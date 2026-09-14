@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block titulo %}Meu perfil — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    <h1>{{ usuario.nickname }}</h1>
+    <p class="perfil-email">{{ usuario.email }}</p>
+
+    <div class="perfil-bloco">
+        <h2>Time</h2>
+        {% if usuario.time %}
+            <p>{{ usuario.time.nome }} [{{ usuario.time.tag }}]</p>
+        {% else %}
+            <p>Você ainda não faz parte de um time.</p>
+        {% endif %}
+        <a href="{{ url_for('time') }}" class="botao-secundario">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-right:6px"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6.5l3.5 2.6-1.3 4.1h-4.4l-1.3-4.1L12 6.5z" fill="currentColor"/></svg>
+            Ver meu time
+        </a>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Campeonatos</h2>
+        {% if campeonatos_inscrito or campeonatos_pendentes %}
+            <ul class="lista-membros">
+                {% for torneio in campeonatos_inscrito %}
+                    <li>
+                        <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}">{{ torneio.nome }}</a>
+                        <span class="selo-status selo-status-{{ torneio.status }}" style="margin-left:8px;">
+                            {% if torneio.status == 'aberto' %}Inscrições abertas
+                            {% elif torneio.status == 'em_andamento' %}Em andamento
+                            {% else %}Finalizado{% endif %}
+                        </span>
+                    </li>
+                {% endfor %}
+                {% for inscricao in campeonatos_pendentes %}
+                    <li>
+                        <a href="{{ url_for('pagamento_pix', torneio_id=inscricao.torneio.id, inscricao_id=inscricao.id) }}">{{ inscricao.torneio.nome }}</a>
+                        <span class="selo-status selo-status-divergente" style="margin-left:8px;">Pagamento pendente</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Você ainda não está inscrito em nenhum campeonato.</p>
+        {% endif %}
+        <a href="{{ url_for('campeonatos') }}" class="link-bloco">Ver campeonatos</a>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Chave Pix</h2>
+        {% if usuario.chave_pix %}
+            <p>{{ tipos_chave_pix.get(usuario.tipo_chave_pix, usuario.tipo_chave_pix) }} · {{ usuario.chave_pix }}</p>
+            <p class="texto-fraco-pequeno">É para essa chave que cai o prêmio (se seu time for campeão) e o repasse da federação (se você for admin de uma).</p>
+        {% else %}
+            <p class="texto-fraco-pequeno">Você ainda não cadastrou uma chave Pix. Sem ela, não dá para receber prêmio de campeonato nem repasse de federação.</p>
+        {% endif %}
+        <a href="{{ url_for('perfil_pix') }}" class="link-bloco">{{ 'Trocar chave Pix' if usuario.chave_pix else 'Cadastrar chave Pix' }}</a>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Federação</h2>
+        {% if usuario.federacao %}
+            {% set federacao = usuario.federacao %}
+            <div class="cabecalho-federacao">
+                {% if federacao.logo %}
+                    <img src="{{ url_for('static', filename='federacoes/' + federacao.logo) }}"
+                         alt="Logo da {{ federacao.nome }}" class="logo-federacao">
+                {% endif %}
+                <div>
+                    <p style="font-weight:700; font-size:16px;">{{ federacao.nome }}</p>
+                    <p class="texto-fraco-pequeno">{{ federacao.admins|length }} admin(s) · dono: {{ federacao.dono.nickname }}</p>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ url_for('enviar_logo_federacao') }}" enctype="multipart/form-data" class="form-escudo" style="margin-top:16px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="logo" class="botao-arquivo">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span id="nome-arquivo-federacao">Escolher imagem</span>
+                </label>
+                <input type="file" id="logo" name="logo" accept="image/*" required
+                       onchange="document.getElementById('nome-arquivo-federacao').textContent = this.files[0] ? this.files[0].name : 'Escolher imagem'">
+                <button type="submit" class="botao-principal-pequeno">{{ 'Trocar logo' if federacao.logo else 'Enviar logo' }}</button>
+            </form>
+
+            <div class="perfil-bloco perfil-bloco-aninhado">
+                <h2>Administradores</h2>
+                <ul class="lista-membros">
+                    {% for admin in federacao.admins %}
+                        <li>{{ admin.nickname }}{% if admin.id == federacao.dono_id %} <span class="tag">[dono]</span>{% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="perfil-bloco perfil-bloco-aninhado">
+                <h2>Convidar admin</h2>
+                <p class="texto-fraco-pequeno">Compartilhe esse código com quem você quer adicionar como administrador:</p>
+                <p class="codigo-convite">{{ federacao.codigo_convite }}</p>
+            </div>
+
+            {% if federacao.dono_id != usuario.id %}
+                <form method="POST" action="{{ url_for('sair_federacao') }}" style="margin-top:16px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-secundario-pequeno">Sair da federação</button>
+                </form>
+            {% endif %}
+        {% else %}
+            <p class="texto-fraco-pequeno" style="margin-bottom:14px;">Você ainda não faz parte de uma federação.</p>
+
+            <form method="POST" action="{{ url_for('entrar_federacao') }}" class="form-escudo">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="codigo" placeholder="Código de convite" maxlength="6" required style="text-transform:uppercase;">
+                <button type="submit" class="botao-principal-pequeno">Entrar com código</button>
+            </form>
+
+            {% if usuario.is_organizador %}
+                <form method="POST" action="{{ url_for('criar_federacao') }}" class="form-escudo" style="margin-top:12px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="nome" placeholder="Nome da federação" required>
+                    <button type="submit" class="botao-principal-pequeno">Criar federação</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

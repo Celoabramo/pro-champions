@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar transferência — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="confirmacao">
+    <h1>Tem certeza?</h1>
+    <p class="texto-aviso">
+        Você está passando a braçadeira para <strong>{{ jogador.nickname }}</strong>.
+        Depois disso, você deixa de ser capitão e não pode desfazer sozinho —
+        só se o novo capitão passar de volta para você.
+    </p>
+
+    <form method="POST" class="form-confirmacao">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="botao-perigo">Sim, passar a braçadeira</button>
+        <a href="{{ url_for('passar_bracadeira') }}" class="botao-secundario">Cancelar</a>
+    </form>
+</section>
+{% endblock %}

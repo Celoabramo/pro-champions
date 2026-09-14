@@ -1,0 +1,7 @@
+.env
+instance/
+__pycache__/
+*.pyc
+venv/
+static/prints/*
+!static/prints/.gitkeep

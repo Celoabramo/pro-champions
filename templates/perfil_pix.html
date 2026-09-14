@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Chave Pix — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="formulario">
+    <h1>Chave Pix</h1>
+    <p class="texto-fraco-pequeno" style="margin-bottom:20px;">
+        Cadastre a chave Pix que recebe o prêmio se o seu time for campeão de um campeonato.
+    </p>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="tipo_chave_pix">Tipo da chave</label>
+        <select id="tipo_chave_pix" name="tipo_chave_pix" required>
+            {% for codigo, rotulo in tipos.items() %}
+                <option value="{{ codigo }}" {% if usuario.tipo_chave_pix == codigo %}selected{% endif %}>{{ rotulo }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="chave_pix">Chave Pix</label>
+        <input type="text" id="chave_pix" name="chave_pix" maxlength="140" value="{{ usuario.chave_pix or '' }}" required>
+
+        <button type="submit" class="botao-principal">Salvar chave Pix</button>
+    </form>
+</section>
+{% endblock %}

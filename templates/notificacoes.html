@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}Notificações — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    <div class="cabecalho-notificacoes">
+        <h1>Notificações</h1>
+        {% if current_user.federacao_id %}
+            <button type="button" class="botao-sino-preferencias" id="botao-preferencias"
+                    aria-expanded="false" aria-controls="bloco-preferencias"
+                    onclick="var b=document.getElementById('bloco-preferencias'); var aberto=b.classList.toggle('aberto'); this.setAttribute('aria-expanded', aberto); this.classList.toggle('ativo', aberto);">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+            </button>
+        {% endif %}
+    </div>
+    <p class="perfil-email">Avisos dos seus campeonatos e partidas.</p>
+
+    {% set rotulos_tipo = {
+        'campeonato_iniciado': ('Campeonato', 'selo-status-em_andamento'),
+        'campeonato_finalizado': ('Finalizado', 'selo-status-finalizado'),
+        'partida_iniciada': ('Partida', 'selo-status-em_andamento'),
+        'partida_finalizada': ('Partida', 'selo-status-aberto'),
+        'repasse_pagamento': ('Pagamento', 'selo-status-em_andamento'),
+    } %}
+
+    {% if notificacoes %}
+        <ul class="lista-notificacoes">
+            {% for n in notificacoes %}
+                {% set rotulo, classe_selo = rotulos_tipo.get(n.tipo, (n.tipo, 'selo-status-em_andamento')) %}
+                <li class="notificacao-item {{ 'nova' if n.id in ids_novas }}">
+                    <span class="selo-status {{ classe_selo }}">{{ rotulo }}</span>
+                    <div class="notificacao-corpo">
+                        <p>{{ n.mensagem }}</p>
+                        <span class="texto-fraco-pequeno">{{ n.criado_em.strftime('%d/%m/%Y %H:%M') }}</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('excluir_notificacao', notificacao_id=n.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="botao-excluir-notificacao" aria-label="Excluir notificação" title="Excluir notificação">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </form>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="texto-fraco-pequeno">Nenhuma notificação por enquanto.</p>
+    {% endif %}
+
+    {% if current_user.federacao_id %}
+        <div class="preferencias-colapsavel" id="bloco-preferencias">
+            <div class="preferencias-colapsavel-miolo">
+                <div class="perfil-bloco" style="margin-top:28px;">
+                    <h2>Preferências</h2>
+                    <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
+                        Escolha quais avisos você quer receber. A notificação de campeonato finalizado nunca é silenciada.
+                    </p>
+                    <form method="POST" action="{{ url_for('atualizar_preferencias_notificacao') }}" class="lista-preferencias">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label class="linha-preferencia">
+                            <input type="checkbox" name="silenciar" value="campeonatos" {{ 'checked' if current_user.notif_campeonatos_silenciadas }}>
+                            Silenciar notificações de campeonato (início)
+                        </label>
+                        <label class="linha-preferencia">
+                            <input type="checkbox" name="silenciar" value="partidas" {{ 'checked' if current_user.notif_partidas_silenciadas }}>
+                            Silenciar notificações de partida (início e resultado)
+                        </label>
+                        <button type="submit" class="botao-principal-pequeno" style="margin-top:14px;">Salvar preferências</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

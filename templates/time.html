@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Meu time — Pro Champions{% endblock %}
+{% block conteudo %}
+
+{% if usuario.time %}
+    <section class="time-atual">
+        <div class="cabecalho-time">
+            {{ macros.escudo_time(usuario.time, 'escudo-time-grande') }}
+            <div>
+                <h1>{{ usuario.time.nome }} <span class="tag">[{{ usuario.time.tag }}]</span></h1>
+                <p class="perfil-email">Capitão: {{ usuario.time.capitao.nickname }}</p>
+            </div>
+        </div>
+
+        {% if usuario.id == usuario.time.capitao_id %}
+            <div class="perfil-bloco">
+                <h2>Escudo do time</h2>
+                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                    Sem imagem enviada, o time usa o escudo genérico do Pro Champions.
+                </p>
+                <form method="POST" action="{{ url_for('enviar_escudo_time') }}" enctype="multipart/form-data" class="form-escudo">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label for="escudo" class="botao-arquivo">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span id="nome-arquivo-escudo">Escolher imagem</span>
+                    </label>
+                    <input type="file" id="escudo" name="escudo" accept="image/*" required
+                           onchange="document.getElementById('nome-arquivo-escudo').textContent = this.files[0] ? this.files[0].name : 'Escolher imagem'">
+                    <button type="submit" class="botao-principal-pequeno">Enviar escudo</button>
+                </form>
+            </div>
+        {% endif %}
+
+        <div class="perfil-bloco">
+            <h2>Código de convite</h2>
+            <p class="codigo-convite">{{ usuario.time.codigo_convite }}</p>
+            <p class="texto-fraco-pequeno">Passe esse código para quem você quiser chamar para o time.</p>
+        </div>
+
+        <div class="perfil-bloco">
+            <h2>Membros ({{ usuario.time.membros|length }})</h2>
+            <ul class="lista-membros">
+                {% for membro in usuario.time.membros %}
+                    <li>{{ membro.nickname }}{% if membro.id == usuario.time.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="perfil-bloco">
+            <h2>Esquema tático</h2>
+            {% set linhas = usuario.time.formacao.split('-') %}
+            <div class="campo">
+                <svg class="linhas-campo" viewBox="0 0 300 400" preserveAspectRatio="none">
+                    <rect x="8" y="8" width="284" height="384" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <line x1="8" y1="200" x2="292" y2="200" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <circle cx="150" cy="200" r="42" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <circle cx="150" cy="200" r="2.5" fill="rgba(255,255,255,0.45)"/>
+                    <rect x="65" y="8" width="170" height="65" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <rect x="110" y="8" width="80" height="26" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <path d="M 112 73 A 38 38 0 0 0 188 73" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <rect x="65" y="327" width="170" height="65" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <rect x="110" y="366" width="80" height="26" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                    <path d="M 112 327 A 38 38 0 0 1 188 327" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+                </svg>
+                <div class="linha-campo">
+                    {% for _ in range(linhas[2]|int) %}<span class="jogador-ponto"></span>{% endfor %}
+                </div>
+                <div class="linha-campo">
+                    {% for _ in range(linhas[1]|int) %}<span class="jogador-ponto"></span>{% endfor %}
+                </div>
+                <div class="linha-campo">
+                    {% for _ in range(linhas[0]|int) %}<span class="jogador-ponto"></span>{% endfor %}
+                </div>
+                <div class="linha-campo linha-goleiro">
+                    <span class="jogador-ponto goleiro">G</span>
+                </div>
+            </div>
+            <p class="esquema-label">{{ usuario.time.formacao }}</p>
+
+            {% if usuario.id == usuario.time.capitao_id %}
+                <form method="POST" action="{{ url_for('atualizar_formacao') }}" class="form-formacao">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="formacao">
+                        {% for f in formacoes %}
+                            <option value="{{ f }}" {% if f == usuario.time.formacao %}selected{% endif %}>{{ f }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="botao-secundario-pequeno">Atualizar</button>
+                </form>
+            {% endif %}
+        </div>
+
+        {% if usuario.id == usuario.time.capitao_id %}
+            <a href="{{ url_for('passar_bracadeira') }}" class="link-bloco">Passar a braçadeira</a>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('sair_time') }}" class="form-sair">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="botao-secundario">Sair do time</button>
+        </form>
+    </section>
+{% else %}
+    <section class="sem-time">
+        <h1>Você ainda não tem um time</h1>
+
+        <div class="perfil-bloco">
+            <h2>Criar um time novo</h2>
+            <form method="POST" action="{{ url_for('criar_time') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="input-time-wrapper">
+                    <input type="text" id="nome" name="nome" maxlength="60" required
+                           placeholder="Nome do time" aria-label="Nome do time" class="input-time">
+                </div>
+
+                <div class="input-time-wrapper">
+                    <input type="text" id="tag" name="tag" maxlength="5" required
+                           placeholder="Sigla (até 5 letras, ex: FLA)" aria-label="Sigla do time" class="input-time">
+                </div>
+
+                <button type="submit" class="botao-principal" style="margin-top:18px;">Criar time</button>
+            </form>
+        </div>
+
+        <div class="perfil-bloco">
+            <h2>Entrar num time existente</h2>
+            <form method="POST" action="{{ url_for('entrar_time') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="input-time-wrapper">
+                    <input type="text" id="codigo" name="codigo" maxlength="6" required
+                           placeholder="Código de convite" aria-label="Código de convite" class="input-time">
+                </div>
+
+                <button type="submit" class="botao-secundario" style="margin-top:6px;">Entrar</button>
+            </form>
+        </div>
+    </section>
+{% endif %}
+
+{% endblock %}

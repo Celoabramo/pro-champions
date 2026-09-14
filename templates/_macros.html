@@ -1,0 +1,102 @@
+{% macro logo_federacao(federacao, classe='logo-federacao') %}
+    {% if federacao.logo %}
+        <img src="{{ url_for('static', filename='federacoes/' + federacao.logo) }}"
+             alt="Logo da {{ federacao.nome }}" class="{{ classe }}">
+    {% else %}
+        <img src="{{ url_for('static', filename='logo.png') }}"
+             alt="Logo genérico" class="{{ classe }} logo-federacao-generico">
+    {% endif %}
+{% endmacro %}
+
+{% macro escudo_time(time, classe='escudo-time') %}
+    {% if time.escudo_imagem %}
+        <img src="{{ url_for('static', filename='escudos/' + time.escudo_imagem) }}"
+             alt="Escudo do {{ time.nome }}" class="{{ classe }} escudo-time-img">
+    {% else %}
+        <img src="{{ url_for('static', filename='escudos/generico.png') }}"
+             alt="Escudo genérico" class="{{ classe }} escudo-time-img escudo-generico">
+    {% endif %}
+{% endmacro %}
+
+{% macro bracket_jogo(confronto, torneio, classe_extra='') %}
+    {% if confronto %}
+        {% set vencedor_id = confronto.vencedor_id if confronto.status == 'validado' else confronto.vencedor_wo_id %}
+        <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.id) }}" class="bracket-jogo bracket-jogo-link {{ classe_extra }}">
+            <div class="bracket-jogo-corpo">
+                <div class="bracket-time {{ 'bracket-vencedor' if vencedor_id == confronto.time1_id }}">
+                    {{ escudo_time(confronto.time1, 'escudo-time-pequeno') }}
+                    <span class="bracket-time-nome">{{ confronto.time1.nome }}</span>
+                    {% if confronto.status == 'validado' %}<span class="bracket-placar">{{ confronto.placar_time1 }}</span>{% endif %}
+                </div>
+                <div class="bracket-time {{ 'bracket-vencedor' if vencedor_id == confronto.time2_id }}">
+                    {{ escudo_time(confronto.time2, 'escudo-time-pequeno') }}
+                    <span class="bracket-time-nome">{{ confronto.time2.nome }}</span>
+                    {% if confronto.status == 'validado' %}<span class="bracket-placar">{{ confronto.placar_time2 }}</span>{% endif %}
+                </div>
+                {% if confronto.status == 'wo' %}
+                    <span class="bracket-selo-wo">{{ 'W.O.' if vencedor_id else 'W.O. duplo' }}</span>
+                {% endif %}
+            </div>
+        </a>
+    {% else %}
+        <div class="bracket-jogo bracket-jogo-vazio {{ classe_extra }}">
+            <div class="bracket-jogo-corpo">
+                <div class="bracket-time bracket-time-vazio"><span class="bracket-time-nome">A definir</span></div>
+                <div class="bracket-time bracket-time-vazio"><span class="bracket-time-nome">A definir</span></div>
+            </div>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro bracket_final_vs(confronto, torneio) %}
+    {% if confronto %}
+        {% set vencedor_id = confronto.vencedor_id if confronto.status == 'validado' else confronto.vencedor_wo_id %}
+        <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.id) }}" class="bracket-final-vs bracket-final-link">
+            <div class="bracket-final-time {{ 'bracket-vencedor' if vencedor_id == confronto.time1_id }}">
+                {{ escudo_time(confronto.time1, 'escudo-time-final') }}
+                <span class="bracket-final-nome">{{ confronto.time1.nome }}</span>
+                {% if confronto.status == 'validado' %}<span class="bracket-final-placar">{{ confronto.placar_time1 }}</span>{% endif %}
+            </div>
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="bracket-final-trofeu" aria-hidden="true">
+            <div class="bracket-final-time {{ 'bracket-vencedor' if vencedor_id == confronto.time2_id }}">
+                {{ escudo_time(confronto.time2, 'escudo-time-final') }}
+                <span class="bracket-final-nome">{{ confronto.time2.nome }}</span>
+                {% if confronto.status == 'validado' %}<span class="bracket-final-placar">{{ confronto.placar_time2 }}</span>{% endif %}
+            </div>
+            {% if confronto.status == 'wo' %}
+                <span class="bracket-selo-wo bracket-selo-wo-final">{{ 'W.O.' if vencedor_id else 'W.O. duplo' }}</span>
+            {% endif %}
+        </a>
+    {% else %}
+        <div class="bracket-final-vs">
+            <div class="bracket-final-time bracket-time-vazio">
+                <span class="bracket-final-nome">A definir</span>
+            </div>
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="bracket-final-trofeu" aria-hidden="true">
+            <div class="bracket-final-time bracket-time-vazio">
+                <span class="bracket-final-nome">A definir</span>
+            </div>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro bracket_coluna(fase, vagas, torneio) %}
+    <div class="bracket-coluna">
+        <h3 class="fase-titulo">{{ fase }}</h3>
+        <div class="bracket-jogos">
+            {% if vagas|length > 1 %}
+                {% for par in vagas|batch(2) %}
+                    <div class="bracket-par">
+                        {% for confronto in par %}
+                            {{ bracket_jogo(confronto, torneio) }}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                {% for confronto in vagas %}
+                    {{ bracket_jogo(confronto, torneio) }}
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+{% endmacro %}

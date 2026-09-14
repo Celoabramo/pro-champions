@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block titulo %}Termos de uso — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil pagina-legal">
+    <h1>Termos de uso</h1>
+    <p class="texto-fraco-pequeno">Última atualização: {{ ano_atual }}.</p>
+
+    <div class="perfil-bloco">
+        <h2>1. Quem somos</h2>
+        <p>O Pro Champions é uma plataforma de organização de campeonatos de Pro Clubs, operada por
+        67.278.439 Marcelo Najjar Abramo Filho (MEI), CNPJ 67.278.439/0001-51, com sede em
+        Parque da Mooca, São Paulo - SP. Ao criar uma conta ou usar o site, você concorda com estes termos.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>2. Conta, times e federações</h2>
+        <p>Você é responsável pelos dados informados no cadastro e por manter sua senha em sigilo. Cada
+        jogador pertence a, no máximo, um time por vez. Federações agrupam campeonatos e têm um dono, que
+        pode convidar outros administradores por código de convite. O dono responde pelas decisões tomadas
+        pela federação dentro da plataforma.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>3. Inscrição em campeonatos</h2>
+        <p>Campeonatos podem ter uma taxa de inscrição, paga via Pix através da AbacatePay, nossa
+        processadora de pagamentos. A vaga do time só é confirmada depois que o pagamento é identificado.
+        Salvo cancelamento do campeonato pelo admin da federação, taxas de inscrição já pagas não são reembolsadas
+        após o início do campeonato.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>4. Prêmio ao campeão</h2>
+        <p>Quando o campeonato tem prêmio em dinheiro (valor definido pelo admin da federação na criação
+        do campeonato), a Pro Champions transfere esse valor via Pix, automaticamente, para a chave Pix
+        cadastrada no perfil do capitão do time campeão, assim que o admin da federação confirma o
+        pagamento na tela do campeonato. É responsabilidade do capitão manter uma chave Pix válida cadastrada — sem
+        ela, o prêmio não pode ser enviado, e a Pro Champions não se responsabiliza por atrasos causados
+        por chave Pix incorreta ou desatualizada.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>5. Repasse à federação organizadora</h2>
+        <p>Além do prêmio, a Pro Champions calcula e distribui automaticamente o resultado financeiro de
+        cada campeonato entre a federação organizadora e a plataforma, da seguinte forma:</p>
+        <p><strong>Arrecadação:</strong> soma de todas as taxas de inscrição pagas pelos times
+        participantes.</p>
+        <p><strong>Lucro do campeonato:</strong> arrecadação menos o valor do prêmio pago ao campeão. Se
+        esse resultado for zero ou negativo, não há repasse — o campeonato não gerou saldo além do que já
+        foi pago de prêmio.</p>
+        <p><strong>80% do lucro</strong> é transferido via Pix, automaticamente e junto com o pagamento do
+        prêmio, para a chave Pix cadastrada no perfil do dono da federação.</p>
+        <p><strong>20% do lucro</strong> permanece retido na conta da Pro Champions, como remuneração da
+        plataforma pela organização e processamento do campeonato. Eventuais taxas cobradas pela própria
+        AbacatePay (nossa processadora de pagamentos) sobre essas transferências saem exclusivamente dessa
+        fatia de 20% — nunca do prêmio do campeão nem do valor repassado à federação.</p>
+        <p>O dono da federação recebe uma notificação dentro da plataforma confirmando se o repasse foi
+        concluído com sucesso ou se falhou (por exemplo, por chave Pix inválida ou desatualizada). Em caso
+        de falha, é responsabilidade dele corrigir a chave Pix cadastrada no perfil e acionar o suporte
+        pelo WhatsApp para que uma nova tentativa seja feita.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>6. Validação de partidas</h2>
+        <p>O resultado de cada partida é confirmado por print enviado pelos dois times, lido
+        automaticamente por um sistema de leitura de imagem. Se as duas leituras não baterem, os times
+        precisam reenviar o print. Se uma partida não começar dentro do prazo, o admin da federação pode
+        declarar W.O. depois de 1 hora do horário marcado. Em caso de disputa entre os times sobre o
+        resultado, a decisão final cabe ao admin da federação responsável pelo campeonato.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>7. Condutas proibidas</h2>
+        <p>É proibido: manipular ou falsificar prints de resultado; criar múltiplas contas para burlar
+        regras de campeonato; usar a plataforma para qualquer finalidade ilícita. Contas que descumprirem
+        essas regras podem ser suspensas ou removidas, a critério do admin da federação ou da
+        administração do site.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>8. Limitação de responsabilidade</h2>
+        <p>O Pro Champions organiza e administra campeonatos, mas não é afiliado à EA Sports nem a
+        nenhuma desenvolvedora dos jogos disputados. Processamento de pagamentos é feito por parceiro
+        externo (AbacatePay); falhas, atrasos ou instabilidades da parte deles fogem do nosso controle
+        direto, mas nos comprometemos a te avisar e buscar resolver junto ao parceiro.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>9. Alterações destes termos</h2>
+        <p>Podemos atualizar estes termos para refletir mudanças na plataforma. Alterações relevantes
+        serão comunicadas por notificação dentro do site.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>10. Legislação aplicável</h2>
+        <p>Estes termos são regidos pelas leis brasileiras, incluindo o Código de Defesa do Consumidor.
+        Fica eleito o foro da comarca de São Paulo - SP para dirimir eventuais controvérsias.</p>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>11. Contato</h2>
+        <p>Dúvidas sobre estes termos: <a href="https://wa.me/5511933351305" target="_blank" rel="noopener">WhatsApp (11) 93335-1305</a>.</p>
+    </div>
+</section>
+{% endblock %}

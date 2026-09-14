@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Federações — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="lista-campeonatos">
+    <div class="eyebrow-secao">
+        <span class="rotulo">Pro Clubs</span>
+        <span class="linha-pontilhada"></span>
+        <span class="meta">{{ federacoes|length }} no total</span>
+    </div>
+    <div class="cabecalho-secao">
+        <h1>Federações</h1>
+        {% if current_user.is_authenticated and not current_user.federacao_id %}
+            <a href="{{ url_for('perfil') }}" class="botao-secundario-pequeno botao-cinza">Criar ou entrar numa federação</a>
+        {% endif %}
+    </div>
+
+    {% if federacoes %}
+        <div class="cards-federacao">
+            {% for federacao in federacoes %}
+                <a href="{{ url_for('detalhe_federacao', federacao_id=federacao.id) }}" class="card-federacao">
+                    {{ macros.logo_federacao(federacao, 'logo-federacao-card') }}
+                    <div class="card-federacao-info">
+                        <h2>{{ federacao.nome }}</h2>
+                        <p class="card-federacao-meta">
+                            {{ contagens.get(federacao.id, 0) }} campeonato(s) organizado(s)
+                            {% if abertos.get(federacao.id) %}
+                                <span class="destaque-aberto">· {{ abertos.get(federacao.id) }} com inscrições abertas agora</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="texto-fraco-pequeno">Nenhuma federação criada ainda.</p>
+    {% endif %}
+</section>
+{% endblock %}

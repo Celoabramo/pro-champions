@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block titulo %}Criar campeonato — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="formulario">
+    <h1>Criar campeonato</h1>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="nome">Nome do campeonato</label>
+        <input type="text" id="nome" name="nome" maxlength="80" required>
+
+        <label for="data_campeonato">Data do campeonato</label>
+        <input type="date" id="data_campeonato" name="data_campeonato" min="{{ hoje }}" required>
+
+        <label for="hora_campeonato">Horário (opcional)</label>
+        <input type="time" id="hora_campeonato" name="hora_campeonato">
+
+        <label for="descricao">Descrição (regras, formato, o que quiser explicar)</label>
+        <textarea id="descricao" name="descricao" rows="4"></textarea>
+
+        <label for="valor_inscricao">Valor da inscrição por time (R$, use 0 para gratuito)</label>
+        <input type="text" id="valor_inscricao" name="valor_inscricao" placeholder="100.00" required>
+
+        <label for="max_times">Número de chaves (máximo de times)</label>
+        <select id="max_times" name="max_times" required>
+            {% for tamanho in tamanhos %}
+                <option value="{{ tamanho }}" {% if tamanho == 8 %}selected{% endif %}>{{ tamanho }} times</option>
+            {% endfor %}
+        </select>
+
+        <label>Formato do campeonato</label>
+        <div class="opcoes-formato">
+            <label class="opcao-formato">
+                <input type="radio" name="formato" value="mata_mata" checked>
+                <div>
+                    <strong>Mata-mata direto</strong>
+                    <span class="texto-fraco-pequeno">Chaveamento eliminatório desde o início — perdeu, está fora.</span>
+                </div>
+            </label>
+            <label class="opcao-formato">
+                <input type="radio" name="formato" value="fase_grupos">
+                <div>
+                    <strong>Fase de grupos</strong>
+                    <span class="texto-fraco-pequeno">Grupos de 4 times, todos contra todos — os 2 primeiros de cada grupo avançam para o mata-mata.</span>
+                </div>
+            </label>
+        </div>
+
+        <label>Geração</label>
+        <div class="opcoes-formato">
+            <label class="opcao-formato">
+                <input type="radio" name="geracao" value="nova" checked>
+                <div>
+                    <strong>Nova geração</strong>
+                    <span class="texto-fraco-pequeno">Campeonato jogado na nova geração de consoles.</span>
+                </div>
+            </label>
+            <label class="opcao-formato">
+                <input type="radio" name="geracao" value="antiga">
+                <div>
+                    <strong>Antiga geração</strong>
+                    <span class="texto-fraco-pequeno">Campeonato jogado na geração antiga de consoles.</span>
+                </div>
+            </label>
+        </div>
+
+        <label for="valor_premio">Prêmio para o campeão (R$, deixe 0 se não tiver)</label>
+        <input type="text" id="valor_premio" name="valor_premio" placeholder="0.00">
+
+        <button type="submit" class="botao-principal">Criar campeonato</button>
+    </form>
+    <p class="texto-fraco-pequeno" style="margin-top:16px;">
+        A inscrição é paga via Pix. O prêmio (se você definir um) é pago automaticamente para o
+        capitão do time campeão quando você declarar o resultado final.
+    </p>
+</section>
+{% endblock %}

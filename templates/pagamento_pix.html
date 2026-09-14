@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Pagar inscrição — Pro Champions{% endblock %}
+{% block conteudo %}
+<div class="pagina-popup">
+    <div class="cartao-popup">
+        <span class="mira tl" aria-hidden="true"></span>
+        <span class="mira tr" aria-hidden="true"></span>
+        <span class="mira bl" aria-hidden="true"></span>
+        <span class="mira br" aria-hidden="true"></span>
+
+        <div class="eyebrow-print"><span class="ponto-pulsante"></span>Pagamento Pix</div>
+        <h1 class="popup-print-titulo">{{ inscricao.time.nome }}</h1>
+        <p class="popup-print-sub">{{ torneio.nome }} — taxa de inscrição</p>
+
+        <div class="valor-taxa">R$ {{ "%.2f"|format(torneio.valor_inscricao) }}</div>
+
+        {% if inscricao.pix_br_code_base64 %}
+            <div class="qr-pix">
+                <img src="{{ inscricao.pix_br_code_base64 }}" alt="QR Code do Pix" width="220" height="220">
+            </div>
+        {% endif %}
+
+        <label for="pix-copia-cola" style="display:block; font-size:12px; color:var(--texto-fraco); margin-bottom:6px;">
+            Ou copie o código Pix (copia e cola)
+        </label>
+        <div class="copia-cola">
+            <input type="text" id="pix-copia-cola" value="{{ inscricao.pix_br_code }}" readonly>
+            <button type="button" class="botao-secundario-pequeno" onclick="navigator.clipboard.writeText(document.getElementById('pix-copia-cola').value); this.textContent='Copiado!'">Copiar</button>
+        </div>
+
+        <p class="popup-print-sub" style="margin-top:16px; margin-bottom:0;">
+            Depois de pagar, clique em verificar — pode levar alguns segundos para confirmar.
+        </p>
+
+        <div class="acoes" style="margin-top:18px;">
+            <form method="POST" action="{{ url_for('verificar_pagamento', torneio_id=torneio.id, inscricao_id=inscricao.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="botao-principal">Já paguei, verificar</button>
+            </form>
+            {% if modo_teste %}
+                <form method="POST" action="{{ url_for('simular_pagamento_pix', torneio_id=torneio.id, inscricao_id=inscricao.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-secundario">Simular pagamento (modo teste)</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

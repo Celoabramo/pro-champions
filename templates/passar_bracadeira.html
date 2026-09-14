@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Passar a braçadeira — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="passar-bracadeira">
+    <h1>Passar a braçadeira</h1>
+    <p class="perfil-email">Escolha quem vai ser o novo capitão do {{ time.nome }}.</p>
+
+    {% if membros %}
+        <ul class="lista-membros">
+            {% for membro in membros %}
+                <li class="linha-membro">
+                    <span>{{ membro.nickname }}</span>
+                    <a href="{{ url_for('confirmar_bracadeira', membro_id=membro.id) }}" class="botao-secundario-pequeno">Transferir</a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Não tem outro membro no time para receber a braçadeira ainda.</p>
+    {% endif %}
+
+    <a href="{{ url_for('time') }}" class="link-bloco">Voltar para o time</a>
+</section>
+{% endblock %}

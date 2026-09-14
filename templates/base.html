@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block titulo %}Pro Champions{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ static_v('estilo.css') }}">
+    {% block preload_extra %}{% endblock %}
+    <script>
+        // As animações de fundo (aurora + grade) rodam em loop pelo relógio
+        // do aparelho, não do zero a cada carregamento — assim, ao trocar
+        // de página (ex: aplicar um filtro), elas continuam de onde
+        // "deveriam" estar em vez de dar aquele soluço voltando para o início.
+        (function () {
+            var agora = Date.now();
+            var cicloAurora = 40000; // 20s por sentido, ida e volta (alternate)
+            var cicloGrade = 22000;
+            document.documentElement.style.setProperty("--aurora-delay", "-" + ((agora % cicloAurora) / 1000) + "s");
+            document.documentElement.style.setProperty("--grade-delay", "-" + ((agora % cicloGrade) / 1000) + "s");
+        })();
+    </script>
+</head>
+<body>
+    {% block fundo_extra %}{% endblock %}
+    <header class="topo">
+        <nav class="pilula-nav">
+            <a href="{{ url_for('home') }}" class="marca-pilula">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Pro Champions" class="logo-nav">
+                Pro <span>Champions</span>
+            </a>
+            <div class="pilula-links">
+                <a href="{{ url_for('campeonatos') }}" class="{{ 'ativo' if request.endpoint == 'campeonatos' }}">Campeonatos</a>
+                <a href="{{ url_for('federacoes') }}" class="{{ 'ativo' if request.endpoint in ('federacoes', 'detalhe_federacao') }}">Federações</a>
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('perfil') }}" class="{{ 'ativo' if request.endpoint == 'perfil' }}">Meu perfil</a>
+                    <a href="{{ url_for('time') }}" class="{{ 'ativo' if request.endpoint == 'time' }}">Meu time</a>
+                {% endif %}
+            </div>
+        </nav>
+
+        <div class="usuario-area">
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('notificacoes') }}" class="link-notificacoes" aria-label="Notificações">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    {% if notificacoes_nao_lidas %}
+                        <span class="badge-notificacoes">{{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}</span>
+                    {% endif %}
+                </a>
+                <span class="nick-logado">{{ current_user.nickname }}</span>
+                <a href="{{ url_for('logout') }}" class="link-sair">Sair</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="link-sair">Entrar</a>
+                <a href="{{ url_for('cadastro') }}" class="botao-nav">Criar conta</a>
+            {% endif %}
+        </div>
+
+        <button type="button" class="botao-menu-mobile" id="botao-menu-mobile" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-mobile" onclick="alternarMenuMobile()">
+            <svg class="icone-menu-abrir" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <svg class="icone-menu-fechar" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+            {% if current_user.is_authenticated and notificacoes_nao_lidas %}<span class="badge-notificacoes badge-menu-mobile"></span>{% endif %}
+        </button>
+    </header>
+
+    <div class="menu-mobile-backdrop" id="menu-mobile-backdrop" onclick="alternarMenuMobile()"></div>
+    <div class="menu-mobile" id="menu-mobile">
+        <a href="{{ url_for('campeonatos') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'campeonatos' }}">Campeonatos</a>
+        <a href="{{ url_for('federacoes') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint in ('federacoes', 'detalhe_federacao') }}">Federações</a>
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('perfil') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'perfil' }}">Meu perfil</a>
+            <a href="{{ url_for('time') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'time' }}">Meu time</a>
+            <a href="{{ url_for('notificacoes') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'notificacoes' }}">
+                Notificações
+                {% if notificacoes_nao_lidas %}<span class="badge-notificacoes">{{ notificacoes_nao_lidas if notificacoes_nao_lidas < 10 else '9+' }}</span>{% endif %}
+            </a>
+            <div class="menu-mobile-rodape">
+                <span class="nick-logado">{{ current_user.nickname }}</span>
+                <a href="{{ url_for('logout') }}" class="link-sair">Sair</a>
+            </div>
+        {% else %}
+            <div class="menu-mobile-auth">
+                <a href="{{ url_for('login') }}" class="menu-mobile-link">Entrar</a>
+                <a href="{{ url_for('cadastro') }}" class="menu-mobile-link menu-mobile-destaque">Criar conta</a>
+            </div>
+        {% endif %}
+    </div>
+    <script>
+        function alternarMenuMobile() {
+            var menu = document.getElementById("menu-mobile");
+            var backdrop = document.getElementById("menu-mobile-backdrop");
+            var botao = document.getElementById("botao-menu-mobile");
+            var aberto = menu.classList.toggle("aberto");
+            backdrop.classList.toggle("aberto", aberto);
+            botao.setAttribute("aria-expanded", aberto);
+            botao.classList.toggle("ativo", aberto);
+            document.body.classList.toggle("menu-mobile-travado", aberto);
+        }
+    </script>
+
+    <main>
+        {% with mensagens = get_flashed_messages(with_categories=true) %}
+            {% if mensagens %}
+                <div class="mensagens">
+                    {% for categoria, texto in mensagens %}
+                        <p class="msg msg-{{ categoria }}">{{ texto }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block conteudo %}{% endblock %}
+    </main>
+
+    <footer class="rodape-site">
+        <div class="rodape-miolo">
+            <div class="rodape-coluna">
+                <a href="{{ url_for('home') }}" class="marca-pilula">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Pro Champions" class="logo-nav">
+                    Pro <span>Champions</span>
+                </a>
+                <p class="rodape-empresa">
+                    67.278.439 Marcelo Najjar Abramo Filho (MEI)<br>
+                    CNPJ 67.278.439/0001-51<br>
+                    Parque da Mooca, São Paulo - SP
+                </p>
+            </div>
+            <div class="rodape-coluna">
+                <h3>Contato</h3>
+                <a href="https://wa.me/5511933351305" target="_blank" rel="noopener" class="rodape-link">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M17.6 6.3A8.9 8.9 0 0 0 3.1 16.9L2 22l5.2-1.4a8.9 8.9 0 0 0 4.3 1.1h0a9 9 0 0 0 6.1-15.4zM12 20.4a7.4 7.4 0 0 1-3.8-1l-.3-.2-3 .8.8-2.9-.2-.3a7.5 7.5 0 1 1 6.5 3.6zm4.1-5.6c-.2-.1-1.3-.7-1.6-.7-.2-.1-.4-.1-.5.1l-.7.9c-.1.2-.3.2-.5.1-.7-.3-1.5-.8-2.1-1.5-.6-.6-1-1.3-1.1-1.5-.1-.2 0-.4.1-.5l.4-.5c.1-.1.2-.3.1-.4 0-.1-.5-1.3-.7-1.8-.2-.4-.4-.4-.5-.4h-.5c-.2 0-.4.1-.6.3-.2.2-.8.8-.8 2s.8 2.3 1 2.5c.1.1 1.6 2.5 4 3.5.5.2 1 .4 1.3.5.6.2 1.1.1 1.5-.1.5-.2 1.3-.5 1.5-1 .2-.5.2-.9.1-1z"/></svg>
+                    (11) 93335-1305
+                </a>
+            </div>
+            <div class="rodape-coluna">
+                <h3>Legal</h3>
+                <a href="{{ url_for('termos_uso') }}" class="rodape-link">Termos de uso</a>
+                <a href="{{ url_for('politica_privacidade') }}" class="rodape-link">Política de privacidade</a>
+            </div>
+        </div>
+        <p class="rodape-copyright">© {{ ano_atual }} Pro Champions. Todos os direitos reservados.</p>
+    </footer>
+</body>
+</html>

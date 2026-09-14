@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Excluir campeonato — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="confirmacao">
+    <h1>Tem certeza?</h1>
+    <p class="texto-aviso">
+        Você está prestes a excluir <strong>{{ torneio.nome }}</strong>. Isso apaga o campeonato,
+        as inscrições e o chaveamento dele — não dá para desfazer. Digite sua senha para confirmar.
+    </p>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="formulario">
+            <label for="senha">Sua senha</label>
+            <input type="password" id="senha" name="senha" required autofocus>
+        </div>
+
+        <div class="form-confirmacao" style="margin-top:22px;">
+            <button type="submit" class="botao-perigo">Sim, excluir campeonato</button>
+            <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}" class="botao-secundario">Cancelar</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

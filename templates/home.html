@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block titulo %}Pro Champions{% endblock %}
+{% block preload_extra %}<link rel="preload" as="image" href="{{ url_for('static', filename='fundo-home.webp') }}">{% endblock %}
+{% block fundo_extra %}<div class="hero-fundo-fixo"></div>{% endblock %}
+{% block conteudo %}
+<section class="hero">
+    <div class="hero-conteudo">
+        {% if current_user.is_authenticated %}
+            <img src="{{ url_for('static', filename='logo-home.png') }}" alt="Pro Champions" class="logo-hero">
+            <div class="eyebrow-secao eyebrow-secao-hero">
+                <span class="rotulo">Pro Champions</span>
+            </div>
+            <h1>Bem-vindo de volta.</h1>
+            <p>Confira seu time e os campeonatos disponíveis.</p>
+            <a href="{{ url_for('perfil') }}" class="botao-principal">Ir para meu perfil</a>
+        {% else %}
+            <img src="{{ url_for('static', filename='logo-home.png') }}" alt="Pro Champions" class="logo-hero">
+            <div class="eyebrow-secao eyebrow-secao-hero">
+                <span class="rotulo">Pro Clubs · Ligas e campeonatos</span>
+            </div>
+            <h1>Monte seu time. Entre na liga. Levante a taça.</h1>
+            <p>Campeonatos de Pro Clubs com inscrição paga, premiação real e resultado validado sem enrolação.</p>
+            <a href="{{ url_for('cadastro') }}" class="botao-principal">Criar minha conta</a>
+        {% endif %}
+    </div>
+</section>
+
+{% if not current_user.is_authenticated %}
+    {% if nomes_marquee %}
+        <section class="faixa-marquee">
+            <div class="faixa-listrada"></div>
+            <div class="marquee-linha">
+                <div class="marquee-trilho">
+                    {% for nome in nomes_marquee %}
+                        <span class="marquee-item">{{ nome }}</span><span class="marquee-traco">—</span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="faixa-listrada"></div>
+        </section>
+    {% endif %}
+
+    <section class="bloco-como-funciona">
+        <div class="eyebrow-secao">
+            <span class="rotulo">Como funciona</span>
+            <span class="linha-pontilhada"></span>
+        </div>
+        <h2 class="titulo-como-funciona">Duas formas de entrar em campo.</h2>
+
+        <div class="grid-como-funciona">
+            <div class="card-explicacao">
+                <img src="{{ url_for('static', filename='icone-jogador.png') }}" alt="" class="icone-explicacao" aria-hidden="true">
+                <h3>Se você é jogador</h3>
+                <div class="passos-grandes">
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">1</span>
+                        <div>
+                            <strong>Monte seu time</strong>
+                            <span>Crie um time novo ou entre em um já existente com o código de convite do capitão.</span>
+                        </div>
+                    </div>
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">2</span>
+                        <div>
+                            <strong>Escolha um campeonato</strong>
+                            <span>Filtre por federação ou geração e inscreva seu time — a taxa (quando tiver) é paga via Pix.</span>
+                        </div>
+                    </div>
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">3</span>
+                        <div>
+                            <strong>Jogue e envie o print</strong>
+                            <span>Depois da partida, é só mandar o print do placar final — a IA lê e confirma o resultado.</span>
+                        </div>
+                    </div>
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">4</span>
+                        <div>
+                            <strong>Acompanhe o chaveamento</strong>
+                            <span>Se seu time for campeão, o prêmio cai automático para o capitão.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-explicacao card-explicacao-organizador">
+                <img src="{{ url_for('static', filename='icone-organizador.png') }}" alt="" class="icone-explicacao" aria-hidden="true">
+                <h3>Se você é organizador</h3>
+                <div class="passos-grandes">
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">1</span>
+                        <div>
+                            <strong>Crie sua federação</strong>
+                            <span>Ou entre numa já existente com o código de convite de outro admin.</span>
+                        </div>
+                    </div>
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">2</span>
+                        <div>
+                            <strong>Crie o campeonato</strong>
+                            <span>Escolha o formato, a geração, a taxa de inscrição e o prêmio para o campeão.</span>
+                        </div>
+                    </div>
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">3</span>
+                        <div>
+                            <strong>Sorteie o chaveamento</strong>
+                            <span>Quando as vagas encherem, é só gerar — os confrontos se organizam sozinhos.</span>
+                        </div>
+                    </div>
+                    <div class="passo-grande">
+                        <span class="passo-grande-num">4</span>
+                        <div>
+                            <strong>Deixa com a IA</strong>
+                            <span>Os resultados são validados sozinhos pelos prints — você só acompanha e paga o campeão.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endif %}
+{% endblock %}

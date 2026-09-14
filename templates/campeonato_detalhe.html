@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}{{ torneio.nome }} — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="detalhe-campeonato">
+    <a href="{{ url_for('campeonatos') }}" class="link-voltar">← Voltar para campeonatos</a>
+    <div class="cabecalho-secao">
+        <h1>{{ torneio.nome }}</h1>
+        <span class="selo-status selo-status-{{ torneio.status }}">
+            {% if torneio.status == 'aberto' %}Inscrições abertas
+            {% elif torneio.status == 'em_andamento' %}Em andamento
+            {% else %}Finalizado{% endif %}
+        </span>
+    </div>
+
+    <div class="organizador-linha">
+        {% if torneio.federacao.logo %}
+            <img src="{{ url_for('static', filename='federacoes/' + torneio.federacao.logo) }}"
+                 alt="Logo da {{ torneio.federacao.nome }}" class="logo-federacao-mini">
+        {% endif %}
+        <span class="nome-organizador">{{ torneio.federacao.nome }} <span class="texto-fraco-pequeno">por {{ torneio.criado_por.nickname }}</span></span>
+    </div>
+    <p class="perfil-email">
+        {% if torneio.data_campeonato %}{{ torneio.data_campeonato.strftime('%d/%m/%Y') }}{% if torneio.hora_campeonato %} às {{ torneio.hora_campeonato.strftime('%H:%M') }}{% endif %} · {% endif %}
+        {{ torneio.times_inscritos|length }}/{{ torneio.max_times }} times
+    </p>
+    {% if torneio.descricao %}
+        <p class="descricao-campeonato">{{ torneio.descricao }}</p>
+    {% endif %}
+    {% if torneio.valor_inscricao > 0 %}
+        <span class="chip-valor">Inscrição R$ {{ "%.2f"|format(torneio.valor_inscricao) }} por time</span>
+    {% else %}
+        <span class="chip-valor chip-valor-gratis">Inscrição gratuita</span>
+    {% endif %}
+    {% if torneio.valor_premio > 0 %}
+        <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> Prêmio R$ {{ "%.2f"|format(torneio.valor_premio) }}</span>
+    {% endif %}
+    <span class="chip-formato">{{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}</span>
+
+    {% if grupos_info %}
+        <div class="bloco-grupos">
+            <h2>Fase de grupos</h2>
+            <div class="grupos-grid">
+                {% for info in grupos_info %}
+                    <div class="grupo-card">
+                        <h3>{{ info.grupo.nome }}</h3>
+                        <table class="tabela-classificacao">
+                            <thead>
+                                <tr><th>Time</th><th>P</th><th>V</th><th>E</th><th>SG</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for linha in info.tabela %}
+                                    <tr class="{{ 'linha-classificado' if loop.index <= 2 }}">
+                                        <td>{{ linha.time.nome }}</td>
+                                        <td>{{ linha.pontos }}</td>
+                                        <td>{{ linha.vitorias }}</td>
+                                        <td>{{ linha.empates }}</td>
+                                        <td>{{ linha.saldo }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <ul class="lista-confrontos-grupo">
+                            {% for confronto in info.confrontos %}
+                                <li>
+                                    <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.id) }}">
+                                        <span class="confronto-grupo-time">{{ confronto.time1.nome }}</span>
+                                        {% if confronto.status == 'validado' %}
+                                            <span class="confronto-grupo-placar">{{ confronto.placar_time1 }} — {{ confronto.placar_time2 }}</span>
+                                        {% elif confronto.status == 'wo' %}
+                                            <span class="confronto-grupo-placar bracket-wo">W.O.</span>
+                                        {% else %}
+                                            <span class="confronto-grupo-placar texto-fraco-pequeno">vs</span>
+                                        {% endif %}
+                                        <span class="confronto-grupo-time">{{ confronto.time2.nome }}</span>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endfor %}
+            </div>
+            <p class="texto-fraco-pequeno" style="margin-top:14px;">Os 2 primeiros colocados de cada grupo (destacados) avançam para o mata-mata.</p>
+        </div>
+    {% endif %}
+
+    {% if rodadas_bracket %}
+        <div class="bloco-chaveamento">
+            <h2>Mata-mata</h2>
+            <div class="bracket-wrap" id="bracket-wrap">
+                <div class="bracket" id="bracket">
+                    {% if rodadas_bracket.esquerda %}
+                        <div class="bracket-lado">
+                            {% for fase, vagas in rodadas_bracket.esquerda %}
+                                {{ macros.bracket_coluna(fase, vagas, torneio) }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="bracket-coluna bracket-coluna-final">
+                        <h3 class="fase-titulo">{{ rodadas_bracket.final[0] }}</h3>
+                        <div class="bracket-jogos bracket-jogos-final">
+                            {{ macros.bracket_final_vs(rodadas_bracket.final[1][0], torneio) }}
+                        </div>
+                    </div>
+
+                    {% if rodadas_bracket.direita %}
+                        <div class="bracket-lado bracket-lado-direita">
+                            {% for fase, vagas in rodadas_bracket.direita %}
+                                {{ macros.bracket_coluna(fase, vagas, torneio) }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bracket-mobile">
+                {% for fase, vagas_esquerda in rodadas_bracket.esquerda %}
+                    {% set vagas_rodada = vagas_esquerda + rodadas_bracket.direita[loop.index0][1] %}
+                    <div class="bracket-mobile-rodada">
+                        <h3 class="fase-titulo">{{ fase }}</h3>
+                        <div class="bracket-mobile-jogos">
+                            {% if vagas_rodada|length > 1 %}
+                                {% for par in vagas_rodada|batch(2) %}
+                                    <div class="bracket-mobile-par">
+                                        {% for confronto in par %}
+                                            {{ macros.bracket_jogo(confronto, torneio) }}
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                {% for confronto in vagas_rodada %}
+                                    {{ macros.bracket_jogo(confronto, torneio) }}
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+
+                <div class="bracket-mobile-rodada bracket-mobile-final">
+                    <h3 class="fase-titulo">{{ rodadas_bracket.final[0] }}</h3>
+                    <div class="bracket-mobile-jogos">
+                        {{ macros.bracket_final_vs(rodadas_bracket.final[1][0], torneio) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+            (function () {
+                var contorno = document.getElementById("bracket-wrap");
+                var bracket = document.getElementById("bracket");
+                if (!contorno || !bracket) return;
+
+                function ajustarEscala() {
+                    bracket.style.transform = "none";
+                    contorno.style.height = "";
+
+                    var larguraDisponivel = contorno.clientWidth;
+                    var larguraNatural = bracket.scrollWidth;
+                    var alturaNatural = bracket.scrollHeight;
+                    if (larguraDisponivel <= 0 || larguraNatural <= 0) return;
+
+                    var escala = Math.min(1, larguraDisponivel / larguraNatural);
+                    var deslocamentoX = (larguraDisponivel - larguraNatural * escala) / 2;
+
+                    bracket.style.transform = "translateX(" + deslocamentoX + "px) scale(" + escala + ")";
+                    contorno.style.height = (alturaNatural * escala) + "px";
+                }
+
+                ajustarEscala();
+                window.addEventListener("resize", ajustarEscala);
+            })();
+        </script>
+    {% elif eh_organizador and pode_gerar_chaveamento %}
+        <div class="bloco-chaveamento" style="text-align:center;">
+            <p class="texto-fraco-pequeno" style="margin-bottom:14px;">As vagas estão preenchidas — já dá para sortear o chaveamento.</p>
+            <form method="POST" action="{{ url_for('gerar_chaveamento', torneio_id=torneio.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="botao-principal">Gerar chaveamento</button>
+            </form>
+        </div>
+    {% endif %}
+
+    <div class="perfil-bloco">
+        <h2>Times inscritos ({{ torneio.times_inscritos|length }} / {{ torneio.max_times }})</h2>
+        {% if torneio.times_inscritos %}
+            <ul class="lista-membros lista-times-escudo">
+                {% for time in torneio.times_inscritos %}
+                    <li>
+                        {{ macros.escudo_time(time, 'escudo-time-pequeno') }}
+                        <span>{{ time.nome }} <span class="tag">[{{ time.tag }}]</span></span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="texto-fraco-pequeno">Nenhum time inscrito ainda.</p>
+        {% endif %}
+    </div>
+
+    {% if torneio.time_campeao %}
+        {% if eh_membro_campeao %}
+            <div class="cartao-campeao">
+                <div class="confete-camada" id="confete"></div>
+                <div class="cartao-campeao-conteudo">
+                    <span class="trofeu-grande" aria-hidden="true">🏆</span>
+                    <div class="eyebrow-secao">
+                        <span class="linha-pontilhada"></span>
+                        <span class="rotulo">Vocês são campeões</span>
+                        <span class="linha-pontilhada"></span>
+                    </div>
+                    <h2 class="titulo-campeao">{{ torneio.time_campeao.nome }}</h2>
+                    <p class="subtitulo-campeao">{{ torneio.nome }}</p>
+
+                    {% if torneio.valor_premio > 0 %}
+                        <div class="premio-destaque">
+                            <span>Seu prêmio</span>
+                            <strong>R$ {{ "%.2f"|format(torneio.valor_premio) }}</strong>
+                            {% if torneio.premio_status == 'concluido' %}
+                                <span class="selo-status selo-status-aberto">Pagamento recebido</span>
+                            {% elif torneio.premio_status == 'pendente' %}
+                                <span class="selo-status selo-status-em_andamento">Pagamento a caminho</span>
+                            {% elif torneio.premio_status == 'falhou' %}
+                                <span class="selo-status selo-status-divergente">Problema no pagamento — o organizador foi avisado</span>
+                            {% else %}
+                                <span class="selo-status selo-status-finalizado">Aguardando o organizador confirmar</span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <script>
+                (function () {
+                    var cores = ["#2ecc71", "#e8b923", "#eef2f5", "#27ae60"];
+                    var camada = document.getElementById("confete");
+                    if (!camada || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+                    for (var i = 0; i < 70; i++) {
+                        var pedaco = document.createElement("span");
+                        pedaco.className = "confete";
+                        pedaco.style.left = (Math.random() * 100) + "%";
+                        pedaco.style.background = cores[i % cores.length];
+                        pedaco.style.animationDelay = (Math.random() * 1.4) + "s";
+                        pedaco.style.animationDuration = (2.2 + Math.random() * 1.8) + "s";
+                        pedaco.style.transform = "rotate(" + Math.floor(Math.random() * 360) + "deg)";
+                        camada.appendChild(pedaco);
+                    }
+                })();
+            </script>
+        {% else %}
+            <div class="perfil-bloco" style="border-left-color: var(--dourado);">
+                <h2>Campeão</h2>
+                <p style="font-size:18px; font-weight:600;">
+                    🏆 {{ torneio.time_campeao.nome }} <span class="tag">[{{ torneio.time_campeao.tag }}]</span>
+                </p>
+
+                {% if torneio.valor_premio > 0 %}
+                    <p class="texto-fraco-pequeno" style="margin-top:8px;">
+                        Prêmio de R$ {{ "%.2f"|format(torneio.valor_premio) }}
+                        {% if torneio.premio_status == 'concluido' %}
+                            <span class="selo-status selo-status-aberto" style="margin-left:6px;">Pago</span>
+                        {% elif torneio.premio_status == 'pendente' %}
+                            <span class="selo-status selo-status-em_andamento" style="margin-left:6px;">Transferência pendente</span>
+                        {% elif torneio.premio_status == 'falhou' %}
+                            <span class="selo-status selo-status-divergente" style="margin-left:6px;">Falha no pagamento</span>
+                        {% else %}
+                            <span class="selo-status selo-status-finalizado" style="margin-left:6px;">Ainda não pago</span>
+                        {% endif %}
+                    </p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if eh_organizador and torneio.repasse_federacao_status and torneio.repasse_federacao_status != 'sem_lucro' %}
+            <div class="perfil-bloco">
+                <h2>Repasse da federação</h2>
+                <p class="texto-fraco-pequeno">
+                    80% do lucro do campeonato (arrecadação menos o prêmio) para o admin da federação.
+                    {% if torneio.repasse_federacao_valor %}Valor: R$ {{ "%.2f"|format(torneio.repasse_federacao_valor) }}{% endif %}
+                </p>
+                <p style="margin-top:6px;">
+                    {% if torneio.repasse_federacao_status == 'concluido' %}
+                        <span class="selo-status selo-status-aberto">Repassado</span>
+                    {% elif torneio.repasse_federacao_status == 'pendente' %}
+                        <span class="selo-status selo-status-em_andamento">Transferência pendente</span>
+                    {% elif torneio.repasse_federacao_status == 'falhou' %}
+                        <span class="selo-status selo-status-divergente">Falha no repasse</span>
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+
+        {% if eh_organizador and pode_pagar_premio %}
+            <div class="perfil-bloco">
+                <form method="POST" action="{{ url_for('pagar_premio', torneio_id=torneio.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Confirmar pagamentos (prêmio e repasse)</button>
+                </form>
+            </div>
+        {% endif %}
+    {% elif eh_organizador and torneio.status == 'em_andamento' %}
+        <p class="texto-fraco-pequeno" style="margin-top:16px;">
+            O campeão é definido automaticamente assim que a final do chaveamento for confirmada.
+        </p>
+    {% endif %}
+
+    {% if current_user.is_authenticated %}
+        {% if time_ja_inscrito %}
+            <p class="texto-fraco-pequeno" style="margin-top:16px;">Seu time já está inscrito nesse campeonato.</p>
+        {% elif inscricao_pendente %}
+            <a href="{{ url_for('pagamento_pix', torneio_id=torneio.id, inscricao_id=inscricao_pendente.id) }}" class="botao-principal" style="margin-top:20px; display:inline-flex;">
+                Finalizar pagamento do Pix
+            </a>
+        {% elif torneio.status == 'aberto' %}
+            {% if torneio.valor_inscricao > 0 %}
+                <button type="button" class="botao-principal" style="margin-top:20px;" onclick="document.getElementById('popup-taxa').showModal()">
+                    Inscrever meu time
+                </button>
+            {% else %}
+                <form method="POST" action="{{ url_for('inscrever_time', torneio_id=torneio.id) }}" style="margin-top:20px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Inscrever meu time</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    {% else %}
+        <p class="texto-fraco-pequeno" style="margin-top:16px;">
+            <a href="{{ url_for('login') }}" style="color: var(--acento); font-weight:600;">Entre</a> para inscrever seu time.
+        </p>
+    {% endif %}
+
+    {% if eh_organizador %}
+        <p style="margin-top:28px;">
+            <a href="{{ url_for('excluir_campeonato', torneio_id=torneio.id) }}" class="link-excluir">Excluir campeonato</a>
+        </p>
+    {% endif %}
+</section>
+
+{% if torneio.valor_inscricao > 0 and current_user.is_authenticated and not time_ja_inscrito %}
+    <dialog id="popup-taxa" class="popup-print">
+        <span class="mira tl" aria-hidden="true"></span>
+        <span class="mira tr" aria-hidden="true"></span>
+        <span class="mira bl" aria-hidden="true"></span>
+        <span class="mira br" aria-hidden="true"></span>
+
+        <div class="eyebrow-print"><span class="ponto-pulsante"></span>Inscrição</div>
+        <h2 class="popup-print-titulo">Taxa de inscrição</h2>
+        <p class="popup-print-sub">
+            Para garantir a vaga do seu time no {{ torneio.nome }}, é só pagar a taxa via Pix.
+            A gente gera um QR Code na hora — a vaga fica confirmada assim que o pagamento cair.
+        </p>
+
+        <div class="valor-taxa">R$ {{ "%.2f"|format(torneio.valor_inscricao) }}</div>
+
+        <form method="POST" action="{{ url_for('inscrever_time', torneio_id=torneio.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="acoes">
+                <button type="button" class="botao-secundario" onclick="document.getElementById('popup-taxa').close()">Cancelar</button>
+                <button type="submit" class="botao-principal">Pagar taxa</button>
+            </div>
+        </form>
+    </dialog>
+{% endif %}
+{% endblock %}

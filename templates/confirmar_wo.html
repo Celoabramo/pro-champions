@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar W.O. — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="confirmacao">
+    <h1>Tem certeza?</h1>
+    <p class="texto-aviso">
+        {% if opcao == 'duplo' %}
+            Você vai declarar <strong>W.O. duplo</strong> em {{ confronto.time1.nome }} x {{ confronto.time2.nome }} —
+            nenhum dos dois times vai ter vencedor nessa partida. Isso não dá para desfazer sozinho.
+        {% else %}
+            Você vai declarar que <strong>{{ time_vencedor.nome }}</strong> venceu por W.O., por ausência do
+            {{ confronto.time2.nome if opcao == 'time1' else confronto.time1.nome }}. Isso não dá para desfazer sozinho.
+        {% endif %}
+    </p>
+
+    <form method="POST" class="form-confirmacao">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="botao-perigo">Sim, declarar W.O.</button>
+        <a href="{{ url_for('escolher_wo', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}" class="botao-secundario">Cancelar</a>
+    </form>
+</section>
+{% endblock %}

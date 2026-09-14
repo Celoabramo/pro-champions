@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Campeonatos — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="lista-campeonatos">
+    <div class="eyebrow-secao">
+        <span class="rotulo">Pro Clubs</span>
+        <span class="linha-pontilhada"></span>
+        <span class="meta">{{ torneios|length }} no total</span>
+    </div>
+    <div class="cabecalho-secao">
+        <h1>Campeonatos</h1>
+        {% if current_user.is_authenticated and current_user.federacao_id %}
+            <a href="{{ url_for('criar_campeonato') }}" class="botao-secundario-pequeno botao-cinza">Criar campeonato</a>
+        {% endif %}
+    </div>
+
+    {% if federacoes %}
+        <form method="GET" id="form-filtros" class="filtros-campeonatos">
+            <div>
+                <span class="filtro-titulo">Federação</span>
+                <button type="button" class="filtro-federacao-botao" onclick="document.getElementById('popup-federacoes').showModal()">
+                    {% if federacao_obj %}
+                        {{ macros.logo_federacao(federacao_obj, 'logo-federacao-filtro') }}
+                        <span>{{ federacao_obj.nome }}</span>
+                    {% else %}
+                        <span>Todas as federações</span>
+                    {% endif %}
+                    <svg class="icone-chevron-baixo" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+            </div>
+
+            <div>
+                <span class="filtro-titulo">Geração</span>
+                <div class="filtro-glider" style="--total-radio: 3;">
+                    <input type="radio" id="filtro-ger-todas" name="geracao" value="" onchange="this.form.submit()" {% if not geracao_selecionada %}checked{% endif %}>
+                    <label for="filtro-ger-todas">Todas</label>
+                    <input type="radio" id="filtro-ger-nova" name="geracao" value="nova" onchange="this.form.submit()" {% if geracao_selecionada == 'nova' %}checked{% endif %}>
+                    <label for="filtro-ger-nova">Nova geração</label>
+                    <input type="radio" id="filtro-ger-antiga" name="geracao" value="antiga" onchange="this.form.submit()" {% if geracao_selecionada == 'antiga' %}checked{% endif %}>
+                    <label for="filtro-ger-antiga">Antiga geração</label>
+                    <div class="glider-container-h"><div class="glider-h"></div></div>
+                </div>
+            </div>
+
+            {% if federacao_selecionada or geracao_selecionada %}
+                <a href="{{ url_for('campeonatos') }}" class="link-limpar-filtro">Limpar</a>
+            {% endif %}
+        </form>
+
+        <dialog id="popup-federacoes" class="popup-federacoes" onclick="if (event.target===this) this.close()">
+            <div class="popup-federacoes-cabecalho">
+                <h2>Filtrar por federação</h2>
+                <button type="button" class="botao-fechar-popup" onclick="document.getElementById('popup-federacoes').close()" aria-label="Fechar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+                </button>
+            </div>
+            <ul class="lista-popup-federacoes">
+                <li>
+                    <button type="submit" form="form-filtros" name="federacao" value="" class="item-popup-federacao {{ 'selecionado' if not federacao_selecionada }}">
+                        <span class="icone-todas-federacoes" aria-hidden="true">🏆</span>
+                        <span>Todas as federações</span>
+                    </button>
+                </li>
+                {% for federacao in federacoes %}
+                    <li>
+                        <button type="submit" form="form-filtros" name="federacao" value="{{ federacao.id }}" class="item-popup-federacao {{ 'selecionado' if federacao_selecionada == federacao.id }}">
+                            {{ macros.logo_federacao(federacao, 'logo-federacao-mini') }}
+                            <span>{{ federacao.nome }}</span>
+                        </button>
+                    </li>
+                {% endfor %}
+            </ul>
+        </dialog>
+    {% endif %}
+
+    {% if torneios %}
+        <div class="cards-campeonato">
+            {% for torneio in torneios %}
+                <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}" class="card-campeonato card-campeonato-{{ torneio.status }}">
+                    <div class="card-campeonato-topo">
+                        <h2>{{ torneio.nome }}</h2>
+                        <span class="selo-status selo-status-{{ torneio.status }}">
+                            {% if torneio.status == 'aberto' %}Inscrições abertas
+                            {% elif torneio.status == 'em_andamento' %}Em andamento
+                            {% else %}Finalizado{% endif %}
+                        </span>
+                    </div>
+                    <div class="organizador-linha">
+                        {% if torneio.federacao.logo %}
+                            <img src="{{ url_for('static', filename='federacoes/' + torneio.federacao.logo) }}"
+                                 alt="Logo da {{ torneio.federacao.nome }}" class="logo-federacao-mini">
+                        {% endif %}
+                        <span class="nome-organizador">{{ torneio.federacao.nome }}</span>
+                    </div>
+                    <p class="card-campeonato-info">
+                        {% if torneio.data_campeonato %}{{ torneio.data_campeonato.strftime('%d/%m/%Y') }}{% if torneio.hora_campeonato %} às {{ torneio.hora_campeonato.strftime('%H:%M') }}{% endif %} · {% endif %}
+                        {{ torneio.times_inscritos|length }} time(s) inscrito(s) · {{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}
+                    </p>
+                    <span class="chip-geracao">{{ 'Antiga geração' if torneio.geracao == 'antiga' else 'Nova geração' }}</span>
+                    <br>
+                    {% if torneio.valor_inscricao > 0 %}
+                        <span class="chip-valor">Inscrição R$ {{ "%.2f"|format(torneio.valor_inscricao) }}</span>
+                    {% else %}
+                        <span class="chip-valor chip-valor-gratis">Grátis</span>
+                    {% endif %}
+                    {% if torneio.valor_premio > 0 %}
+                        <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> R$ {{ "%.2f"|format(torneio.valor_premio) }}</span>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="texto-fraco-pequeno">Nenhum campeonato criado ainda.</p>
+    {% endif %}
+</section>
+{% endblock %}

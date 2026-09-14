@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}{{ confronto.time1.nome }} x {{ confronto.time2.nome }} — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="detalhe-confronto">
+    <a href="{{ url_for('detalhe_campeonato', torneio_id=confronto.torneio_id) }}" class="link-voltar">← Voltar para o campeonato</a>
+    <p class="fase-titulo" style="margin-bottom:6px;">{{ confronto.fase }}</p>
+
+    <div class="placar-confronto">
+        <div class="lado-confronto">
+            {{ macros.escudo_time(confronto.time1) }}
+            <span class="nome-time">{{ confronto.time1.nome }}</span>
+        </div>
+
+        {% if confronto.status == 'validado' %}
+            <div class="placar-final">
+                <span class="{{ 'placar-vencedor' if confronto.vencedor_id == confronto.time1_id }}">{{ confronto.placar_time1 }}</span>
+                <span class="placar-traço">—</span>
+                <span class="{{ 'placar-vencedor' if confronto.vencedor_id == confronto.time2_id }}">{{ confronto.placar_time2 }}</span>
+            </div>
+        {% elif confronto.status == 'wo' %}
+            <div class="placar-final placar-pendente">W.O.</div>
+        {% else %}
+            <div class="placar-final placar-pendente">vs</div>
+        {% endif %}
+
+        <div class="lado-confronto">
+            {{ macros.escudo_time(confronto.time2) }}
+            <span class="nome-time">{{ confronto.time2.nome }}</span>
+        </div>
+    </div>
+
+    <div class="cabecalho-secao" style="margin-top:24px;">
+        <span class="selo-status {{ 'selo-status-aberto' if confronto.status == 'validado' else 'selo-status-divergente' if confronto.status in ('divergente', 'wo') else 'selo-status-em_andamento' }}">
+            {% if confronto.status == 'pendente' %}Aguardando prints
+            {% elif confronto.status == 'divergente' %}Placares não bateram
+            {% elif confronto.status == 'wo' %}W.O.
+            {% else %}Validado{% endif %}
+        </span>
+    </div>
+
+    {% if confronto.status == 'validado' %}
+        <p class="texto-fraco-pequeno" style="margin-top:8px;">
+            {% if confronto.vencedor_id %}
+                {{ confronto.vencedor.nome }} venceu e avança de fase.
+            {% else %}
+                Empate — vale ponto pros dois times na tabela do grupo.
+            {% endif %}
+            Resultado lido e confirmado automaticamente pela IA a partir dos dois prints.
+        </p>
+    {% endif %}
+
+    {% if confronto.status == 'divergente' %}
+        <p class="texto-fraco-pequeno" style="margin-top:8px; color: var(--erro);">
+            A IA leu placares diferentes nos dois prints enviados. Confiram o resultado combinado e reenviem o print — o que for enviado por último substitui o anterior.
+        </p>
+    {% endif %}
+
+    {% if confronto.status == 'wo' %}
+        <p class="texto-fraco-pequeno" style="margin-top:8px;">
+            {% if confronto.vencedor_wo %}
+                W.O. — {{ confronto.vencedor_wo.nome }} venceu por ausência do adversário.
+            {% else %}
+                W.O. duplo — nenhum time compareceu.
+            {% endif %}
+        </p>
+    {% endif %}
+
+    {% if eh_organizador and confronto.status not in ('validado', 'wo') %}
+        <div class="perfil-bloco">
+            <h2>Controles do admin da federação</h2>
+
+            {% if confronto.hora_inicio %}
+                <p class="texto-fraco-pequeno">
+                    Partida iniciada às {{ confronto.hora_inicio.strftime('%d/%m %H:%M') }}.
+                    W.O. automático liberado a partir das {{ confronto.prazo_wo.strftime('%d/%m %H:%M') }}.
+                </p>
+
+                {% if confronto.elegivel_wo %}
+                    <p class="texto-aviso" style="margin: 12px 0; color: var(--erro);">
+                        O prazo de 1h já passou e a partida ainda não foi confirmada. Esse confronto já está elegível para W.O.
+                    </p>
+                {% endif %}
+
+                <a href="{{ url_for('escolher_wo', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
+                   class="botao-perigo" style="margin-top:10px;">
+                    Declarar W.O.
+                </a>
+            {% else %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                    Marque o início para começar a contar o prazo de 1h do W.O. automático.
+                </p>
+                <form method="POST" action="{{ url_for('iniciar_confronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-secundario">Iniciar partida</button>
+                </form>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if confronto.status not in ('validado', 'wo') or (eh_organizador and (confronto.print_time1 or confronto.print_time2)) %}
+        <div class="perfil-bloco">
+            <h2>Prints da partida</h2>
+            {% if confronto.status in ('validado', 'wo') %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Partida encerrada — prints guardados para consulta.</p>
+            {% endif %}
+            <div class="status-prints">
+                <div class="status-print-item {{ 'enviado' if confronto.leitura_time1_ok }}">
+                    <span>{{ confronto.time1.nome }}</span>
+                    {% if confronto.print_time1 %}
+                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('static', filename='prints/' + confronto.print_time1) }}')">Ver print enviado</a>
+                    {% else %}
+                        <span class="texto-fraco-pequeno">Aguardando envio</span>
+                    {% endif %}
+                </div>
+                <div class="status-print-item {{ 'enviado' if confronto.leitura_time2_ok }}">
+                    <span>{{ confronto.time2.nome }}</span>
+                    {% if confronto.print_time2 %}
+                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('static', filename='prints/' + confronto.print_time2) }}')">Ver print enviado</a>
+                    {% else %}
+                        <span class="texto-fraco-pequeno">Aguardando envio</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if confronto.status not in ('validado', 'wo') %}
+                {% set meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 %}
+                {% set minha_leitura_ok = (confronto.leitura_time1_ok if meu_lado == 1 else confronto.leitura_time2_ok) %}
+                {% if meu_lado and current_user.id == meu_time.capitao_id and (not minha_leitura_ok or confronto.status == 'divergente') %}
+                    <button type="button" class="botao-principal" style="margin-top:16px;" onclick="document.getElementById('popup-print').showModal()">
+                        {% if confronto.status == 'divergente' %}Reenviar print do placar{% else %}Tirar print do placar{% endif %}
+                    </button>
+                {% elif meu_lado and current_user.id == meu_time.capitao_id %}
+                    <p class="texto-fraco-pequeno" style="margin-top:14px;">Print enviado e lido. Agora é esperar o adversário enviar o dele para confirmar o resultado.</p>
+                {% endif %}
+            {% endif %}
+        </div>
+    {% endif %}
+</section>
+
+<dialog id="popup-print" class="popup-print">
+    <span class="mira tl" aria-hidden="true"></span>
+    <span class="mira tr" aria-hidden="true"></span>
+    <span class="mira bl" aria-hidden="true"></span>
+    <span class="mira br" aria-hidden="true"></span>
+
+    <div class="eyebrow-print"><span class="ponto-pulsante"></span>Print da partida</div>
+    <h2 class="popup-print-titulo">Antes de tirar a foto</h2>
+    <p class="popup-print-sub">O placar é conferido pelos dois prints — do seu time e do adversário. Sem o placar visível e completo, a validação não passa.</p>
+
+    <div class="passos">
+        <div class="passo">
+            <span class="passo-num">1</span>
+            <div class="passo-corpo">
+                <strong>Espere a tela final da partida</strong>
+                <span>A que mostra o placar cheio — não vale print do meio do jogo.</span>
+            </div>
+        </div>
+        <div class="passo">
+            <span class="passo-num">2</span>
+            <div class="passo-corpo">
+                <strong>Enquadre a tela toda</strong>
+                <span>Sem cortar os escudos ou o placar, sem zoom, sem editar.</span>
+            </div>
+        </div>
+        <div class="passo">
+            <span class="passo-num">3</span>
+            <div class="passo-corpo">
+                <strong>Print nítido</strong>
+                <span>Direto da tela — nada de foto tremida ou com reflexo.</span>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('enviar_print', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}" enctype="multipart/form-data" id="form-print">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" id="input-print" name="print" accept="image/*" capture="environment" style="display:none;" onchange="document.getElementById('form-print').submit()">
+        <div class="acoes">
+            <button type="button" class="botao-secundario" onclick="document.getElementById('popup-print').close()">Cancelar</button>
+            <button type="button" class="botao-principal" onclick="document.getElementById('input-print').click()">Tirar o print</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="popup-imagem" class="popup-imagem" onclick="if (event.target === this) this.close()">
+    <img id="imagem-print-grande" src="" alt="Print enviado">
+    <div class="popup-imagem-acoes">
+        <button type="button" class="botao-secundario" onclick="document.getElementById('popup-imagem').close()">Voltar</button>
+    </div>
+</dialog>
+<script>
+    function abrirPrint(src) {
+        var imagem = document.getElementById('imagem-print-grande');
+        imagem.src = src;
+        document.getElementById('popup-imagem').showModal();
+        // Alguns navegadores não repintam a imagem certo assim que o
+        // popup abre — força um redesenho para ela aparecer de primeira.
+        requestAnimationFrame(function () {
+            imagem.style.transform = 'translateZ(0.01px)';
+            requestAnimationFrame(function () {
+                imagem.style.transform = 'translateZ(0)';
+            });
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}{{ federacao.nome }} — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="detalhe-federacao">
+    <a href="{{ url_for('federacoes') }}" class="link-voltar">← Voltar para federações</a>
+
+    <div class="cabecalho-federacao">
+        {{ macros.logo_federacao(federacao, 'logo-federacao') }}
+        <div>
+            <h1 style="margin:0;">{{ federacao.nome }}</h1>
+            <p class="texto-fraco-pequeno">
+                Dono: {{ federacao.dono.nickname }} · {{ federacao.admins|length }} admin(s)
+                · na Pro Champions desde {{ federacao.criado_em.strftime('%m/%Y') }}
+            </p>
+        </div>
+    </div>
+
+    <div class="grid-stats-federacao">
+        <div class="stat-federacao">
+            <span class="stat-federacao-valor">{{ torneios|length }}</span>
+            <span class="stat-federacao-rotulo">Campeonatos</span>
+        </div>
+        <div class="stat-federacao">
+            <span class="stat-federacao-valor">{{ times_participantes }}</span>
+            <span class="stat-federacao-rotulo">Times participantes</span>
+        </div>
+        {% if premios_pagos > 0 %}
+            <div class="stat-federacao">
+                <span class="stat-federacao-valor">R$ {{ "%.2f"|format(premios_pagos) }}</span>
+                <span class="stat-federacao-rotulo">Já pago em prêmios</span>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if ranking_campeoes %}
+        <div class="perfil-bloco">
+            <h2>Maiores campeões</h2>
+            <ul class="lista-ranking-campeoes">
+                {% for time, titulos in ranking_campeoes %}
+                    <li>
+                        <span class="ranking-posicao">{{ loop.index }}º</span>
+                        {{ macros.escudo_time(time, 'escudo-time-pequeno') }}
+                        <span class="ranking-nome">{{ time.nome }}</span>
+                        <span class="ranking-titulos">{{ titulos }} título{{ 's' if titulos != 1 }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if ranking_artilharia %}
+        <div class="perfil-bloco">
+            <h2>Mais gols marcados</h2>
+            <ul class="lista-ranking-campeoes">
+                {% for time, gols in ranking_artilharia %}
+                    <li>
+                        <span class="ranking-posicao">{{ loop.index }}º</span>
+                        {{ macros.escudo_time(time, 'escudo-time-pequeno') }}
+                        <span class="ranking-nome">{{ time.nome }}</span>
+                        <span class="ranking-titulos">{{ gols }} gol{{ 's' if gols != 1 }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <div class="perfil-bloco">
+        <h2>Campeonatos</h2>
+        {% if torneios %}
+            <ul class="lista-membros">
+                {% for torneio in torneios %}
+                    <li>
+                        <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}">{{ torneio.nome }}</a>
+                        <span class="selo-status selo-status-{{ torneio.status }}" style="margin-left:8px;">
+                            {% if torneio.status == 'aberto' %}Inscrições abertas
+                            {% elif torneio.status == 'em_andamento' %}Em andamento
+                            {% else %}Finalizado{% endif %}
+                        </span>
+                        {% if torneio.time_campeao %}
+                            <span class="texto-fraco-pequeno" style="margin-left:8px;">🏆 {{ torneio.time_campeao.nome }}</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="texto-fraco-pequeno">Essa federação ainda não criou nenhum campeonato.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
