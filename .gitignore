@@ -1,5 +1,6 @@
 .env
 instance/
+backups/
 __pycache__/
 *.pyc
 venv/

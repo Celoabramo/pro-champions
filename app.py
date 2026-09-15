@@ -63,9 +63,11 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
 
-# Banco de dados local em arquivo (SQLite). Depois, quando o site for
-# para o ar de verdade, a gente troca isso por um banco tipo PostgreSQL.
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///pro_clubs.db"
+# Localmente usa SQLite em arquivo (simples, sem precisar instalar nada).
+# Em produção, defina DATABASE_URL no ambiente apontando pra um Postgres —
+# o Railway não mantém arquivos entre deploys, um banco em arquivo local
+# se perderia a cada atualização do site.
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///pro_clubs.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Prints do placar, escudos de time e logos de federação. Guardados como
@@ -1993,9 +1995,14 @@ def promover_organizador(email):
     click.echo(f"{usuario.nickname} agora é organizador.")
 
 
+# Fora do "if __main__" de propósito — precisa rodar também quando o
+# gunicorn importa esse arquivo em produção (ele nunca executa como
+# "__main__"). db.create_all() só cria as tabelas que ainda não existem,
+# então rodar de novo a cada início não faz nada se elas já estiverem lá.
+with app.app_context():
+    db.create_all()
+
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()  # cria o banco de dados na primeira vez que roda
     # Debug SÓ fica ligado se você setar FLASK_DEBUG=1 no ambiente. Com
     # debug ligado, qualquer erro abre um console que executa código
     # Python — isso não pode estar ligado se o site for para o ar de verdade.
