@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar nome do time — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="confirmacao">
+    <h1>Já existe um time parecido</h1>
+    <p class="texto-aviso">
+        Já {{ 'tem times cadastrados' if nomes_parecidos|length > 1 else 'existe um time cadastrado' }} com nome parecido com
+        <strong>{{ nome }}</strong>:
+    </p>
+    <ul class="lista-membros" style="margin: 12px 0 16px;">
+        {% for nome_parecido in nomes_parecidos %}
+            <li>{{ nome_parecido }}</li>
+        {% endfor %}
+    </ul>
+    <p class="texto-aviso">
+        Nomes parecidos podem confundir a leitura automática do placar pelos prints. Quer criar o time
+        <strong>{{ nome }}</strong> mesmo assim?
+    </p>
+
+    <form method="POST" action="{{ url_for('criar_time') }}" class="form-confirmacao">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="nome" value="{{ nome }}">
+        <input type="hidden" name="tag" value="{{ tag }}">
+        <input type="hidden" name="confirmar_nome_parecido" value="1">
+        <button type="submit" class="botao-perigo">Sim, criar com esse nome mesmo</button>
+        <a href="{{ url_for('time') }}" class="botao-secundario">Cancelar e escolher outro nome</a>
+    </form>
+</section>
+{% endblock %}

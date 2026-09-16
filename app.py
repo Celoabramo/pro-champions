@@ -631,6 +631,16 @@ def criar_time():
         flash("Já existe um time com esse nome.", "erro")
         return redirect(url_for("time"))
 
+    if not request.form.get("confirmar_nome_parecido"):
+        nomes_parecidos = [t.nome for t in Team.query.all() if _nomes_parecidos(nome, t.nome)]
+        if nomes_parecidos:
+            return render_template(
+                "confirmar_nome_time.html",
+                nome=nome,
+                tag=tag,
+                nomes_parecidos=nomes_parecidos,
+            )
+
     novo_time = Team(nome=nome, tag=tag, capitao_id=current_user.id)
     db.session.add(novo_time)
     db.session.flush()  # já gera o id do time antes de vincular o usuário
@@ -1813,6 +1823,53 @@ def detalhe_confronto(torneio_id, confronto_id):
         meu_lado=meu_lado,
         eh_organizador=eh_organizador,
     )
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/contestar", methods=["POST"])
+@login_required
+@limiter.limit("5 per minute", methods=["POST"])
+def contestar_placar(torneio_id, confronto_id):
+    confronto = Confronto.query.get_or_404(confronto_id)
+    if confronto.torneio_id != torneio_id:
+        abort(404)
+
+    if confronto.status != "validado":
+        flash("Só dá para contestar uma partida já validada.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    meu_lado = time_do_confronto(confronto, current_user)
+    meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 else None
+    if not meu_time or current_user.id != meu_time.capitao_id:
+        flash("Só o capitão de um dos dois times pode contestar o placar.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    torneio = confronto.torneio
+    corpo = (
+        f"Contestação de placar em {torneio.nome} ({torneio.federacao.nome}).\n\n"
+        f"Partida: {confronto.time1.nome} {confronto.placar_time1} x {confronto.placar_time2} {confronto.time2.nome}\n"
+        f"Fase: {confronto.fase}\n"
+        f"Contestado por: {current_user.nickname} ({current_user.email}), capitão do {meu_time.nome}\n"
+    )
+    try:
+        email_util.enviar_email(
+            "suporte@prochampions.com.br",
+            f"Contestação de placar — {torneio.nome}",
+            corpo,
+        )
+    except email_util.EmailIndisponivel as erro:
+        app.logger.error(f"Falha ao enviar e-mail de contestação (confronto {confronto.id}): {erro}")
+
+    notificar_federacao(
+        torneio,
+        "placar_contestado",
+        f'{meu_time.nome} contestou o placar de {confronto.time1.nome} {confronto.placar_time1} x '
+        f'{confronto.placar_time2} {confronto.time2.nome} ({torneio.nome}).',
+        confronto=confronto,
+    )
+    db.session.commit()
+
+    flash("Contestação enviada! O organizador foi avisado e o suporte vai revisar.", "sucesso")
+    return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
 @app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/iniciar", methods=["POST"])
