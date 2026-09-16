@@ -2106,7 +2106,10 @@ def _reset_status_pagamento_teste_temporario():
     if current_user.id != torneio.criado_por_id:
         abort(403)
 
-    torneio.premio_status = None
+    # O prêmio dessa rodada já foi pago de verdade (confirmado por fora) —
+    # marca como concluído em vez de limpar, pra não arriscar reenviar.
+    # Só o repasse (que nunca chegou a completar) é resetado.
+    torneio.premio_status = "concluido"
     torneio.premio_transferencia_id = None
     torneio.repasse_federacao_status = None
     torneio.repasse_federacao_valor = None
