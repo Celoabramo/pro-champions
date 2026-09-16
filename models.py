@@ -67,17 +67,6 @@ class User(UserMixin, db.Model):
     federacao_id = db.Column(db.Integer, db.ForeignKey("federacoes.id"), nullable=True)
     federacao = db.relationship("Federacao", back_populates="admins", foreign_keys=[federacao_id])
 
-    # Link do grupo de WhatsApp da federação — só faz sentido pra quem é
-    # dono de uma (Federacao.dono_id). Mostrado como botão na página
-    # pública da federação; se estiver vazio, o botão avisa que não tem
-    # grupo cadastrado em vez de sumir.
-    #
-    # db.deferred: essa coluna só é buscada quando alguém acessa
-    # `.link_grupo_whatsapp` de verdade, nunca num SELECT normal de User —
-    # assim login/cadastro continuam funcionando mesmo antes da migração
-    # que cria essa coluna na tabela já existente rodar em produção.
-    link_grupo_whatsapp = db.deferred(db.Column(db.String(255), nullable=True))
-
     def __repr__(self):
         return f"<User {self.nickname}>"
 
