@@ -1671,7 +1671,13 @@ def pagar_premio(torneio_id):
         flash("Não tem mais nada pendente para pagar nesse campeonato.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
+    # Cada envio salva seu resultado no banco IMEDIATAMENTE, antes de tentar
+    # o próximo — se o dinheiro já saiu de verdade pela AbacatePay, isso
+    # não pode ficar só na memória. Um erro no meio (rede, bug, timeout)
+    # não pode apagar o registro de uma transferência que já aconteceu.
     msg_premio, erro_premio = _pagar_premio_campeao(torneio)
+    db.session.commit()
+
     # A AbacatePay recusa dois saques feitos rápido demais em sequência
     # ("aguarde alguns segundos antes de solicitar outro saque") — essa
     # pequena pausa evita esbarrar nesse limite ao mandar prêmio e repasse
