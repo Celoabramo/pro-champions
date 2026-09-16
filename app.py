@@ -105,6 +105,29 @@ def arquivo_upload(categoria, nome_arquivo):
         abort(404)
     return send_from_directory(os.path.join(app.config["PASTA_UPLOADS"], categoria), nome_arquivo)
 
+
+def _apagar_upload(categoria, nome_arquivo):
+    """Apaga um arquivo enviado, se ele ainda existir.
+
+    O disco do site é um volume de tamanho fixo. Sem apagar o arquivo antigo
+    ao substituir (print reenviado, escudo/logo trocados), cada troca deixava
+    um arquivo órfão para sempre — e quando o volume enchesse, TODO upload do
+    site pararia de funcionar.
+
+    Falha aqui nunca derruba a ação do usuário: se o arquivo já não existe ou
+    não dá para apagar, só registra e segue.
+    """
+    if not nome_arquivo or categoria not in CATEGORIAS_UPLOAD_VALIDAS:
+        return
+
+    caminho = os.path.join(app.config["PASTA_UPLOADS"], categoria, os.path.basename(nome_arquivo))
+    try:
+        os.remove(caminho)
+    except FileNotFoundError:
+        pass
+    except OSError as erro:
+        app.logger.warning(f"Não deu para apagar o upload {categoria}/{nome_arquivo}: {erro}")
+
 # Secret usado para assinar/validar o webhook da AbacatePay (HMAC). Também
 # vem de variável de ambiente — sem isso o webhook automático não valida,
 # mas o botão manual "já paguei, verificar" continua funcionando.
@@ -546,6 +569,7 @@ def enviar_logo_federacao():
     nome_arquivo = secure_filename(f"federacao{current_user.federacao_id}-{uuid.uuid4().hex}.{extensao}")
     arquivo.save(os.path.join(app.config["PASTA_FEDERACOES"], nome_arquivo))
 
+    _apagar_upload("federacoes", current_user.federacao.logo)
     current_user.federacao.logo = nome_arquivo
     db.session.commit()
 
@@ -799,6 +823,7 @@ def enviar_escudo_time():
     nome_arquivo = secure_filename(f"time{time_atual.id}-{uuid.uuid4().hex}.{extensao}")
     arquivo.save(os.path.join(app.config["PASTA_ESCUDOS"], nome_arquivo))
 
+    _apagar_upload("escudos", time_atual.escudo_imagem)
     time_atual.escudo_imagem = nome_arquivo
     db.session.commit()
 
@@ -1131,6 +1156,7 @@ def detalhe_campeonato(torneio_id):
         eh_membro_campeao=eh_membro_campeao,
         grupos_info=grupos_info,
         rodadas_bracket=_estrutura_bracket(torneio) if torneio.status != "aberto" else None,
+        tem_contestacao_aberta=_tem_contestacao_aberta(torneio) if eh_organizador else False,
     )
 
 
@@ -1431,6 +1457,11 @@ def _avancar_mata_mata(confronto):
             "campeonato_finalizado",
             f'O campeonato "{torneio.nome}" foi finalizado — {campeao.nome} é o campeão!',
         )
+        # Campeonato sem dinheiro envolvido não tem tela de "confirmar
+        # pagamentos" — então é aqui mesmo que os prints saem, senão eles
+        # ficariam acumulando no volume pra sempre.
+        if torneio.valor_inscricao <= 0 and torneio.valor_premio <= 0:
+            _limpar_prints_do_torneio(torneio)
         return
 
     proxima_fase = FASES_POR_TAMANHO.get(len(vencedores), f"Fase de {len(vencedores)}")
@@ -1678,6 +1709,39 @@ FATIA_FEDERACAO_NO_LUCRO = 0.8  # os outros 20% ficam parados na conta AbacatePa
 TAXA_REEMBOLSO = 1.60
 
 
+def _tem_contestacao_aberta(torneio):
+    """Se alguma partida desse campeonato foi contestada por um dos times."""
+    return bool(
+        Notificacao.query
+        .filter(Notificacao.torneio_id == torneio.id, Notificacao.tipo == "placar_contestado")
+        .first()
+    )
+
+
+def _limpar_prints_do_torneio(torneio):
+    """Apaga os prints das partidas de um campeonato já encerrado e pago.
+
+    Print é prova de contestação, então só sai depois que o campeonato
+    fechou e o dinheiro foi pago — a partir daí não tem mais o que
+    contestar (ver Termos de uso: contestação é durante o campeonato).
+    Sem essa limpeza, os prints iam se acumulando no volume até enchê-lo,
+    e aí nenhum upload do site funcionaria mais.
+    """
+    apagados = 0
+    for confronto in torneio.confrontos:
+        for lado in (1, 2):
+            nome = confronto.print_time1 if lado == 1 else confronto.print_time2
+            if not nome:
+                continue
+            _apagar_upload("prints", nome)
+            if lado == 1:
+                confronto.print_time1 = None
+            else:
+                confronto.print_time2 = None
+            apagados += 1
+    return apagados
+
+
 def _motivo_para_recusar_vaga(inscricao):
     """Devolve o motivo (texto) se essa inscrição não pode mais virar vaga, ou None.
 
@@ -1902,6 +1966,17 @@ def pagar_premio(torneio_id):
         flash(erro, "erro")
     if not any([msg_premio, erro_premio, msg_repasse, erro_repasse]):
         flash("Já tem uma transferência pendente de confirmação na AbacatePay — aguarde antes de tentar de novo.", "sucesso")
+
+    # Campeonato encerrado e sem pendência de pagamento: os prints já
+    # cumpriram o papel deles (prova em caso de contestação) e podem sair,
+    # pra não acumular arquivo no volume sem fim.
+    premio_resolvido = torneio.valor_premio <= 0 or torneio.premio_status in ("concluido", "pendente")
+    repasse_resolvido = torneio.repasse_federacao_status in ("concluido", "pendente", "sem_lucro", "abaixo_minimo")
+    if premio_resolvido and repasse_resolvido:
+        apagados = _limpar_prints_do_torneio(torneio)
+        db.session.commit()
+        if apagados:
+            flash(f"{apagados} print(s) da competição foram apagados — o campeonato está encerrado e pago.", "sucesso")
 
     return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
@@ -2398,9 +2473,13 @@ def enviar_print(torneio_id, confronto_id):
     caminho_arquivo = os.path.join(app.config["PASTA_PRINTS"], nome_arquivo)
     arquivo.save(caminho_arquivo)
 
+    # Reenvio (divergência) troca o print: apaga o anterior pra não deixar
+    # arquivo órfão ocupando o volume pra sempre.
     if meu_lado == 1:
+        _apagar_upload("prints", confronto.print_time1)
         confronto.print_time1 = nome_arquivo
     else:
+        _apagar_upload("prints", confronto.print_time2)
         confronto.print_time2 = nome_arquivo
 
     # Manda para IA ler o placar desse print. Qualquer falha (timeout, rede,

@@ -298,7 +298,14 @@
 
         {% if eh_organizador and pode_pagar_premio %}
             <div class="perfil-bloco">
-                <form method="POST" action="{{ url_for('pagar_premio', torneio_id=torneio.id) }}">
+                {% if tem_contestacao_aberta %}
+                    <p class="texto-aviso" style="color: var(--erro); margin-bottom:14px;">
+                        ⚠ Um dos times contestou o placar de uma partida desse campeonato. Confira a contestação antes
+                        de pagar — depois de confirmar, o dinheiro é transferido e os prints das partidas são apagados.
+                    </p>
+                {% endif %}
+                <form method="POST" action="{{ url_for('pagar_premio', torneio_id=torneio.id) }}"
+                      onsubmit="return confirm({% if tem_contestacao_aberta %}'ATENÇÃO: esse campeonato tem uma contestação de placar em aberto.\n\nSe você continuar, o prêmio e o repasse são pagos agora e os prints das partidas são apagados — não dá para desfazer.\n\nTem certeza que quer encerrar assim mesmo?'{% else %}'Confirmar os pagamentos e encerrar o campeonato?\n\nO prêmio e o repasse são transferidos agora, e os prints das partidas são apagados.'{% endif %});">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="botao-principal">Confirmar pagamentos (prêmio e repasse)</button>
                 </form>
