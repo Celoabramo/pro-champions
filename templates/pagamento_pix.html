@@ -14,6 +14,17 @@
 
         <div class="valor-taxa">R$ {{ "%.2f"|format(torneio.valor_inscricao) }}</div>
 
+        {% if pix_vencido %}
+            <p class="texto-aviso" style="color: var(--erro); margin-bottom:14px;">
+                Esse código Pix venceu. Gere um novo para conseguir pagar — a vaga só é garantida
+                depois que o pagamento cai.
+            </p>
+            <form method="POST" action="{{ url_for('inscrever_time', torneio_id=torneio.id) }}" style="margin-bottom:18px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="botao-principal">Gerar um novo Pix</button>
+            </form>
+        {% endif %}
+
         {% if inscricao.pix_br_code_base64 %}
             <div class="qr-pix">
                 <img src="{{ inscricao.pix_br_code_base64 }}" alt="QR Code do Pix" width="220" height="220">

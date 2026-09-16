@@ -1233,7 +1233,17 @@ def inscrever_time(torneio_id):
     inscricao_existente = Inscricao.query.filter_by(
         torneio_id=torneio.id, time_id=current_user.time.id
     ).first()
-    if inscricao_existente and inscricao_existente.status == "pendente":
+    # Só manda de volta pra cobrança existente se ela ainda dá pra pagar.
+    # Antes, com o Pix vencido (30 min), o time era devolvido pro mesmo QR
+    # Code morto pra sempre — sem nunca gerar um novo e sem conseguir
+    # entrar no campeonato. Vencido, cai no fluxo de baixo e gera outro.
+    pix_ainda_vale = (
+        inscricao_existente
+        and inscricao_existente.status == "pendente"
+        and inscricao_existente.pix_expira_em
+        and inscricao_existente.pix_expira_em > datetime.utcnow()
+    )
+    if pix_ainda_vale:
         return redirect(url_for("pagamento_pix", torneio_id=torneio_id, inscricao_id=inscricao_existente.id))
 
     if _vagas_ocupadas(torneio) >= torneio.max_times:
@@ -1299,6 +1309,7 @@ def pagamento_pix(torneio_id, inscricao_id):
         inscricao=inscricao,
         torneio=inscricao.torneio,
         modo_teste=bool(os.environ.get("ABACATEPAY_MODO_TESTE")),
+        pix_vencido=bool(inscricao.pix_expira_em and inscricao.pix_expira_em <= datetime.utcnow()),
     )
 
 
