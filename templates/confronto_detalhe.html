@@ -119,7 +119,7 @@
                 <div class="status-print-item {{ 'enviado' if confronto.leitura_time1_ok }}">
                     <span>{{ confronto.time1.nome }}</span>
                     {% if confronto.print_time1 %}
-                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('static', filename='prints/' + confronto.print_time1) }}')">Ver print enviado</a>
+                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time1) }}')">Ver print enviado</a>
                     {% else %}
                         <span class="texto-fraco-pequeno">Aguardando envio</span>
                     {% endif %}
@@ -127,7 +127,7 @@
                 <div class="status-print-item {{ 'enviado' if confronto.leitura_time2_ok }}">
                     <span>{{ confronto.time2.nome }}</span>
                     {% if confronto.print_time2 %}
-                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('static', filename='prints/' + confronto.print_time2) }}')">Ver print enviado</a>
+                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time2) }}')">Ver print enviado</a>
                     {% else %}
                         <span class="texto-fraco-pequeno">Aguardando envio</span>
                     {% endif %}

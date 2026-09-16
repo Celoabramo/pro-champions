@@ -4,6 +4,8 @@ backups/
 __pycache__/
 *.pyc
 venv/
-static/prints/*
-!static/prints/.gitkeep
+uploads/
+static/escudos/*
+!static/escudos/generico.png
+static/federacoes/*
 .claude/scheduled_tasks.lock

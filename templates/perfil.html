@@ -69,7 +69,7 @@
             {% set federacao = usuario.federacao %}
             <div class="cabecalho-federacao">
                 {% if federacao.logo %}
-                    <img src="{{ url_for('static', filename='federacoes/' + federacao.logo) }}"
+                    <img src="{{ url_for('arquivo_upload', categoria='federacoes', nome_arquivo=federacao.logo) }}"
                          alt="Logo da {{ federacao.nome }}" class="logo-federacao">
                 {% endif %}
                 <div>

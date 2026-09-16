@@ -1,6 +1,6 @@
 {% macro logo_federacao(federacao, classe='logo-federacao') %}
     {% if federacao.logo %}
-        <img src="{{ url_for('static', filename='federacoes/' + federacao.logo) }}"
+        <img src="{{ url_for('arquivo_upload', categoria='federacoes', nome_arquivo=federacao.logo) }}"
              alt="Logo da {{ federacao.nome }}" class="{{ classe }}">
     {% else %}
         <img src="{{ url_for('static', filename='logo.png') }}"
@@ -10,7 +10,7 @@
 
 {% macro escudo_time(time, classe='escudo-time') %}
     {% if time.escudo_imagem %}
-        <img src="{{ url_for('static', filename='escudos/' + time.escudo_imagem) }}"
+        <img src="{{ url_for('arquivo_upload', categoria='escudos', nome_arquivo=time.escudo_imagem) }}"
              alt="Escudo do {{ time.nome }}" class="{{ classe }} escudo-time-img">
     {% else %}
         <img src="{{ url_for('static', filename='escudos/generico.png') }}"

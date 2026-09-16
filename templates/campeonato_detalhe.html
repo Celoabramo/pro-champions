@@ -15,7 +15,7 @@
 
     <div class="organizador-linha">
         {% if torneio.federacao.logo %}
-            <img src="{{ url_for('static', filename='federacoes/' + torneio.federacao.logo) }}"
+            <img src="{{ url_for('arquivo_upload', categoria='federacoes', nome_arquivo=torneio.federacao.logo) }}"
                  alt="Logo da {{ torneio.federacao.nome }}" class="logo-federacao-mini">
         {% endif %}
         <span class="nome-organizador">{{ torneio.federacao.nome }} <span class="texto-fraco-pequeno">por {{ torneio.criado_por.nickname }}</span></span>

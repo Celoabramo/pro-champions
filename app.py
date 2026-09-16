@@ -25,7 +25,7 @@ from time import sleep as _dormir
 
 import click
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, request, flash, abort, jsonify
+from flask import Flask, render_template, redirect, url_for, request, flash, abort, jsonify, send_from_directory
 from sqlalchemy import case
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
@@ -75,19 +75,35 @@ app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///pro_clubs.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Prints do placar, escudos de time e logos de federação. Guardados como
-# arquivo local por enquanto — numa próxima parte isso pode ir para um
-# storage (S3 etc).
-app.config["PASTA_PRINTS"] = os.path.join(app.root_path, "static", "prints")
-app.config["PASTA_ESCUDOS"] = os.path.join(app.root_path, "static", "escudos")
-app.config["PASTA_FEDERACOES"] = os.path.join(app.root_path, "static", "federacoes")
+# Prints do placar, escudos de time e logos de federação — arquivos
+# enviados pelos usuários, servidos pela rota arquivo_upload() abaixo
+# (não pelo static/ do Flask, que é só pro que já vem no código).
+#
+# PASTA_UPLOADS por padrão é uma pasta local (bom pra rodar na sua
+# máquina) — em produção (Railway), aponta via variável de ambiente pra
+# dentro de um Volume, que é a única parte do sistema de arquivos que
+# sobrevive a um novo deploy. Sem isso, TODO upload (print de resultado,
+# escudo de time, logo de federação) some silenciosamente no próximo
+# deploy, porque cada deploy sobe um container zerado.
+app.config["PASTA_UPLOADS"] = os.environ.get("PASTA_UPLOADS", os.path.join(app.root_path, "uploads"))
+app.config["PASTA_PRINTS"] = os.path.join(app.config["PASTA_UPLOADS"], "prints")
+app.config["PASTA_ESCUDOS"] = os.path.join(app.config["PASTA_UPLOADS"], "escudos")
+app.config["PASTA_FEDERACOES"] = os.path.join(app.config["PASTA_UPLOADS"], "federacoes")
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB por upload
 EXTENSOES_PRINT_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
 EXTENSOES_IMAGEM_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
+CATEGORIAS_UPLOAD_VALIDAS = {"prints", "escudos", "federacoes"}
 
 os.makedirs(app.config["PASTA_PRINTS"], exist_ok=True)
 os.makedirs(app.config["PASTA_ESCUDOS"], exist_ok=True)
 os.makedirs(app.config["PASTA_FEDERACOES"], exist_ok=True)
+
+
+@app.route("/uploads/<categoria>/<path:nome_arquivo>")
+def arquivo_upload(categoria, nome_arquivo):
+    if categoria not in CATEGORIAS_UPLOAD_VALIDAS:
+        abort(404)
+    return send_from_directory(os.path.join(app.config["PASTA_UPLOADS"], categoria), nome_arquivo)
 
 # Secret usado para assinar/validar o webhook da AbacatePay (HMAC). Também
 # vem de variável de ambiente — sem isso o webhook automático não valida,
