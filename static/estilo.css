@@ -647,7 +647,8 @@ main { max-width: 640px; margin: 0 auto; padding: 48px 24px 80px; }
     letter-spacing: 0.02em;
     flex-shrink: 0;
 }
-.escudo-time-grande.escudo-time-img { border-color: var(--linha); background: var(--fundo); object-fit: cover; display: block; }
+.escudo-time-grande.escudo-time-img { border-color: var(--linha); background: transparent; object-fit: cover; display: block; }
+.escudo-time-grande.escudo-generico { background: var(--fundo); }
 .cabecalho-time h1 { margin: 0; }
 
 .form-escudo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -709,9 +710,10 @@ main { max-width: 640px; margin: 0 auto; padding: 48px 24px 80px; }
     height: 96px;
     border-radius: 14px;
     border: 1.5px solid var(--linha);
-    background: var(--fundo);
+    background: transparent;
     object-fit: cover;
 }
+.logo-federacao.logo-federacao-generico { background: var(--fundo); }
 
 .time-atual h1 { font-size: 28px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .tag { color: var(--texto-fraco); font-weight: 400; font-size: 18px; font-family: "Inter", sans-serif; }
@@ -941,10 +943,11 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
     height: 20px;
     border-radius: 5px;
     border: 1px solid var(--linha);
-    background: var(--fundo);
+    background: transparent;
     object-fit: cover;
     flex-shrink: 0;
 }
+.logo-federacao-mini.logo-federacao-generico { background: var(--fundo); }
 .nome-organizador { color: var(--texto); font-size: 13px; font-weight: 700; }
 .detalhe-campeonato .nome-organizador { font-size: 15px; }
 
@@ -966,11 +969,11 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
     height: 52px;
     border-radius: 12px;
     border: 1.5px solid var(--linha);
-    background: var(--fundo);
+    background: transparent;
     object-fit: cover;
     flex-shrink: 0;
 }
-.logo-federacao-generico { object-fit: contain; padding: 8px; }
+.logo-federacao-generico { object-fit: contain; padding: 8px; background: var(--fundo); }
 .card-federacao-info h2 { font-size: 17px; margin: 0 0 4px; }
 .card-federacao-meta { color: var(--texto-fraco); font-size: 13px; margin: 0; }
 .destaque-aberto { color: var(--acento); font-weight: 600; }
@@ -1400,10 +1403,11 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
     height: 56px;
     border-radius: 14px;
     border: 1.5px solid var(--linha);
-    background: var(--fundo);
+    background: transparent;
     object-fit: cover;
     display: block;
 }
+.escudo-time-final.escudo-generico { background: var(--fundo); }
 .bracket-final-time.bracket-vencedor .escudo-time-final { border-color: var(--acento); background: var(--acento-fraco); }
 .bracket-final-nome {
     font-size: 13.5px;
@@ -1455,10 +1459,11 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 }
 .escudo-time.escudo-time-img {
     border-color: var(--linha);
-    background: var(--fundo);
+    background: transparent;
     object-fit: cover;
     display: block;
 }
+.escudo-time.escudo-generico { background: var(--fundo); }
 
 .escudo-time-pequeno {
     width: 30px;
@@ -1478,10 +1483,11 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 }
 .escudo-time-pequeno.escudo-time-img {
     border-color: var(--linha);
-    background: var(--fundo);
+    background: transparent;
     object-fit: cover;
     display: block;
 }
+.escudo-time-pequeno.escudo-generico { background: var(--fundo); }
 
 .nome-time { font-size: 13px; text-align: center; color: var(--texto); }
 .placar-final {
