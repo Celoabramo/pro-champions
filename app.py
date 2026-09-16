@@ -549,6 +549,15 @@ def excluir_notificacao(notificacao_id):
     return redirect(url_for("notificacoes"))
 
 
+@app.route("/notificacoes/limpar", methods=["POST"])
+@login_required
+def limpar_notificacoes():
+    Notificacao.query.filter_by(usuario_id=current_user.id).delete()
+    db.session.commit()
+    flash("Notificações limpas.", "sucesso")
+    return redirect(url_for("notificacoes"))
+
+
 @app.route("/time")
 @login_required
 def time():
@@ -2042,7 +2051,7 @@ def enviar_print(torneio_id, confronto_id):
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
-@app.route("/manutencao/reset-torneio-teste-r5g9k2p8", methods=["POST"])
+@app.route("/manutencao/reset-torneio-teste-r5g9k2p8", methods=["GET", "POST"])
 @login_required
 def _reset_torneio_teste_temporario():
     # Rota temporária, só pra resetar o torneio de teste (id=1) entre rodadas

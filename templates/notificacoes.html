@@ -4,6 +4,12 @@
 <section class="perfil">
     <div class="cabecalho-notificacoes">
         <h1>Notificações</h1>
+        {% if notificacoes %}
+            <form method="POST" action="{{ url_for('limpar_notificacoes') }}" onsubmit="return confirm('Apagar todas as notificações? Isso não pode ser desfeito.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="botao-secundario-pequeno">Limpar tudo</button>
+            </form>
+        {% endif %}
         {% if current_user.federacao_id %}
             <button type="button" class="botao-sino-preferencias" id="botao-preferencias"
                     aria-expanded="false" aria-controls="bloco-preferencias"
