@@ -234,12 +234,21 @@ class Torneio(db.Model):
 
     @property
     def times_inscritos(self):
-        """Só os times com inscrição paga — Pix pendente não conta vaga.
+        """Só os times que estão realmente disputando o campeonato.
+
+        Precisa ter pago (Pix pendente não segura vaga) e NÃO ter sido
+        reembolsado — quem pagou atrasado, depois das vagas acabarem, tem o
+        dinheiro devolvido e não entra na competição; sem esse filtro ele
+        continuaria contando como time inscrito e o chaveamento (que exige o
+        número exato de times) não fechava.
 
         `i.time` pode vir None se o time foi dissolvido depois de pago
         (capitão saiu e era o último membro) — filtra esses casos.
         """
-        return [i.time for i in self.inscricoes if i.status == "pago" and i.time is not None]
+        return [
+            i.time for i in self.inscricoes
+            if i.status == "pago" and i.time is not None and i.reembolso_status is None
+        ]
 
     def __repr__(self):
         return f"<Torneio {self.nome}>"
@@ -298,6 +307,14 @@ class Confronto(db.Model):
     # Nome do arquivo do print enviado por cada capitão (fica em static/prints/).
     print_time1 = db.Column(db.String(255), nullable=True)
     print_time2 = db.Column(db.String(255), nullable=True)
+
+    # Nick de cada capitão dentro do FC 26, do jeito exato que aparece no
+    # jogo. Serve só pros dois times se acharem lá dentro e combinarem quem
+    # manda o convite da partida — o site não usa esse nome pra nada mais.
+    # É por confronto (e não fixo no perfil) porque quem hospeda pode mudar
+    # de uma partida pra outra.
+    nick_fc_time1 = db.Column(db.String(40), nullable=True)
+    nick_fc_time2 = db.Column(db.String(40), nullable=True)
 
     # Leitura bruta (JSON) que a IA tirou do print de cada time, guardada
     # até os dois times enviarem pra dar pra comparar. leitura_timeN_ok é

@@ -1190,7 +1190,7 @@ def detalhe_campeonato(torneio_id):
     )
 
 
-def _vagas_ocupadas(torneio):
+def _vagas_ocupadas(torneio, ignorar_inscricao_id=None):
     """Vagas que já não estão disponíveis: as pagas MAIS as com Pix gerado e
     ainda dentro do prazo de pagamento.
 
@@ -1198,13 +1198,22 @@ def _vagas_ocupadas(torneio):
     gerar Pix ao mesmo tempo num campeonato de 4 vagas — se 6 pagassem, o
     chaveamento nunca mais era gerado (ele exige o número exato de times) e
     o dinheiro dos que sobraram ficava preso. Pix vencido não segura vaga.
+
+    `ignorar_inscricao_id` tira uma inscrição da conta. É usado ao confirmar
+    um pagamento: a inscrição que está sendo paga já ocupa uma vaga como
+    "pendente", então sem ignorá-la o último time a completar o campeonato
+    via a própria vaga como se fosse de outro e era recusado (e reembolsado)
+    sem motivo nenhum.
     """
     agora = datetime.utcnow()
     return sum(
         1
         for i in torneio.inscricoes
-        if i.status == "pago"
-        or (i.status == "pendente" and i.pix_expira_em and i.pix_expira_em > agora)
+        if i.id != ignorar_inscricao_id
+        and (
+            i.status == "pago"
+            or (i.status == "pendente" and i.pix_expira_em and i.pix_expira_em > agora)
+        )
     )
 
 
@@ -1794,7 +1803,9 @@ def _motivo_para_recusar_vaga(inscricao):
     torneio = inscricao.torneio
     if torneio.status != "aberto":
         return "Esse campeonato não está mais com inscrições abertas."
-    if _vagas_ocupadas(torneio) >= torneio.max_times:
+    # Ignora a própria inscrição: ela já conta como vaga pendente, e sem isso
+    # o último time a fechar o campeonato seria recusado na própria vaga.
+    if _vagas_ocupadas(torneio, ignorar_inscricao_id=inscricao.id) >= torneio.max_times:
         return "As vagas desse campeonato foram preenchidas antes do seu pagamento cair."
     return None
 
@@ -2196,6 +2207,45 @@ def contestar_placar(torneio_id, confronto_id):
     db.session.commit()
 
     flash("Contestação enviada! O organizador foi avisado e o suporte vai revisar.", "sucesso")
+    return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/nick", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute", methods=["POST"])
+def salvar_nick_fc(torneio_id, confronto_id):
+    """Capitão publica o nick dele no FC 26 pra essa partida.
+
+    Os dois times passam a ver os dois nicks e combinam entre eles quem
+    manda o convite dentro do jogo. O site não usa esse nome pra mais nada.
+    """
+    confronto = Confronto.query.get_or_404(confronto_id)
+    if confronto.torneio_id != torneio_id:
+        abort(404)
+
+    meu_lado = time_do_confronto(confronto, current_user)
+    meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 else None
+    if not meu_time or current_user.id != meu_time.capitao_id:
+        flash("Só o capitão de um dos dois times pode informar o nick da partida.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    if confronto.status in ("validado", "wo"):
+        flash("Essa partida já foi encerrada.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    nick = request.form.get("nick_fc", "").strip()[:40]
+
+    if meu_lado == 1:
+        confronto.nick_fc_time1 = nick or None
+    else:
+        confronto.nick_fc_time2 = nick or None
+    db.session.commit()
+
+    flash(
+        f"Nick salvo! O {confronto.time2.nome if meu_lado == 1 else confronto.time1.nome} já consegue te achar no jogo."
+        if nick else "Nick removido.",
+        "sucesso",
+    )
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
@@ -2635,6 +2685,8 @@ def _garantir_colunas_novas():
         ("inscricoes", "reembolso_valor", "DOUBLE PRECISION"),
         ("inscricoes", "reembolso_transferencia_id", "VARCHAR(80)"),
         ("inscricoes", "reembolso_status", "VARCHAR(20)"),
+        ("confrontos", "nick_fc_time1", "VARCHAR(40)"),
+        ("confrontos", "nick_fc_time2", "VARCHAR(40)"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

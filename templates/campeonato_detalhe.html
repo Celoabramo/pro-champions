@@ -185,7 +185,7 @@
         <h2>Times inscritos ({{ torneio.times_inscritos|length }} / {{ torneio.max_times }})</h2>
         {% if torneio.times_inscritos %}
             <ul class="lista-membros lista-times-escudo">
-                {% for inscricao in torneio.inscricoes if inscricao.status == 'pago' and inscricao.time %}
+                {% for inscricao in torneio.inscricoes if inscricao.status == 'pago' and inscricao.time and not inscricao.reembolso_status %}
                     <li>
                         {{ macros.escudo_time(inscricao.time, 'escudo-time-pequeno') }}
                         <span>{{ inscricao.time.nome }} <span class="tag">[{{ inscricao.time.tag }}]</span></span>

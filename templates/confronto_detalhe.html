@@ -39,6 +39,55 @@
         </span>
     </div>
 
+    {% if (meu_lado or eh_organizador) and confronto.status not in ('validado', 'wo') %}
+        {% set meu_time_nick = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
+        {% set meu_nick = confronto.nick_fc_time1 if meu_lado == 1 else confronto.nick_fc_time2 if meu_lado == 2 %}
+        <div class="perfil-bloco">
+            <h2>Combinar a partida no FC 26</h2>
+            <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
+                Cada capitão coloca aqui o nick dele <strong>exatamente como aparece no FC 26</strong>.
+                Quando os dois enviarem, vocês se acham dentro do jogo e combinam entre si quem manda o convite.
+            </p>
+
+            <div class="status-prints" style="margin-bottom:14px;">
+                <div class="status-print-item {{ 'enviado' if confronto.nick_fc_time1 }}">
+                    <span>{{ confronto.time1.nome }}</span>
+                    {% if confronto.nick_fc_time1 %}
+                        <strong>{{ confronto.nick_fc_time1 }}</strong>
+                    {% else %}
+                        <span class="texto-fraco-pequeno">Aguardando o nick</span>
+                    {% endif %}
+                </div>
+                <div class="status-print-item {{ 'enviado' if confronto.nick_fc_time2 }}">
+                    <span>{{ confronto.time2.nome }}</span>
+                    {% if confronto.nick_fc_time2 %}
+                        <strong>{{ confronto.nick_fc_time2 }}</strong>
+                    {% else %}
+                        <span class="texto-fraco-pequeno">Aguardando o nick</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if confronto.nick_fc_time1 and confronto.nick_fc_time2 %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
+                    Os dois nicks estão aí — combinem entre vocês quem envia o convite dentro do jogo.
+                </p>
+            {% endif %}
+
+            {% if meu_time_nick and current_user.id == meu_time_nick.capitao_id %}
+                <form method="POST" action="{{ url_for('salvar_nick_fc', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
+                      class="form-escudo">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="nick_fc" maxlength="40" value="{{ meu_nick or '' }}"
+                           placeholder="Seu nick igual está no FC 26" aria-label="Seu nick no FC 26" style="flex:1; min-width:160px;">
+                    <button type="submit" class="botao-principal-pequeno">{{ 'Atualizar nick' if meu_nick else 'Enviar nick' }}</button>
+                </form>
+            {% elif meu_lado %}
+                <p class="texto-fraco-pequeno">Só o capitão do seu time informa o nick da partida.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+
     {% if confronto.status == 'validado' %}
         <p class="texto-fraco-pequeno" style="margin-top:8px;">
             {% if confronto.vencedor_id %}
