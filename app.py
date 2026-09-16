@@ -1816,12 +1816,16 @@ def detalhe_confronto(torneio_id, confronto_id):
 
     meu_lado = time_do_confronto(confronto, current_user)
     eh_organizador = current_user.is_authenticated and current_user.federacao_id == confronto.torneio.federacao_id
+    ja_contestado = bool(
+        Notificacao.query.filter_by(confronto_id=confronto.id, tipo="placar_contestado").first()
+    )
 
     return render_template(
         "confronto_detalhe.html",
         confronto=confronto,
         meu_lado=meu_lado,
         eh_organizador=eh_organizador,
+        ja_contestado=ja_contestado,
     )
 
 
@@ -1835,6 +1839,15 @@ def contestar_placar(torneio_id, confronto_id):
 
     if confronto.status != "validado":
         flash("Só dá para contestar uma partida já validada.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    # Sem isso, dava pra ficar clicando de novo (uma vez por minuto, sem
+    # limite de quantas vezes) e floodar o e-mail de suporte com a mesma
+    # contestação repetida. Uma vez contestada, essa partida trava —
+    # organizador e suporte já foram avisados na primeira vez.
+    ja_contestado = Notificacao.query.filter_by(confronto_id=confronto.id, tipo="placar_contestado").first()
+    if ja_contestado:
+        flash("Esse placar já foi contestado antes — o organizador e o suporte já estão cientes.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
     meu_lado = time_do_confronto(confronto, current_user)

@@ -50,9 +50,11 @@
         </p>
 
         {% set meu_time_validado = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
-        {% if meu_time_validado and current_user.id == meu_time_validado.capitao_id %}
+        {% if ja_contestado %}
+            <p class="texto-fraco-pequeno" style="margin-top:12px;">Esse placar já foi contestado — o organizador e o suporte já foram avisados.</p>
+        {% elif meu_time_validado and current_user.id == meu_time_validado.capitao_id %}
             <form method="POST" action="{{ url_for('contestar_placar', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
-                  onsubmit="return confirm('Contestar esse placar? Um e-mail vai pro suporte e o organizador da federação é avisado.');" style="margin-top:12px;">
+                  onsubmit="return confirm('Contestar esse placar? Um e-mail vai pro suporte e o organizador da federação é avisado. Só dá pra contestar uma vez.');" style="margin-top:12px;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="botao-secundario-pequeno">Contestar placar</button>
             </form>
