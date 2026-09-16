@@ -2073,13 +2073,10 @@ def _reset_torneio_teste_temporario():
     torneio.repasse_federacao_valor = None
     torneio.repasse_federacao_transferencia_id = None
 
-    for inscricao in Inscricao.query.filter_by(torneio_id=1):
-        inscricao.status = "pendente"
-        inscricao.pix_id = None
-        inscricao.pix_br_code = None
-        inscricao.pix_br_code_base64 = None
-        inscricao.pix_expira_em = None
-        inscricao.pago_em = None
+    # Apaga de vez, em vez de só limpar os campos — uma inscrição "pendente"
+    # sem Pix confunde o fluxo normal (ele assume que pendente = já tem Pix
+    # gerado, e só redireciona pra tela de pagamento sem criar um novo).
+    Inscricao.query.filter_by(torneio_id=1).delete()
 
     senha_nova = secrets.token_urlsafe(9)  # gerada na hora, nunca fica salva no código
     capitaes = User.query.filter(User.email.like("capitao%.prod@procampeoes.local")).order_by(User.id).all()
