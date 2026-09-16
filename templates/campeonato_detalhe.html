@@ -269,7 +269,7 @@
             </div>
         {% endif %}
 
-        {% if eh_organizador and torneio.repasse_federacao_status and torneio.repasse_federacao_status != 'sem_lucro' %}
+        {% if eh_organizador and torneio.repasse_federacao_status and torneio.repasse_federacao_status not in ('sem_lucro', 'abaixo_minimo') %}
             <div class="perfil-bloco">
                 <h2>Repasse da federação</h2>
                 <p class="texto-fraco-pequeno">

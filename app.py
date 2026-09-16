@@ -841,6 +841,16 @@ def detalhe_federacao(federacao_id):
 
 TAMANHOS_VALIDOS = [4, 8, 16, 32]
 
+# A AbacatePay cobra uma taxa fixa (não percentual) por Pix — na prática,
+# testamos e confirmamos ~R$0,80 por transação. Isso é insignificante numa
+# inscrição de R$20, mas destrói uma de R$1 (a taxa sozinha já é 80% do
+# valor). Esses mínimos existem pra nenhum organizador criar sem querer
+# um campeonato pago que nunca vai sobrar dinheiro suficiente pra pagar
+# o prêmio/repasse depois que a taxa é descontada.
+TAXA_ABACATEPAY_ESTIMADA = 0.80
+VALOR_MINIMO_INSCRICAO_PAGA = 5.00
+VALOR_MINIMO_PIX_ABACATEPAY = 1.00  # mínimo documentado da própria AbacatePay pra qualquer Pix
+
 
 @app.route("/campeonatos/criar", methods=["GET", "POST"])
 @login_required
@@ -862,6 +872,15 @@ def criar_campeonato():
             flash("Valor de inscrição inválido.", "erro")
             return redirect(url_for("criar_campeonato"))
 
+        if 0 < valor < VALOR_MINIMO_INSCRICAO_PAGA:
+            flash(
+                f"Inscrição paga precisa ser de pelo menos R$ {VALOR_MINIMO_INSCRICAO_PAGA:.2f} — "
+                f"a AbacatePay cobra uma taxa fixa por Pix (na prática, cerca de R$ {TAXA_ABACATEPAY_ESTIMADA:.2f}), "
+                "e um valor muito baixo não deixa sobrar dinheiro suficiente pra pagar o prêmio depois.",
+                "erro",
+            )
+            return redirect(url_for("criar_campeonato"))
+
         try:
             max_times = int(request.form["max_times"])
             if max_times not in TAMANHOS_VALIDOS:
@@ -877,6 +896,14 @@ def criar_campeonato():
                 raise ValueError
         except ValueError:
             flash("Valor do prêmio inválido.", "erro")
+            return redirect(url_for("criar_campeonato"))
+
+        if 0 < valor_premio < VALOR_MINIMO_PIX_ABACATEPAY:
+            flash(
+                f"Prêmio precisa ser de pelo menos R$ {VALOR_MINIMO_PIX_ABACATEPAY:.2f} (mínimo exigido pela "
+                "AbacatePay pra qualquer Pix) ou R$ 0,00 (sem prêmio).",
+                "erro",
+            )
             return redirect(url_for("criar_campeonato"))
 
         try:
@@ -950,7 +977,7 @@ def detalhe_campeonato(torneio_id):
         and len(torneio.times_inscritos) == torneio.max_times
     )
     premio_pendente = torneio.valor_premio > 0 and torneio.premio_status != "concluido"
-    repasse_pendente = torneio.repasse_federacao_status not in ("concluido", "sem_lucro")
+    repasse_pendente = torneio.repasse_federacao_status not in ("concluido", "sem_lucro", "abaixo_minimo")
     pode_pagar_premio = eh_organizador and torneio.time_campeao_id and (premio_pendente or repasse_pendente)
     eh_membro_campeao = (
         current_user.is_authenticated
@@ -1516,7 +1543,7 @@ def _repassar_lucro_federacao(torneio):
     transferidos — ficam parados na própria conta AbacatePay, que é a
     parte da plataforma. Devolve (mensagem_ou_None, erro_ou_None), igual
     _pagar_premio_campeao."""
-    if torneio.repasse_federacao_status in ("concluido", "sem_lucro"):
+    if torneio.repasse_federacao_status in ("concluido", "sem_lucro", "abaixo_minimo"):
         return None, None
 
     total_arrecadado = torneio.valor_inscricao * len(torneio.times_inscritos)
@@ -1526,6 +1553,13 @@ def _repassar_lucro_federacao(torneio):
         return None, None
 
     valor_repasse = round(lucro * FATIA_FEDERACAO_NO_LUCRO, 2)
+    if valor_repasse < VALOR_MINIMO_PIX_ABACATEPAY:
+        # Lucro pequeno demais pra virar um Pix (a AbacatePay recusa qualquer
+        # envio abaixo do mínimo dela) — não é erro, só não dá pra repassar
+        # esse valor. Fica retido junto com os 20% da plataforma mesmo.
+        torneio.repasse_federacao_status = "abaixo_minimo"
+        return None, None
+
     dono = torneio.federacao.dono
     if not dono.chave_pix or not dono.tipo_chave_pix:
         torneio.repasse_federacao_status = "falhou"
