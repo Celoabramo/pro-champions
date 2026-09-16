@@ -1546,8 +1546,13 @@ def _repassar_lucro_federacao(torneio):
     if torneio.repasse_federacao_status in ("concluido", "sem_lucro", "abaixo_minimo"):
         return None, None
 
-    total_arrecadado = torneio.valor_inscricao * len(torneio.times_inscritos)
-    lucro = total_arrecadado - torneio.valor_premio
+    # Lucro calculado em cima do valor que REALMENTE entrou na conta — cada
+    # inscrição paga já perdeu a taxa fixa que a AbacatePay cobra pra
+    # receber um Pix. Calcular em cima do valor bruto (sem descontar isso)
+    # prometia repassar mais dinheiro do que existia de verdade na conta.
+    times_inscritos = len(torneio.times_inscritos)
+    total_arrecadado_liquido = times_inscritos * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
+    lucro = total_arrecadado_liquido - torneio.valor_premio
     if lucro <= 0:
         torneio.repasse_federacao_status = "sem_lucro"
         return None, None
