@@ -17,6 +17,7 @@ import os
 import random
 import secrets
 import string
+import time
 import unicodedata
 import uuid
 from collections import Counter
@@ -923,9 +924,19 @@ def criar_campeonato():
             leituras_estimadas = (max_times - 1) * 2 * 1.2
             custo_ia_estimado = leituras_estimadas * CUSTO_IA_POR_LEITURA_ESTIMADO
 
+            # A AbacatePay cobra a mesma taxa fixa em QUALQUER envio, não só
+            # no recebimento — então mandar o prêmio e o repasse cheios
+            # custa +1 taxa cada. Essas taxas de envio saem da fatia da
+            # plataforma (nunca do prêmio nem do repasse), então entram
+            # aqui como custo direto do lucro estimado da plataforma.
             arrecadacao_liquida_maxima = max_times * max(valor - TAXA_ABACATEPAY_ESTIMADA, 0)
-            lucro_maximo = arrecadacao_liquida_maxima - valor_premio
-            lucro_plataforma_estimado = lucro_maximo * (1 - FATIA_FEDERACAO_NO_LUCRO) - custo_ia_estimado
+            custo_premio_maximo = (valor_premio + TAXA_ABACATEPAY_ESTIMADA) if valor_premio > 0 else 0
+            base_para_divisao = arrecadacao_liquida_maxima - custo_premio_maximo
+            lucro_plataforma_estimado = (
+                base_para_divisao * (1 - FATIA_FEDERACAO_NO_LUCRO)
+                - TAXA_ABACATEPAY_ESTIMADA  # taxa de envio do repasse pra federação
+                - custo_ia_estimado
+            )
 
             if lucro_plataforma_estimado < LUCRO_MINIMO_PLATAFORMA:
                 flash(
@@ -1547,9 +1558,13 @@ def _pagar_premio_campeao(torneio):
         torneio.premio_status = "falhou"
         return None, f"{capitao.nickname} (capitão do {torneio.time_campeao.nome}) ainda não cadastrou uma chave Pix para receber o prêmio."
 
+    # A AbacatePay cobra a mesma taxa fixa também em cima de QUALQUER envio
+    # (não só no recebimento) — manda-se valor_premio + taxa pra o campeão
+    # receber o valor cheio anunciado, e quem absorve a taxa é a fatia da
+    # plataforma (nunca o prêmio), como prometido nos termos de uso.
     try:
         transferencia = pagamentos.enviar_pix(
-            valor_reais=torneio.valor_premio,
+            valor_reais=torneio.valor_premio + TAXA_ABACATEPAY_ESTIMADA,
             chave_pix=capitao.chave_pix,
             tipo_chave=capitao.tipo_chave_pix,
             descricao=f"Prêmio {torneio.nome} - {torneio.time_campeao.nome}",
@@ -1581,13 +1596,22 @@ def _repassar_lucro_federacao(torneio):
     # inscrição paga já perdeu a taxa fixa que a AbacatePay cobra pra
     # receber um Pix. Calcular em cima do valor bruto (sem descontar isso)
     # prometia repassar mais dinheiro do que existia de verdade na conta.
+    #
+    # O prêmio também custa (valor_premio + taxa) pra sair da conta — a
+    # AbacatePay cobra a mesma taxa fixa em qualquer envio, não só no
+    # recebimento — então essa taxa extra também precisa ser descontada
+    # antes de calcular o que sobra pra dividir entre federação e plataforma.
     times_inscritos = len(torneio.times_inscritos)
     total_arrecadado_liquido = times_inscritos * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
-    lucro = total_arrecadado_liquido - torneio.valor_premio
+    custo_premio = (torneio.valor_premio + TAXA_ABACATEPAY_ESTIMADA) if torneio.valor_premio > 0 else 0
+    lucro = total_arrecadado_liquido - custo_premio
     if lucro <= 0:
         torneio.repasse_federacao_status = "sem_lucro"
         return None, None
 
+    # Valor que a federação deve efetivamente RECEBER (líquido). Pra isso
+    # acontecer, precisa se enviar valor_repasse + taxa — a taxa desse envio
+    # sai da fatia de 20% da plataforma, nunca do valor repassado.
     valor_repasse = round(lucro * FATIA_FEDERACAO_NO_LUCRO, 2)
     if valor_repasse < VALOR_MINIMO_PIX_ABACATEPAY:
         # Lucro pequeno demais pra virar um Pix (a AbacatePay recusa qualquer
@@ -1603,7 +1627,7 @@ def _repassar_lucro_federacao(torneio):
 
     try:
         transferencia = pagamentos.enviar_pix(
-            valor_reais=valor_repasse,
+            valor_reais=valor_repasse + TAXA_ABACATEPAY_ESTIMADA,
             chave_pix=dono.chave_pix,
             tipo_chave=dono.tipo_chave_pix,
             descricao=f"Repasse {torneio.nome} - {torneio.federacao.nome}",
@@ -1643,6 +1667,11 @@ def pagar_premio(torneio_id):
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
     msg_premio, erro_premio = _pagar_premio_campeao(torneio)
+    # A AbacatePay recusa dois saques feitos rápido demais em sequência
+    # ("aguarde alguns segundos antes de solicitar outro saque") — essa
+    # pequena pausa evita esbarrar nesse limite ao mandar prêmio e repasse
+    # no mesmo clique.
+    time.sleep(2)
     msg_repasse, erro_repasse = _repassar_lucro_federacao(torneio)
     db.session.commit()
 
