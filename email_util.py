@@ -1,53 +1,57 @@
-"""Envio de e-mail transacional via SMTP (hoje, só pra redefinição de senha).
+"""Envio de e-mail transacional via Resend (API HTTPS).
+
+Trocado de SMTP pra API HTTP porque a Railway bloqueia conexão SMTP de
+saída nos planos Free/Trial/Hobby (só libera a partir do plano Pro) —
+a própria Railway recomenda um serviço de e-mail transacional via API
+nesse caso (https://docs.railway.com/networking/outbound-networking).
 
 Credenciais vêm de variáveis de ambiente — nunca ficam no código:
-EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USER, EMAIL_SMTP_SENHA,
-e opcionalmente EMAIL_REMETENTE (usa EMAIL_SMTP_USER se não tiver).
-
-Funciona com qualquer provedor SMTP comum — Gmail (com uma "senha de
-app", não a senha normal da conta), Outlook, ou um provedor transacional
-tipo SendGrid/Mailgun/Resend usando a porta SMTP deles.
+RESEND_API_KEY (obrigatória) e EMAIL_REMETENTE (endereço de envio,
+precisa ser de um domínio verificado na conta Resend — resend.com/domains).
 """
 
 import os
-import smtplib
-from email.mime.text import MIMEText
+
+import requests
+
+TIMEOUT_SEGUNDOS = 15
 
 
 class EmailIndisponivel(Exception):
-    """SMTP não configurado ou recusou o envio."""
+    """Resend não está configurado ou recusou o envio."""
 
 
 def _configurado():
-    return bool(
-        os.environ.get("EMAIL_SMTP_HOST")
-        and os.environ.get("EMAIL_SMTP_USER")
-        and os.environ.get("EMAIL_SMTP_SENHA")
-    )
+    return bool(os.environ.get("RESEND_API_KEY") and os.environ.get("EMAIL_REMETENTE"))
 
 
 def enviar_email(destinatario, assunto, corpo_texto):
     if not _configurado():
         raise EmailIndisponivel(
-            "Envio de e-mail não configurado. Defina EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, "
-            "EMAIL_SMTP_USER e EMAIL_SMTP_SENHA no .env."
+            "Envio de e-mail não configurado. Defina RESEND_API_KEY e EMAIL_REMETENTE no .env."
         )
 
-    host = os.environ["EMAIL_SMTP_HOST"]
-    porta = int(os.environ.get("EMAIL_SMTP_PORT", "587"))
-    usuario = os.environ["EMAIL_SMTP_USER"]
-    senha = os.environ["EMAIL_SMTP_SENHA"]
-    remetente = os.environ.get("EMAIL_REMETENTE", usuario)
-
-    msg = MIMEText(corpo_texto, "plain", "utf-8")
-    msg["Subject"] = assunto
-    msg["From"] = remetente
-    msg["To"] = destinatario
+    api_key = os.environ["RESEND_API_KEY"]
+    remetente = os.environ["EMAIL_REMETENTE"]
 
     try:
-        with smtplib.SMTP(host, porta, timeout=15) as servidor:
-            servidor.starttls()
-            servidor.login(usuario, senha)
-            servidor.sendmail(remetente, [destinatario], msg.as_string())
-    except (smtplib.SMTPException, OSError) as erro:
-        raise EmailIndisponivel(f"Falha ao enviar e-mail: {erro}") from erro
+        resposta = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "from": remetente,
+                "to": destinatario,
+                "subject": assunto,
+                "text": corpo_texto,
+            },
+            timeout=TIMEOUT_SEGUNDOS,
+        )
+    except requests.RequestException as erro:
+        raise EmailIndisponivel(f"Falha ao falar com o Resend: {erro}") from erro
+
+    if not resposta.ok:
+        try:
+            detalhe = resposta.json().get("message", resposta.text)
+        except ValueError:
+            detalhe = resposta.text
+        raise EmailIndisponivel(f"Resend recusou o envio: {detalhe}")
