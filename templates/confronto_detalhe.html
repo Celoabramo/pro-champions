@@ -77,11 +77,41 @@
         </p>
     {% endif %}
 
-    {% if eh_organizador and confronto.status not in ('validado', 'wo') %}
+    {% if eh_organizador and confronto.status != 'validado' %}
         <div class="perfil-bloco">
             <h2>Controles do admin da federação</h2>
 
-            {% if confronto.hora_inicio %}
+            {% if confronto.status == 'wo' %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                    {% if confronto.vencedor_wo %}
+                        Essa partida está encerrada por W.O. Se foi engano, dá para cravar o placar de verdade abaixo.
+                    {% else %}
+                        W.O. duplo não define quem avança — o chaveamento fica parado até você cravar um placar aqui embaixo.
+                    {% endif %}
+                </p>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('resolver_confronto_manual', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
+                  class="form-escudo" style="margin-bottom:18px; align-items:flex-end;"
+                  onsubmit="return confirm('Cravar esse placar? Ele vale como resultado final e o chaveamento avança com ele.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label style="font-size:12px; color:var(--texto-fraco);">
+                    {{ confronto.time1.nome }}<br>
+                    <input type="number" name="placar_time1" min="0" max="99" required style="width:70px;">
+                </label>
+                <label style="font-size:12px; color:var(--texto-fraco);">
+                    {{ confronto.time2.nome }}<br>
+                    <input type="number" name="placar_time2" min="0" max="99" required style="width:70px;">
+                </label>
+                <button type="submit" class="botao-principal-pequeno">Definir placar na mão</button>
+            </form>
+            <p class="texto-fraco-pequeno" style="margin:-8px 0 16px;">
+                Use quando a leitura automática não resolver (nomes de time parecidos demais, divergência que não acaba, W.O. duplo).
+            </p>
+
+            {% if confronto.status in ('validado', 'wo') %}
+                {# partida encerrada: só o placar manual acima continua disponível #}
+            {% elif confronto.hora_inicio %}
                 <p class="texto-fraco-pequeno">
                     Partida iniciada às {{ confronto.hora_inicio.strftime('%d/%m %H:%M') }}.
                     W.O. automático liberado a partir das {{ confronto.prazo_wo.strftime('%d/%m %H:%M') }}.

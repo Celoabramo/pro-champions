@@ -151,6 +151,16 @@ class Inscricao(db.Model):
     criado_em = db.Column(db.DateTime, server_default=db.func.now())
     pago_em = db.Column(db.DateTime, nullable=True)
 
+    # Reembolso de inscrição paga, quando o time sai/é removido do campeonato.
+    # Volta o valor da inscrição menos TAXA_REEMBOLSO (as duas taxas fixas da
+    # AbacatePay: a que já foi cobrada pra receber + a que vai ser cobrada pra
+    # devolver). reembolso_status: None (nunca precisou) | concluido |
+    # pendente (AbacatePay aceitou, ainda confirmando) | falhou | sem_saldo
+    # (valor a devolver ficaria abaixo do mínimo de Pix da AbacatePay).
+    reembolso_valor = db.Column(db.Float, nullable=True)
+    reembolso_transferencia_id = db.Column(db.String(80), nullable=True)
+    reembolso_status = db.Column(db.String(20), nullable=True)
+
     __table_args__ = (db.UniqueConstraint("torneio_id", "time_id", name="uq_inscricao_torneio_time"),)
 
     def __repr__(self):

@@ -185,10 +185,18 @@
         <h2>Times inscritos ({{ torneio.times_inscritos|length }} / {{ torneio.max_times }})</h2>
         {% if torneio.times_inscritos %}
             <ul class="lista-membros lista-times-escudo">
-                {% for time in torneio.times_inscritos %}
+                {% for inscricao in torneio.inscricoes if inscricao.status == 'pago' and inscricao.time %}
                     <li>
-                        {{ macros.escudo_time(time, 'escudo-time-pequeno') }}
-                        <span>{{ time.nome }} <span class="tag">[{{ time.tag }}]</span></span>
+                        {{ macros.escudo_time(inscricao.time, 'escudo-time-pequeno') }}
+                        <span>{{ inscricao.time.nome }} <span class="tag">[{{ inscricao.time.tag }}]</span></span>
+                        {% if eh_organizador and torneio.status == 'aberto' %}
+                            <form method="POST" style="margin-left:auto;"
+                                  action="{{ url_for('remover_time_do_campeonato', torneio_id=torneio.id, inscricao_id=inscricao.id) }}"
+                                  onsubmit="return confirm('Remover {{ inscricao.time.nome }} do campeonato? A inscrição vai ser devolvida por Pix, descontando R$ 1,60 de taxa.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="botao-secundario-pequeno">Remover e reembolsar</button>
+                            </form>
+                        {% endif %}
                     </li>
                 {% endfor %}
             </ul>

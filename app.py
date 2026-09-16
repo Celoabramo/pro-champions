@@ -1134,8 +1134,27 @@ def detalhe_campeonato(torneio_id):
     )
 
 
+def _vagas_ocupadas(torneio):
+    """Vagas que já não estão disponíveis: as pagas MAIS as com Pix gerado e
+    ainda dentro do prazo de pagamento.
+
+    Contar só as pagas (como era antes) deixava qualquer quantidade de times
+    gerar Pix ao mesmo tempo num campeonato de 4 vagas — se 6 pagassem, o
+    chaveamento nunca mais era gerado (ele exige o número exato de times) e
+    o dinheiro dos que sobraram ficava preso. Pix vencido não segura vaga.
+    """
+    agora = datetime.utcnow()
+    return sum(
+        1
+        for i in torneio.inscricoes
+        if i.status == "pago"
+        or (i.status == "pendente" and i.pix_expira_em and i.pix_expira_em > agora)
+    )
+
+
 @app.route("/campeonatos/<int:torneio_id>/inscrever", methods=["POST"])
 @login_required
+@limiter.limit("10 per minute", methods=["POST"])
 def inscrever_time(torneio_id):
     torneio = Torneio.query.get_or_404(torneio_id)
 
@@ -1161,7 +1180,7 @@ def inscrever_time(torneio_id):
     if inscricao_existente and inscricao_existente.status == "pendente":
         return redirect(url_for("pagamento_pix", torneio_id=torneio_id, inscricao_id=inscricao_existente.id))
 
-    if len(torneio.times_inscritos) >= torneio.max_times:
+    if _vagas_ocupadas(torneio) >= torneio.max_times:
         flash("As vagas desse campeonato já estão preenchidas.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
@@ -1245,6 +1264,18 @@ def verificar_pagamento(torneio_id, inscricao_id):
             return redirect(url_for("pagamento_pix", torneio_id=torneio_id, inscricao_id=inscricao_id))
 
         if status.get("status") == "PAID":
+            recusa = _motivo_para_recusar_vaga(inscricao)
+            if recusa:
+                # O dinheiro entrou, mas a vaga não existe mais. Não dá pra
+                # fingir que inscreveu — marca pra devolução e avisa.
+                inscricao.status = "pago"
+                inscricao.pago_em = datetime.utcnow()
+                db.session.commit()
+                mensagem, erro_reembolso = _reembolsar_inscricao(inscricao)
+                db.session.commit()
+                flash(f"{recusa} {mensagem or erro_reembolso}", "erro")
+                return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
             inscricao.status = "pago"
             inscricao.pago_em = datetime.utcnow()
             db.session.commit()
@@ -1325,9 +1356,18 @@ def webhook_abacatepay():
         pix_id = dados.get("transparent", {}).get("id")
         inscricao = Inscricao.query.filter_by(pix_id=pix_id).first()
         if inscricao and inscricao.status != "pago":
+            recusa = _motivo_para_recusar_vaga(inscricao)
             inscricao.status = "pago"
             inscricao.pago_em = datetime.utcnow()
             db.session.commit()
+
+            if recusa:
+                # Pagou depois de fechar/lotar: devolve na hora em vez de
+                # ficar com o dinheiro de uma vaga que não existe mais.
+                _, erro = _reembolsar_inscricao(inscricao)
+                db.session.commit()
+                if erro:
+                    app.logger.error(f"Reembolso automático falhou (inscrição {inscricao.id}): {erro}")
 
     return jsonify({"recebido": True})
 
@@ -1394,6 +1434,14 @@ def _avancar_mata_mata(confronto):
         return
 
     proxima_fase = FASES_POR_TAMANHO.get(len(vencedores), f"Fase de {len(vencedores)}")
+
+    # Se a próxima fase já foi montada antes, não monta de novo — senão um
+    # resultado corrigido depois (W.O. revisto, placar resolvido na mão)
+    # criaria uma SEGUNDA final/semi em paralelo com a primeira, e os dois
+    # jogos valeriam ao mesmo tempo.
+    if Confronto.query.filter_by(torneio_id=torneio.id, fase=proxima_fase).first():
+        return
+
     for ordem, i in enumerate(range(0, len(vencedores), 2)):
         db.session.add(Confronto(
             torneio_id=torneio.id,
@@ -1623,6 +1671,81 @@ def gerar_chaveamento(torneio_id):
 
 FATIA_FEDERACAO_NO_LUCRO = 0.8  # os outros 20% ficam parados na conta AbacatePay (é a parte da plataforma)
 
+# Quanto fica retido num reembolso de inscrição: são as DUAS taxas fixas da
+# AbacatePay que a plataforma já pagou ou vai pagar nessa ida e volta — a de
+# receber o Pix da inscrição e a de enviar o Pix da devolução. Sem descontar
+# isso, cada time reembolsado daria prejuízo direto pra plataforma.
+TAXA_REEMBOLSO = 1.60
+
+
+def _motivo_para_recusar_vaga(inscricao):
+    """Devolve o motivo (texto) se essa inscrição não pode mais virar vaga, ou None.
+
+    Serve pro caso do Pix cair atrasado: o time gerou a cobrança, demorou, e
+    quando pagou o campeonato já tinha começado ou as vagas já tinham
+    acabado. Antes disso o pagamento era aceito assim mesmo e o time ficava
+    pagando por uma vaga que não existia.
+    """
+    torneio = inscricao.torneio
+    if torneio.status != "aberto":
+        return "Esse campeonato não está mais com inscrições abertas."
+    if _vagas_ocupadas(torneio) >= torneio.max_times:
+        return "As vagas desse campeonato foram preenchidas antes do seu pagamento cair."
+    return None
+
+
+def _reembolsar_inscricao(inscricao):
+    """Devolve a inscrição paga via Pix, descontando TAXA_REEMBOLSO.
+
+    Devolve (mensagem_ou_None, erro_ou_None), igual às outras funções de
+    dinheiro. Não faz nada se a inscrição não chegou a ser paga ou se já foi
+    reembolsada antes (não pode devolver duas vezes).
+    """
+    if inscricao.status != "pago" or inscricao.reembolso_status in ("concluido", "pendente"):
+        return None, None
+
+    valor = round(inscricao.torneio.valor_inscricao - TAXA_REEMBOLSO, 2)
+    if valor < VALOR_MINIMO_PIX_ABACATEPAY:
+        # Inscrição barata demais: depois de descontar as taxas não sobra nem
+        # o mínimo que a AbacatePay aceita enviar num Pix.
+        inscricao.reembolso_status = "sem_saldo"
+        inscricao.reembolso_valor = 0
+        return None, (
+            f"Não deu para reembolsar {inscricao.time.nome}: depois de descontar as taxas "
+            f"(R$ {TAXA_REEMBOLSO:.2f}) sobraria menos que o mínimo de Pix da AbacatePay."
+        )
+
+    capitao = inscricao.time.capitao
+    if not capitao.chave_pix or not capitao.tipo_chave_pix:
+        inscricao.reembolso_status = "falhou"
+        return None, (
+            f"Reembolso de {inscricao.time.nome}: {capitao.nickname} (capitão) ainda não "
+            "cadastrou uma chave Pix para receber."
+        )
+
+    try:
+        transferencia = pagamentos.enviar_pix(
+            valor_reais=valor,
+            chave_pix=capitao.chave_pix,
+            tipo_chave=capitao.tipo_chave_pix,
+            descricao=f"Reembolso {inscricao.torneio.nome} - {inscricao.time.nome}",
+            external_id=f"reembolso-inscricao-{inscricao.id}",
+        )
+    except pagamentos.PagamentoIndisponivel as erro:
+        inscricao.reembolso_status = "falhou"
+        return None, f"Reembolso de {inscricao.time.nome}: não deu para transferir agora ({erro})."
+
+    inscricao.reembolso_valor = valor
+    inscricao.reembolso_transferencia_id = transferencia.get("id")
+    status_abacatepay = (transferencia.get("status") or "").upper()
+    inscricao.reembolso_status = "concluido" if status_abacatepay in ("COMPLETED", "PAID") else "pendente"
+
+    return (
+        f"Reembolso de R$ {valor:.2f} enviado para {capitao.nickname} ({inscricao.time.nome}) — "
+        f"R$ {TAXA_REEMBOLSO:.2f} retidos das taxas de Pix.",
+        None,
+    )
+
 
 def _pagar_premio_campeao(torneio):
     """Tenta transferir o prêmio para o capitão do time campeão. Devolve
@@ -1783,6 +1906,46 @@ def pagar_premio(torneio_id):
     return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
 
+@app.route("/campeonatos/<int:torneio_id>/inscricoes/<int:inscricao_id>/remover", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute", methods=["POST"])
+def remover_time_do_campeonato(torneio_id, inscricao_id):
+    """Tira um time do campeonato e devolve a inscrição (menos as taxas).
+
+    Só antes do chaveamento ser sorteado — depois que os confrontos existem,
+    tirar um time deixaria a chave com um buraco no meio.
+    """
+    torneio = Torneio.query.get_or_404(torneio_id)
+    inscricao = Inscricao.query.get_or_404(inscricao_id)
+
+    if inscricao.torneio_id != torneio.id:
+        abort(404)
+
+    if torneio.federacao_id != current_user.federacao_id:
+        flash("Só um admin da federação pode remover um time do campeonato.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    if torneio.status != "aberto":
+        flash("O campeonato já começou — não dá mais para remover um time.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    nome_time = inscricao.time.nome if inscricao.time else "time removido"
+    mensagem, erro = _reembolsar_inscricao(inscricao)
+    db.session.commit()
+
+    if erro:
+        # Não apaga a inscrição se o dinheiro não voltou — senão o registro
+        # do que precisa ser devolvido some junto.
+        flash(erro, "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    db.session.delete(inscricao)
+    db.session.commit()
+
+    flash(f"{nome_time} removido do campeonato. {mensagem or ''}".strip(), "sucesso")
+    return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+
 @app.route("/campeonatos/<int:torneio_id>/excluir", methods=["GET", "POST"])
 @login_required
 @limiter.limit("10 per minute", methods=["POST"])
@@ -1791,6 +1954,21 @@ def excluir_campeonato(torneio_id):
 
     if torneio.federacao_id != current_user.federacao_id:
         flash("Só um admin da federação pode excluir o campeonato.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    # Excluir com inscrição paga em aberto apagava o registro do pagamento
+    # junto — o time ficava sem vaga E sem o dinheiro de volta. Agora precisa
+    # reembolsar (ou remover) cada time pago antes.
+    pagas_sem_reembolso = [
+        i for i in torneio.inscricoes
+        if i.status == "pago" and i.reembolso_status not in ("concluido", "pendente", "sem_saldo")
+    ]
+    if pagas_sem_reembolso and torneio.status != "finalizado":
+        flash(
+            f"Esse campeonato tem {len(pagas_sem_reembolso)} inscrição(ões) paga(s) sem reembolso. "
+            "Remova e reembolse esses times antes de excluir o campeonato.",
+            "erro",
+        )
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
     if request.method == "POST":
@@ -1898,6 +2076,69 @@ def contestar_placar(torneio_id, confronto_id):
     db.session.commit()
 
     flash("Contestação enviada! O organizador foi avisado e o suporte vai revisar.", "sucesso")
+    return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/resolver", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute", methods=["POST"])
+def resolver_confronto_manual(torneio_id, confronto_id):
+    """Deixa o admin da federação cravar o placar de uma partida na mão.
+
+    É a saída para os casos em que a leitura automática não resolve sozinha:
+    times com nomes parecidos demais (a IA não sabe qual placar é de quem),
+    divergência que não acaba, ou W.O. duplo — que antes travava a fase
+    inteira para sempre, sem nenhuma forma de destravar pelo site.
+    """
+    confronto = Confronto.query.get_or_404(confronto_id)
+    if confronto.torneio_id != torneio_id:
+        abort(404)
+
+    if confronto.torneio.federacao_id != current_user.federacao_id:
+        flash("Só um admin da federação pode resolver a partida manualmente.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    if confronto.status == "validado":
+        flash("Essa partida já tem um resultado confirmado.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    try:
+        placar1 = int(request.form["placar_time1"])
+        placar2 = int(request.form["placar_time2"])
+        if placar1 < 0 or placar2 < 0 or placar1 > 99 or placar2 > 99:
+            raise ValueError
+    except (KeyError, ValueError):
+        flash("Placar inválido. Use números de 0 a 99 nos dois campos.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    if placar1 == placar2 and not confronto.fase.startswith("Grupo "):
+        flash("Empate não decide mata-mata — coloque o placar do desempate para alguém avançar.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    confronto.placar_time1 = placar1
+    confronto.placar_time2 = placar2
+    confronto.vencedor_id = None if placar1 == placar2 else (
+        confronto.time1_id if placar1 > placar2 else confronto.time2_id
+    )
+    confronto.vencedor_wo_id = None
+    confronto.status = "validado"
+
+    resultado = (
+        f"{confronto.vencedor.nome} venceu {max(placar1, placar2)} a {min(placar1, placar2)}"
+        if confronto.vencedor_id
+        else f"Empate em {placar1} a {placar2}"
+    )
+    notificar_federacao(
+        confronto.torneio,
+        "partida_finalizada",
+        f"A partida {confronto.time1.nome} x {confronto.time2.nome} ({confronto.torneio.nome}) "
+        f"foi resolvida manualmente pelo admin: {resultado}.",
+        confronto=confronto,
+    )
+    _avancar_chaveamento(confronto)
+    db.session.commit()
+
+    flash(f"Resultado definido manualmente: {resultado}.", "sucesso")
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
@@ -2118,6 +2359,9 @@ def _tentar_finalizar_confronto(confronto):
 
 @app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/print", methods=["POST"])
 @login_required
+# Cada envio custa uma leitura de IA (dinheiro) e grava um arquivo no disco —
+# sem limite, dava pra ficar reenviando print e queimar o saldo da API.
+@limiter.limit("10 per minute", methods=["POST"])
 def enviar_print(torneio_id, confronto_id):
     confronto = Confronto.query.get_or_404(confronto_id)
     if confronto.torneio_id != torneio_id:
@@ -2133,8 +2377,11 @@ def enviar_print(torneio_id, confronto_id):
         flash("Só o capitão do time pode enviar o print da partida.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
-    if confronto.status == "validado":
-        flash("Esse confronto já foi validado.", "erro")
+    # "wo" também conta como encerrado: sem isso, os dois capitães podiam
+    # combinar prints e derrubar o W.O. que o organizador tinha declarado —
+    # trocando o vencedor e duplicando a fase seguinte do chaveamento.
+    if confronto.status in ("validado", "wo"):
+        flash("Essa partida já foi encerrada.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
     arquivo = request.files.get("print")
@@ -2246,11 +2493,40 @@ def promover_organizador(email):
 
 
 # Fora do "if __main__" de propósito — precisa rodar também quando o
+def _garantir_colunas_novas():
+    """Adiciona colunas novas em tabelas que já existem, no boot.
+
+    db.create_all() só cria tabela que ainda não existe — ele NUNCA altera
+    uma tabela existente. Sem isso, toda vez que a gente adiciona um campo
+    novo num model, o banco de produção fica sem a coluna e qualquer INSERT
+    naquela tabela quebra (foi exatamente o que derrubou o cadastro quando
+    adicionamos o link de WhatsApp).
+
+    Rodar aqui, no boot, resolve antes do app atender qualquer requisição —
+    e o "IF NOT EXISTS" faz ser um no-op nas próximas vezes. No SQLite local
+    o create_all() já cria a tabela completa, então o erro de sintaxe do
+    ALTER é ignorado de propósito.
+    """
+    colunas = [
+        ("inscricoes", "reembolso_valor", "DOUBLE PRECISION"),
+        ("inscricoes", "reembolso_transferencia_id", "VARCHAR(80)"),
+        ("inscricoes", "reembolso_status", "VARCHAR(20)"),
+    ]
+    for tabela, coluna, tipo in colunas:
+        try:
+            db.session.execute(db.text(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}"))
+            db.session.commit()
+        except Exception as erro:  # SQLite não tem "IF NOT EXISTS" em ADD COLUMN
+            db.session.rollback()
+            app.logger.info(f"Migração de coluna {tabela}.{coluna} ignorada: {erro}")
+
+
 # gunicorn importa esse arquivo em produção (ele nunca executa como
 # "__main__"). db.create_all() só cria as tabelas que ainda não existem,
 # então rodar de novo a cada início não faz nada se elas já estiverem lá.
 with app.app_context():
     db.create_all()
+    _garantir_colunas_novas()
 
 if __name__ == "__main__":
     # Debug SÓ fica ligado se você setar FLASK_DEBUG=1 no ambiente. Com
