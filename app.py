@@ -850,6 +850,8 @@ TAMANHOS_VALIDOS = [4, 8, 16, 32]
 TAXA_ABACATEPAY_ESTIMADA = 0.80
 VALOR_MINIMO_INSCRICAO_PAGA = 5.00
 VALOR_MINIMO_PIX_ABACATEPAY = 1.00  # mínimo documentado da própria AbacatePay pra qualquer Pix
+CUSTO_IA_POR_LEITURA_ESTIMADO = 0.02  # custo da API da Anthropic (Claude Haiku) por print lido, com folga
+LUCRO_MINIMO_PLATAFORMA = 5.00  # lucro real mínimo (já descontando taxas e IA) que um campeonato pago precisa garantir
 
 
 @app.route("/campeonatos/criar", methods=["GET", "POST"])
@@ -905,6 +907,26 @@ def criar_campeonato():
                 "erro",
             )
             return redirect(url_for("criar_campeonato"))
+
+        if valor > 0:
+            # Estimativa conservadora de leituras de IA (mata-mata: max_times-1 partidas,
+            # 2 prints por partida, +20% de folga pra reenvio em caso de divergência).
+            leituras_estimadas = (max_times - 1) * 2 * 1.2
+            custo_ia_estimado = leituras_estimadas * CUSTO_IA_POR_LEITURA_ESTIMADO
+
+            arrecadacao_liquida_maxima = max_times * max(valor - TAXA_ABACATEPAY_ESTIMADA, 0)
+            lucro_maximo = arrecadacao_liquida_maxima - valor_premio
+            lucro_plataforma_estimado = lucro_maximo * (1 - FATIA_FEDERACAO_NO_LUCRO) - custo_ia_estimado
+
+            if lucro_plataforma_estimado < LUCRO_MINIMO_PLATAFORMA:
+                flash(
+                    f"Com {max_times} times a R$ {valor:.2f} e prêmio de R$ {valor_premio:.2f}, o lucro "
+                    f"da plataforma fica em torno de R$ {lucro_plataforma_estimado:.2f} — abaixo do mínimo "
+                    f"de R$ {LUCRO_MINIMO_PLATAFORMA:.2f}. Aumente o valor da inscrição, reduza o prêmio ou "
+                    "escolha um chaveamento com mais times.",
+                    "erro",
+                )
+                return redirect(url_for("criar_campeonato"))
 
         try:
             data_campeonato = datetime.strptime(request.form["data_campeonato"], "%Y-%m-%d").date()
@@ -2018,6 +2040,40 @@ def enviar_print(torneio_id, confronto_id):
         flash("Print lido! Falta o outro time enviar o dele para confirmar o resultado.", "sucesso")
 
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+
+@app.route("/manutencao/reset-torneio-teste-r5g9k2p8", methods=["POST"])
+@login_required
+def _reset_torneio_teste_temporario():
+    # Rota temporária, só pra resetar o torneio de teste (id=1) entre rodadas
+    # de teste real com a AbacatePay em produção. Remover depois de usar.
+    # Só funciona logado como quem criou esse torneio de teste especificamente.
+    torneio = Torneio.query.get(1)
+    if not torneio:
+        return "torneio id=1 não encontrado", 404
+    if current_user.id != torneio.criado_por_id:
+        abort(403)
+
+    torneio.valor_inscricao = 7.50
+    torneio.valor_premio = 1.00
+    torneio.status = "aberto"
+    torneio.time_campeao_id = None
+    torneio.premio_status = None
+    torneio.premio_transferencia_id = None
+    torneio.repasse_federacao_status = None
+    torneio.repasse_federacao_valor = None
+    torneio.repasse_federacao_transferencia_id = None
+
+    for inscricao in Inscricao.query.filter_by(torneio_id=1):
+        inscricao.status = "pendente"
+        inscricao.pix_id = None
+        inscricao.pix_br_code = None
+        inscricao.pix_br_code_base64 = None
+        inscricao.pix_expira_em = None
+        inscricao.pago_em = None
+
+    db.session.commit()
+    return "ok, torneio de teste resetado: R$7,50 inscricao / R$1,00 premio"
 
 
 @app.cli.command("promover-organizador")
