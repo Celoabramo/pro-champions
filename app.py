@@ -17,11 +17,11 @@ import os
 import random
 import secrets
 import string
-import time
 import unicodedata
 import uuid
 from collections import Counter
 from datetime import date, datetime, timedelta
+from time import sleep as _dormir
 
 import click
 from dotenv import load_dotenv
@@ -1676,7 +1676,7 @@ def pagar_premio(torneio_id):
     # ("aguarde alguns segundos antes de solicitar outro saque") — essa
     # pequena pausa evita esbarrar nesse limite ao mandar prêmio e repasse
     # no mesmo clique.
-    time.sleep(2)
+    _dormir(2)
     msg_repasse, erro_repasse = _repassar_lucro_federacao(torneio)
     db.session.commit()
 
