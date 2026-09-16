@@ -2087,6 +2087,29 @@ def enviar_print(torneio_id, confronto_id):
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
+@app.route("/manutencao/reset-pagamento-teste-r5g9k2p8", methods=["GET", "POST"])
+@login_required
+def _reset_status_pagamento_teste_temporario():
+    # Rota temporária, irmã da de reset completo — só limpa o status de
+    # prêmio/repasse (sem apagar inscrições nem desfazer o chaveamento),
+    # pra poder testar de novo "Confirmar pagamentos" sem precisar pagar
+    # a inscrição inteira outra vez. Remover depois de usar.
+    torneio = Torneio.query.get(1)
+    if not torneio:
+        return "torneio id=1 não encontrado", 404
+    if current_user.id != torneio.criado_por_id:
+        abort(403)
+
+    torneio.premio_status = None
+    torneio.premio_transferencia_id = None
+    torneio.repasse_federacao_status = None
+    torneio.repasse_federacao_valor = None
+    torneio.repasse_federacao_transferencia_id = None
+    db.session.commit()
+
+    return "ok, status de premio/repasse resetado (inscricoes e chaveamento mantidos)"
+
+
 @app.route("/manutencao/reset-torneio-teste-r5g9k2p8", methods=["GET", "POST"])
 @login_required
 def _reset_torneio_teste_temporario():
