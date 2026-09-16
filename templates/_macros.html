@@ -25,12 +25,12 @@
             <div class="bracket-jogo-corpo">
                 <div class="bracket-time {{ 'bracket-vencedor' if vencedor_id == confronto.time1_id }}">
                     {{ escudo_time(confronto.time1, 'escudo-time-pequeno') }}
-                    <span class="bracket-time-nome">{{ confronto.time1.nome }}</span>
+                    <span class="bracket-time-nome">{{ confronto.nome_time1 }}</span>
                     {% if confronto.status == 'validado' %}<span class="bracket-placar">{{ confronto.placar_time1 }}</span>{% endif %}
                 </div>
                 <div class="bracket-time {{ 'bracket-vencedor' if vencedor_id == confronto.time2_id }}">
                     {{ escudo_time(confronto.time2, 'escudo-time-pequeno') }}
-                    <span class="bracket-time-nome">{{ confronto.time2.nome }}</span>
+                    <span class="bracket-time-nome">{{ confronto.nome_time2 }}</span>
                     {% if confronto.status == 'validado' %}<span class="bracket-placar">{{ confronto.placar_time2 }}</span>{% endif %}
                 </div>
                 {% if confronto.status == 'wo' %}
@@ -54,13 +54,13 @@
         <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.id) }}" class="bracket-final-vs bracket-final-link">
             <div class="bracket-final-time {{ 'bracket-vencedor' if vencedor_id == confronto.time1_id }}">
                 {{ escudo_time(confronto.time1, 'escudo-time-final') }}
-                <span class="bracket-final-nome">{{ confronto.time1.nome }}</span>
+                <span class="bracket-final-nome">{{ confronto.nome_time1 }}</span>
                 {% if confronto.status == 'validado' %}<span class="bracket-final-placar">{{ confronto.placar_time1 }}</span>{% endif %}
             </div>
             <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="bracket-final-trofeu" aria-hidden="true">
             <div class="bracket-final-time {{ 'bracket-vencedor' if vencedor_id == confronto.time2_id }}">
                 {{ escudo_time(confronto.time2, 'escudo-time-final') }}
-                <span class="bracket-final-nome">{{ confronto.time2.nome }}</span>
+                <span class="bracket-final-nome">{{ confronto.nome_time2 }}</span>
                 {% if confronto.status == 'validado' %}<span class="bracket-final-placar">{{ confronto.placar_time2 }}</span>{% endif %}
             </div>
             {% if confronto.status == 'wo' %}

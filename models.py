@@ -344,6 +344,24 @@ class Confronto(db.Model):
     PRAZO_WO = timedelta(hours=1)
 
     @property
+    def eh_bye(self):
+        """Confronto sem adversário — o time passa direto de fase por W.O.
+
+        Acontece quando o campeonato começa com menos times do que as vagas:
+        a chave é montada no tamanho válido mais próximo (potência de 2) e as
+        vagas que sobram ficam vazias. Quem cai numa delas avança sem jogar.
+        """
+        return self.time1_id is None or self.time2_id is None
+
+    @property
+    def nome_time1(self):
+        return self.time1.nome if self.time1 else "Sem adversário"
+
+    @property
+    def nome_time2(self):
+        return self.time2.nome if self.time2 else "Sem adversário"
+
+    @property
     def prazo_wo(self):
         """Horário em que o W.O. automático fica disponível. None se a partida ainda não começou."""
         if not self.hora_inicio:

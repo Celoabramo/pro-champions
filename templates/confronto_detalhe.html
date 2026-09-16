@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% import "_macros.html" as macros %}
-{% block titulo %}{{ confronto.time1.nome }} x {{ confronto.time2.nome }} — Pro Champions{% endblock %}
+{% block titulo %}{{ confronto.nome_time1 }} x {{ confronto.nome_time2 }} — Pro Champions{% endblock %}
 {% block conteudo %}
 <section class="detalhe-confronto">
     <a href="{{ url_for('detalhe_campeonato', torneio_id=confronto.torneio_id) }}" class="link-voltar">← Voltar para o campeonato</a>
@@ -9,7 +9,7 @@
     <div class="placar-confronto">
         <div class="lado-confronto">
             {{ macros.escudo_time(confronto.time1) }}
-            <span class="nome-time">{{ confronto.time1.nome }}</span>
+            <span class="nome-time">{{ confronto.nome_time1 }}</span>
         </div>
 
         {% if confronto.status == 'validado' %}
@@ -26,7 +26,7 @@
 
         <div class="lado-confronto">
             {{ macros.escudo_time(confronto.time2) }}
-            <span class="nome-time">{{ confronto.time2.nome }}</span>
+            <span class="nome-time">{{ confronto.nome_time2 }}</span>
         </div>
     </div>
 
@@ -51,7 +51,7 @@
 
             <div class="status-prints" style="margin-bottom:14px;">
                 <div class="status-print-item {{ 'enviado' if confronto.nick_fc_time1 }}">
-                    <span>{{ confronto.time1.nome }}</span>
+                    <span>{{ confronto.nome_time1 }}</span>
                     {% if confronto.nick_fc_time1 %}
                         <strong>{{ confronto.nick_fc_time1 }}</strong>
                     {% else %}
@@ -59,7 +59,7 @@
                     {% endif %}
                 </div>
                 <div class="status-print-item {{ 'enviado' if confronto.nick_fc_time2 }}">
-                    <span>{{ confronto.time2.nome }}</span>
+                    <span>{{ confronto.nome_time2 }}</span>
                     {% if confronto.nick_fc_time2 %}
                         <strong>{{ confronto.nick_fc_time2 }}</strong>
                     {% else %}
@@ -145,11 +145,11 @@
                   onsubmit="return confirm('Cravar esse placar? Ele vale como resultado final e o chaveamento avança com ele.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label style="font-size:12px; color:var(--texto-fraco);">
-                    {{ confronto.time1.nome }}<br>
+                    {{ confronto.nome_time1 }}<br>
                     <input type="number" name="placar_time1" min="0" max="99" required style="width:70px;">
                 </label>
                 <label style="font-size:12px; color:var(--texto-fraco);">
-                    {{ confronto.time2.nome }}<br>
+                    {{ confronto.nome_time2 }}<br>
                     <input type="number" name="placar_time2" min="0" max="99" required style="width:70px;">
                 </label>
                 <button type="submit" class="botao-principal-pequeno">Definir placar na mão</button>
@@ -196,7 +196,7 @@
             {% endif %}
             <div class="status-prints">
                 <div class="status-print-item {{ 'enviado' if confronto.leitura_time1_ok }}">
-                    <span>{{ confronto.time1.nome }}</span>
+                    <span>{{ confronto.nome_time1 }}</span>
                     {% if confronto.print_time1 %}
                         <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time1) }}')">Ver print enviado</a>
                     {% else %}
@@ -204,7 +204,7 @@
                     {% endif %}
                 </div>
                 <div class="status-print-item {{ 'enviado' if confronto.leitura_time2_ok }}">
-                    <span>{{ confronto.time2.nome }}</span>
+                    <span>{{ confronto.nome_time2 }}</span>
                     {% if confronto.print_time2 %}
                         <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time2) }}')">Ver print enviado</a>
                     {% else %}

@@ -148,6 +148,13 @@ def erro_csrf(erro):
     return redirect(request.referrer or url_for("home"))
 
 
+@app.errorhandler(404)
+def erro_404(erro):
+    """Página inexistente — mostra uma tela do site com caminho de volta,
+    em vez do 404 cru e sem estilo do servidor."""
+    return render_template("404.html"), 404
+
+
 # Limita quantas vezes o mesmo IP pode tentar login, cadastro e código de
 # convite por minuto — para ninguém conseguir forçar senha ou código
 # tentando várias vezes seguidas. Guarda a contagem em memória (dá conta
@@ -1146,11 +1153,16 @@ def detalhe_campeonato(torneio_id):
             ).first()
 
     eh_organizador = current_user.is_authenticated and current_user.federacao_id == torneio.federacao_id
+    times_pagos = len(torneio.times_inscritos)
     pode_gerar_chaveamento = (
         eh_organizador
         and torneio.status == "aberto"
-        and len(torneio.times_inscritos) == torneio.max_times
+        and times_pagos >= 2
+        and (torneio.formato != "fase_grupos" or times_pagos % 4 == 0)
     )
+    # Quanto o prêmio ficaria se o organizador começasse agora, com menos
+    # times do que as vagas — usado no aviso antes de confirmar.
+    premio_se_comecar_agora = _premio_ajustado_para(torneio, times_pagos) if pode_gerar_chaveamento else torneio.valor_premio
     premio_pendente = torneio.valor_premio > 0 and torneio.premio_status != "concluido"
     repasse_pendente = torneio.repasse_federacao_status not in ("concluido", "sem_lucro", "abaixo_minimo")
     pode_pagar_premio = eh_organizador and torneio.time_campeao_id and (premio_pendente or repasse_pendente)
@@ -1182,6 +1194,8 @@ def detalhe_campeonato(torneio_id):
         inscricao_pendente=inscricao_pendente,
         eh_organizador=eh_organizador,
         pode_gerar_chaveamento=pode_gerar_chaveamento,
+        times_pagos=times_pagos,
+        premio_se_comecar_agora=premio_se_comecar_agora,
         pode_pagar_premio=pode_pagar_premio,
         eh_membro_campeao=eh_membro_campeao,
         grupos_info=grupos_info,
@@ -1653,6 +1667,36 @@ def _avancar_grupo(confronto):
     )
 
 
+def _premio_ajustado_para(torneio, num_times):
+    """Prêmio possível com `num_times` pagando, em vez das vagas todas.
+
+    O prêmio foi calibrado na criação pra sobrar o lucro mínimo da
+    plataforma com o campeonato CHEIO. Começando com menos times entra menos
+    dinheiro, e manter o prêmio cheio faria a plataforma pagar a diferença do
+    próprio bolso. Aqui a gente refaz a mesma conta da criação, só que com o
+    número real de times, e devolve o maior prêmio que ainda respeita o piso
+    (nunca aumenta o prêmio — no máximo mantém o que já estava combinado).
+    """
+    if torneio.valor_premio <= 0 or num_times >= torneio.max_times:
+        return torneio.valor_premio
+
+    leituras = (num_times - 1) * 2 * 1.2
+    custo_ia = leituras * CUSTO_IA_POR_LEITURA_ESTIMADO
+    arrecadacao = num_times * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
+
+    # Da fórmula do lucro da plataforma:
+    #   (arrecadacao - premio - taxa) * (1 - fatia) - taxa - ia = lucro_minimo
+    base_necessaria = (LUCRO_MINIMO_PLATAFORMA + TAXA_ABACATEPAY_ESTIMADA + custo_ia) / (1 - FATIA_FEDERACAO_NO_LUCRO)
+    premio_possivel = arrecadacao - TAXA_ABACATEPAY_ESTIMADA - base_necessaria
+
+    premio = min(torneio.valor_premio, premio_possivel)
+    if premio < VALOR_MINIMO_PIX_ABACATEPAY:
+        # Não sobra nem o mínimo que a AbacatePay envia num Pix — fica sem
+        # prêmio em dinheiro (o campeonato continua valendo, só não paga).
+        return 0
+    return round(premio, 2)
+
+
 def _estrutura_bracket(torneio):
     """Monta a chave inteira dividida em dois lados que se encontram na
     final — do jeito de chave de campeonato de verdade (metade dos times de
@@ -1676,7 +1720,11 @@ def _estrutura_bracket(torneio):
     if torneio.formato == "fase_grupos":
         tamanho = Grupo.query.filter_by(torneio_id=torneio.id).count() * 2
     else:
-        tamanho = torneio.max_times
+        # O tamanho real da chave vem da rodada mais cheia que existe, não de
+        # max_times: o campeonato pode ter começado com menos times do que as
+        # vagas, e aí a chave é menor (ex: 16 vagas, 6 times -> chave de 8).
+        maior_rodada = max((len(c) for c in confrontos_por_fase.values()), default=0)
+        tamanho = maior_rodada * 2 if maior_rodada else torneio.max_times
     if tamanho < 2:
         return None
 
@@ -1712,13 +1760,29 @@ def gerar_chaveamento(torneio_id):
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
     times = list(torneio.times_inscritos)
-    if len(times) != torneio.max_times:
+    if len(times) < 2:
         flash(
-            f"O campeonato precisa das {torneio.max_times} vagas preenchidas para sortear o chaveamento "
-            f"(hoje tem {len(times)}).",
+            f"Precisa de pelo menos 2 times pagos para começar o campeonato (hoje tem {len(times)}).",
             "erro",
         )
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    if torneio.formato == "fase_grupos" and len(times) % 4 != 0:
+        flash(
+            f"Campeonato de fase de grupos precisa de um número de times múltiplo de 4 "
+            f"(hoje tem {len(times)}). Complete as vagas ou remova algum time.",
+            "erro",
+        )
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    # Começando com menos times do que as vagas, entra menos dinheiro — então
+    # o prêmio cai junto, senão a plataforma banca a diferença do próprio
+    # bolso. O organizador é avisado disso antes de confirmar (ver o popup na
+    # tela do campeonato).
+    premio_antigo = torneio.valor_premio
+    premio_novo = _premio_ajustado_para(torneio, len(times))
+    if premio_novo != premio_antigo:
+        torneio.valor_premio = premio_novo
 
     if torneio.formato == "fase_grupos":
         _gerar_grupos(torneio, times)
@@ -1726,17 +1790,54 @@ def gerar_chaveamento(torneio_id):
         mensagem_sucesso = f"Grupos sorteados! {descricao_fase}."
     else:
         random.shuffle(times)
-        fase = FASES_POR_TAMANHO.get(len(times), f"Fase de {len(times)}")
-        for ordem, i in enumerate(range(0, len(times), 2)):
-            db.session.add(Confronto(
+        # A chave precisa ser potência de 2. Com menos times que isso, as
+        # vagas que sobram ficam vazias e quem cai nelas passa de fase por
+        # W.O., sem jogar.
+        tamanho_chave = 2
+        while tamanho_chave < len(times):
+            tamanho_chave *= 2
+
+        # Monta os pares na mão em vez de fatiar a lista com buracos: assim
+        # nunca sai uma vaga vazia contra outra vazia (com 5 times numa chave
+        # de 8, fatiar deixaria o último confronto sem nenhum time).
+        qtd_byes = tamanho_chave - len(times)
+        pares = [(time, None) for time in times[:qtd_byes]]
+        jogam = times[qtd_byes:]
+        pares += [(jogam[i], jogam[i + 1]) for i in range(0, len(jogam), 2)]
+        random.shuffle(pares)  # espalha os byes pelos dois lados da chave
+
+        fase = FASES_POR_TAMANHO.get(tamanho_chave, f"Fase de {tamanho_chave}")
+        for ordem, (time1, time2) in enumerate(pares):
+            confronto = Confronto(
                 torneio_id=torneio.id,
                 fase=fase,
                 ordem=ordem,
-                time1_id=times[i].id,
-                time2_id=times[i + 1].id,
-            ))
+                time1_id=time1.id if time1 else None,
+                time2_id=time2.id if time2 else None,
+            )
+            # Sem adversário: já nasce decidido por W.O. pra quem está lá.
+            if time2 is None:
+                confronto.status = "wo"
+                confronto.vencedor_wo_id = time1.id
+            db.session.add(confronto)
+        byes = qtd_byes
+
         descricao_fase = f"chaveamento sorteado ({fase})"
         mensagem_sucesso = f"Chaveamento sorteado! Fase inicial: {fase}."
+        if byes:
+            mensagem_sucesso += (
+                f" {len(times)} time(s) para uma chave de {tamanho_chave} — "
+                f"{byes} time(s) passam direto de fase por W.O."
+            )
+
+    if premio_novo != premio_antigo:
+        mensagem_sucesso += f" Prêmio ajustado de R$ {premio_antigo:.2f} para R$ {premio_novo:.2f} (começou com menos times)."
+        notificar_federacao(
+            torneio,
+            "campeonato_iniciado",
+            f'O prêmio do "{torneio.nome}" foi ajustado de R$ {premio_antigo:.2f} para '
+            f'R$ {premio_novo:.2f} porque o campeonato começou com {len(times)} de {torneio.max_times} times.',
+        )
 
     torneio.status = "em_andamento"
     notificar_federacao(
@@ -2184,7 +2285,7 @@ def contestar_placar(torneio_id, confronto_id):
     torneio = confronto.torneio
     corpo = (
         f"Contestação de placar em {torneio.nome} ({torneio.federacao.nome}).\n\n"
-        f"Partida: {confronto.time1.nome} {confronto.placar_time1} x {confronto.placar_time2} {confronto.time2.nome}\n"
+        f"Partida: {confronto.nome_time1} {confronto.placar_time1} x {confronto.placar_time2} {confronto.nome_time2}\n"
         f"Fase: {confronto.fase}\n"
         f"Contestado por: {current_user.nickname} ({current_user.email}), capitão do {meu_time.nome}\n"
     )
@@ -2200,8 +2301,8 @@ def contestar_placar(torneio_id, confronto_id):
     notificar_federacao(
         torneio,
         "placar_contestado",
-        f'{meu_time.nome} contestou o placar de {confronto.time1.nome} {confronto.placar_time1} x '
-        f'{confronto.placar_time2} {confronto.time2.nome} ({torneio.nome}).',
+        f'{meu_time.nome} contestou o placar de {confronto.nome_time1} {confronto.placar_time1} x '
+        f'{confronto.placar_time2} {confronto.nome_time2} ({torneio.nome}).',
         confronto=confronto,
     )
     db.session.commit()
@@ -2242,7 +2343,7 @@ def salvar_nick_fc(torneio_id, confronto_id):
     db.session.commit()
 
     flash(
-        f"Nick salvo! O {confronto.time2.nome if meu_lado == 1 else confronto.time1.nome} já consegue te achar no jogo."
+        f"Nick salvo! O {confronto.nome_time2 if meu_lado == 1 else confronto.nome_time1} já consegue te achar no jogo."
         if nick else "Nick removido.",
         "sucesso",
     )
@@ -2270,6 +2371,10 @@ def resolver_confronto_manual(torneio_id, confronto_id):
 
     if confronto.status == "validado":
         flash("Essa partida já tem um resultado confirmado.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+    if confronto.eh_bye:
+        flash("Essa vaga não teve adversário — o time passou direto de fase, não tem placar para definir.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
     try:
@@ -2301,7 +2406,7 @@ def resolver_confronto_manual(torneio_id, confronto_id):
     notificar_federacao(
         confronto.torneio,
         "partida_finalizada",
-        f"A partida {confronto.time1.nome} x {confronto.time2.nome} ({confronto.torneio.nome}) "
+        f"A partida {confronto.nome_time1} x {confronto.nome_time2} ({confronto.torneio.nome}) "
         f"foi resolvida manualmente pelo admin: {resultado}.",
         confronto=confronto,
     )
@@ -2335,7 +2440,7 @@ def iniciar_confronto(torneio_id, confronto_id):
     notificar_federacao(
         confronto.torneio,
         "partida_iniciada",
-        f'A partida {confronto.time1.nome} x {confronto.time2.nome} ({confronto.torneio.nome}) começou.',
+        f'A partida {confronto.nome_time1} x {confronto.nome_time2} ({confronto.torneio.nome}) começou.',
         confronto=confronto,
     )
     db.session.commit()
@@ -2405,7 +2510,7 @@ def confirmar_wo(torneio_id, confronto_id, opcao):
         notificar_federacao(
             confronto.torneio,
             "partida_finalizada",
-            f'A partida {confronto.time1.nome} x {confronto.time2.nome} ({confronto.torneio.nome}) finalizou: {resultado}',
+            f'A partida {confronto.nome_time1} x {confronto.nome_time2} ({confronto.torneio.nome}) finalizou: {resultado}',
             confronto=confronto,
         )
         _avancar_chaveamento(confronto)
@@ -2496,8 +2601,8 @@ def _tentar_finalizar_confronto(confronto):
     nome0, placar0 = nomes_lidos[0]
     nome1, placar1 = nomes_lidos[1]
 
-    bate_direto = _nomes_parecidos(nome0, confronto.time1.nome) or _nomes_parecidos(nome1, confronto.time2.nome)
-    bate_invertido = _nomes_parecidos(nome1, confronto.time1.nome) or _nomes_parecidos(nome0, confronto.time2.nome)
+    bate_direto = _nomes_parecidos(nome0, confronto.nome_time1) or _nomes_parecidos(nome1, confronto.nome_time2)
+    bate_invertido = _nomes_parecidos(nome1, confronto.nome_time1) or _nomes_parecidos(nome0, confronto.nome_time2)
 
     if bate_direto and not bate_invertido:
         placar_time1, placar_time2 = placar0, placar1
@@ -2624,7 +2729,7 @@ def enviar_print(torneio_id, confronto_id):
         notificar_federacao(
             confronto.torneio,
             "partida_finalizada",
-            f'A partida {confronto.time1.nome} x {confronto.time2.nome} ({confronto.torneio.nome}) finalizou: {resultado_texto}',
+            f'A partida {confronto.nome_time1} x {confronto.nome_time2} ({confronto.torneio.nome}) finalizou: {resultado_texto}',
             confronto=confronto,
         )
         _avancar_chaveamento(confronto)

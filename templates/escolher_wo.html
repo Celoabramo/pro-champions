@@ -4,17 +4,17 @@
 <section class="passar-bracadeira">
     <h1>Declarar W.O.</h1>
     <p class="perfil-email">
-        {{ confronto.time1.nome }} x {{ confronto.time2.nome }} — {{ confronto.fase }}.
+        {{ confronto.nome_time1 }} x {{ confronto.nome_time2 }} — {{ confronto.fase }}.
         Escolha o que aconteceu nessa partida.
     </p>
 
     <ul class="lista-membros">
         <li class="linha-membro">
-            <span>{{ confronto.time1.nome }} venceu por W.O.</span>
+            <span>{{ confronto.nome_time1 }} venceu por W.O.</span>
             <a href="{{ url_for('confirmar_wo', torneio_id=confronto.torneio_id, confronto_id=confronto.id, opcao='time1') }}" class="botao-secundario-pequeno">Escolher</a>
         </li>
         <li class="linha-membro">
-            <span>{{ confronto.time2.nome }} venceu por W.O.</span>
+            <span>{{ confronto.nome_time2 }} venceu por W.O.</span>
             <a href="{{ url_for('confirmar_wo', torneio_id=confronto.torneio_id, confronto_id=confronto.id, opcao='time2') }}" class="botao-secundario-pequeno">Escolher</a>
         </li>
         <li class="linha-membro">

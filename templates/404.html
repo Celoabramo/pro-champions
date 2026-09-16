@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Página não encontrada — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="confirmacao">
+    <h1>Essa página não existe</h1>
+    <p class="texto-aviso">
+        O link pode ter mudado de lugar, estar escrito errado, ou o campeonato/partida que você procura
+        foi removido. Você vai voltar para a página inicial em alguns segundos.
+    </p>
+
+    <div class="form-confirmacao" style="margin-top:20px;">
+        <a href="{{ url_for('home') }}" class="botao-principal">Voltar para o início agora</a>
+        <a href="{{ url_for('campeonatos') }}" class="botao-secundario">Ver campeonatos</a>
+    </div>
+</section>
+
+<script>
+    // Redireciona sozinho depois de alguns segundos — tempo pra pessoa ler
+    // o aviso e entender o que houve antes de sair da tela.
+    setTimeout(function () {
+        window.location.href = "{{ url_for('home') }}";
+    }, 6000);
+</script>
+{% endblock %}

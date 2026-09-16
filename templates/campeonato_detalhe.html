@@ -64,7 +64,7 @@
                             {% for confronto in info.confrontos %}
                                 <li>
                                     <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.id) }}">
-                                        <span class="confronto-grupo-time">{{ confronto.time1.nome }}</span>
+                                        <span class="confronto-grupo-time">{{ confronto.nome_time1 }}</span>
                                         {% if confronto.status == 'validado' %}
                                             <span class="confronto-grupo-placar">{{ confronto.placar_time1 }} — {{ confronto.placar_time2 }}</span>
                                         {% elif confronto.status == 'wo' %}
@@ -72,7 +72,7 @@
                                         {% else %}
                                             <span class="confronto-grupo-placar texto-fraco-pequeno">vs</span>
                                         {% endif %}
-                                        <span class="confronto-grupo-time">{{ confronto.time2.nome }}</span>
+                                        <span class="confronto-grupo-time">{{ confronto.nome_time2 }}</span>
                                     </a>
                                 </li>
                             {% endfor %}
@@ -172,9 +172,25 @@
             })();
         </script>
     {% elif eh_organizador and pode_gerar_chaveamento %}
+        {% set faltando = torneio.max_times - times_pagos %}
+        {% set premio_cai = torneio.valor_premio > 0 and premio_se_comecar_agora != torneio.valor_premio %}
         <div class="bloco-chaveamento" style="text-align:center;">
-            <p class="texto-fraco-pequeno" style="margin-bottom:14px;">As vagas estão preenchidas — já dá para sortear o chaveamento.</p>
-            <form method="POST" action="{{ url_for('gerar_chaveamento', torneio_id=torneio.id) }}">
+            {% if faltando > 0 %}
+                <p class="texto-aviso" style="color: var(--erro); margin-bottom:14px;">
+                    Ainda faltam {{ faltando }} time(s) para encher as {{ torneio.max_times }} vagas.
+                    Dá para começar assim mesmo com {{ times_pagos }}: quem sobrar sem adversário no sorteio
+                    passa direto de fase por W.O.
+                    {% if premio_cai %}
+                        <br><br>Como entrou menos dinheiro de inscrição, o prêmio cairia de
+                        <strong>R$ {{ "%.2f"|format(torneio.valor_premio) }}</strong> para
+                        <strong>R$ {{ "%.2f"|format(premio_se_comecar_agora) }}</strong>.
+                    {% endif %}
+                </p>
+            {% else %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:14px;">As vagas estão preenchidas — já dá para sortear o chaveamento.</p>
+            {% endif %}
+            <form method="POST" action="{{ url_for('gerar_chaveamento', torneio_id=torneio.id) }}"
+                  onsubmit="return confirm({% if faltando > 0 %}'Começar com {{ times_pagos }} de {{ torneio.max_times }} times?\n\n{{ faltando }} vaga(s) ficam vazias e quem cair nelas passa de fase por W.O.{% if premio_cai %}\n\nO prêmio vai cair de R$ {{ "%.2f"|format(torneio.valor_premio) }} para R$ {{ "%.2f"|format(premio_se_comecar_agora) }}, porque entrou menos dinheiro de inscrição.{% endif %}\n\nDepois de sortear, as inscrições fecham e não dá para voltar atrás. Tem certeza?'{% else %}'Sortear o chaveamento e começar o campeonato?\n\nDepois disso as inscrições fecham e não dá para voltar atrás.'{% endif %});">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="botao-principal">Gerar chaveamento</button>
             </form>
