@@ -1549,8 +1549,11 @@ FATIA_FEDERACAO_NO_LUCRO = 0.8  # os outros 20% ficam parados na conta AbacatePa
 def _pagar_premio_campeao(torneio):
     """Tenta transferir o prêmio para o capitão do time campeão. Devolve
     (mensagem_ou_None, erro_ou_None) — só um dos dois vem preenchido.
-    Não faz nada (devolve None, None) se já pago ou se não tem prêmio."""
-    if torneio.valor_premio <= 0 or torneio.premio_status == "concluido":
+    Não faz nada (devolve None, None) se já pago, sem prêmio, ou se já tem
+    uma transferência "pendente" — nesse caso a AbacatePay já aceitou o
+    envio e só está confirmando; tentar de novo criaria um segundo envio
+    real em cima do primeiro."""
+    if torneio.valor_premio <= 0 or torneio.premio_status in ("concluido", "pendente"):
         return None, None
 
     capitao = torneio.time_campeao.capitao
@@ -1588,8 +1591,10 @@ def _repassar_lucro_federacao(torneio):
     o prêmio) para o admin dono da federação. Os outros 20% não são
     transferidos — ficam parados na própria conta AbacatePay, que é a
     parte da plataforma. Devolve (mensagem_ou_None, erro_ou_None), igual
-    _pagar_premio_campeao."""
-    if torneio.repasse_federacao_status in ("concluido", "sem_lucro", "abaixo_minimo"):
+    _pagar_premio_campeao. Mesma regra de não reenviar em cima de uma
+    transferência "pendente" (já aceita pela AbacatePay, só aguardando
+    confirmação)."""
+    if torneio.repasse_federacao_status in ("concluido", "sem_lucro", "abaixo_minimo", "pendente"):
         return None, None
 
     # Lucro calculado em cima do valor que REALMENTE entrou na conta — cada
@@ -1688,6 +1693,8 @@ def pagar_premio(torneio_id):
         flash(mensagem, "sucesso")
     for erro in filter(None, [erro_premio, erro_repasse]):
         flash(erro, "erro")
+    if not any([msg_premio, erro_premio, msg_repasse, erro_repasse]):
+        flash("Já tem uma transferência pendente de confirmação na AbacatePay — aguarde antes de tentar de novo.", "sucesso")
 
     return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
