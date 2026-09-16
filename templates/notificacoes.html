@@ -35,12 +35,26 @@
         <ul class="lista-notificacoes">
             {% for n in notificacoes %}
                 {% set rotulo, classe_selo = rotulos_tipo.get(n.tipo, (n.tipo, 'selo-status-em_andamento')) %}
+                {% if n.confronto_id %}
+                    {% set url_notificacao = url_for('detalhe_confronto', torneio_id=n.torneio_id, confronto_id=n.confronto_id) %}
+                {% elif n.torneio_id %}
+                    {% set url_notificacao = url_for('detalhe_campeonato', torneio_id=n.torneio_id) %}
+                {% else %}
+                    {% set url_notificacao = None %}
+                {% endif %}
                 <li class="notificacao-item {{ 'nova' if n.id in ids_novas }}">
                     <span class="selo-status {{ classe_selo }}">{{ rotulo }}</span>
-                    <div class="notificacao-corpo">
-                        <p>{{ n.mensagem }}</p>
-                        <span class="texto-fraco-pequeno">{{ n.criado_em.strftime('%d/%m/%Y %H:%M') }}</span>
-                    </div>
+                    {% if url_notificacao %}
+                        <a href="{{ url_notificacao }}" class="notificacao-corpo notificacao-corpo-link">
+                            <p>{{ n.mensagem }}</p>
+                            <span class="texto-fraco-pequeno">{{ n.criado_em.strftime('%d/%m/%Y %H:%M') }}</span>
+                        </a>
+                    {% else %}
+                        <div class="notificacao-corpo">
+                            <p>{{ n.mensagem }}</p>
+                            <span class="texto-fraco-pequeno">{{ n.criado_em.strftime('%d/%m/%Y %H:%M') }}</span>
+                        </div>
+                    {% endif %}
                     <form method="POST" action="{{ url_for('excluir_notificacao', notificacao_id=n.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="botao-excluir-notificacao" aria-label="Excluir notificação" title="Excluir notificação">

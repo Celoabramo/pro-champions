@@ -773,6 +773,8 @@ main { max-width: 640px; margin: 0 auto; padding: 48px 24px 80px; }
 .notificacao-item .selo-status { flex-shrink: 0; margin-top: 2px; }
 .notificacao-corpo { flex: 1; min-width: 0; }
 .notificacao-corpo p { font-size: 14px; line-height: 1.5; margin: 0 0 4px; }
+a.notificacao-corpo-link { color: inherit; text-decoration: none; display: block; }
+a.notificacao-corpo-link:hover p { color: var(--acento); }
 
 .botao-excluir-notificacao {
     flex-shrink: 0;
