@@ -67,6 +67,13 @@ class User(UserMixin, db.Model):
     federacao_id = db.Column(db.Integer, db.ForeignKey("federacoes.id"), nullable=True)
     federacao = db.relationship("Federacao", back_populates="admins", foreign_keys=[federacao_id])
 
+    # Link do grupo de WhatsApp da federação — só faz sentido pra quem é
+    # dono de uma (Federacao.dono_id). Mostrado como botão na página
+    # pública da federação; se estiver vazio, o botão avisa que não tem
+    # grupo cadastrado em vez de sumir. A coluna já existe em produção
+    # (migração rodada separadamente antes desse campo voltar ao model).
+    link_grupo_whatsapp = db.Column(db.String(255), nullable=True)
+
     def __repr__(self):
         return f"<User {self.nickname}>"
 
