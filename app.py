@@ -1040,7 +1040,7 @@ def inscrever_time(torneio_id):
     try:
         pix = pagamentos.criar_pix(
             valor_reais=torneio.valor_inscricao,
-            descricao=f"Inscrição {current_user.time.nome} — {torneio.nome}",
+            descricao=f"Inscrição {current_user.time.nome} - {torneio.nome}",
             external_id=f"inscricao-{inscricao.id}",
         )
     except pagamentos.PagamentoIndisponivel as erro:
@@ -1494,7 +1494,7 @@ def _pagar_premio_campeao(torneio):
             valor_reais=torneio.valor_premio,
             chave_pix=capitao.chave_pix,
             tipo_chave=capitao.tipo_chave_pix,
-            descricao=f"Prêmio {torneio.nome} — {torneio.time_campeao.nome}",
+            descricao=f"Prêmio {torneio.nome} - {torneio.time_campeao.nome}",
             external_id=f"premio-torneio-{torneio.id}",
         )
     except pagamentos.PagamentoIndisponivel as erro:
@@ -1536,7 +1536,7 @@ def _repassar_lucro_federacao(torneio):
             valor_reais=valor_repasse,
             chave_pix=dono.chave_pix,
             tipo_chave=dono.tipo_chave_pix,
-            descricao=f"Repasse {torneio.nome} — {torneio.federacao.nome}",
+            descricao=f"Repasse {torneio.nome} - {torneio.federacao.nome}",
             external_id=f"repasse-federacao-torneio-{torneio.id}",
         )
     except pagamentos.PagamentoIndisponivel as erro:
