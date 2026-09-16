@@ -2081,8 +2081,19 @@ def _reset_torneio_teste_temporario():
         inscricao.pix_expira_em = None
         inscricao.pago_em = None
 
+    senha_nova = secrets.token_urlsafe(9)  # gerada na hora, nunca fica salva no código
+    capitaes = User.query.filter(User.email.like("capitao%.prod@procampeoes.local")).order_by(User.id).all()
+    for capitao in capitaes:
+        capitao.senha_hash = generate_password_hash(senha_nova)
+
     db.session.commit()
-    return "ok, torneio de teste resetado: R$7,50 inscricao / R$1,00 premio"
+
+    linhas = [f"{c.email} — senha: {senha_nova}" for c in capitaes]
+    return (
+        "ok, torneio de teste resetado: R$7,50 inscricao / R$1,00 premio<br>"
+        "senha dos 4 capitaes resetada pra: " + senha_nova + "<br><br>"
+        + "<br>".join(linhas)
+    )
 
 
 @app.cli.command("promover-organizador")
