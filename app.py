@@ -726,17 +726,47 @@ def sair_time():
         flash("Você é o capitão. Passe a braçadeira para outro membro antes de sair.", "erro")
         return redirect(url_for("passar_bracadeira"))
 
+    # Sair sendo o último membro dissolve o time. Se ele estiver num
+    # campeonato que já começou, dissolver deixaria o chaveamento apontando
+    # para um time que não existe mais (e o banco recusa a exclusão) — então
+    # esse caso é barrado antes de mexer em qualquer coisa.
+    if time_atual and len(time_atual.membros) == 1:
+        em_andamento = [
+            i.torneio.nome for i in Inscricao.query.filter_by(time_id=time_atual.id).all()
+            if i.torneio and i.torneio.status != "aberto"
+        ]
+        if em_andamento:
+            flash(
+                f"Você é o último membro do {time_atual.nome} e ele está disputando "
+                f"{', '.join(em_andamento)}. Saindo agora, o time seria desfeito no meio do campeonato — "
+                "espere o campeonato terminar ou chame alguém para o time antes de sair.",
+                "erro",
+            )
+            return redirect(url_for("time"))
+
     current_user.time_id = None
     db.session.commit()
 
-    # Se o time ficou vazio, apaga ele — e junto as inscrições em
-    # campeonato que ele tinha, senão sobra referência quebrada por aí.
+    # Time vazio é desfeito. As inscrições dele saem junto — e as que já
+    # estavam pagas são devolvidas (menos a taxa), senão o time ficava sem
+    # vaga E sem o dinheiro. Só sobram campeonatos ainda abertos aqui: os que
+    # já começaram foram barrados acima.
+    avisos = []
     if time_atual and len(time_atual.membros) == 0:
+        for inscricao in Inscricao.query.filter_by(time_id=time_atual.id).all():
+            mensagem, erro = _reembolsar_inscricao(inscricao)
+            if mensagem:
+                avisos.append(mensagem)
+            elif erro:
+                avisos.append(erro)
+        db.session.commit()
+
         Inscricao.query.filter_by(time_id=time_atual.id).delete()
+        _apagar_upload("escudos", time_atual.escudo_imagem)
         db.session.delete(time_atual)
         db.session.commit()
 
-    flash("Você saiu do time.", "sucesso")
+    flash(" ".join(["Você saiu do time."] + avisos), "sucesso")
     return redirect(url_for("time"))
 
 
@@ -2053,6 +2083,10 @@ def excluir_campeonato(torneio_id):
             return redirect(url_for("excluir_campeonato", torneio_id=torneio_id))
 
         nome = torneio.nome
+        # Os prints das partidas saem junto — senão os arquivos ficavam no
+        # volume para sempre, sem nem existir mais um confronto apontando
+        # para eles.
+        _limpar_prints_do_torneio(torneio)
         Notificacao.query.filter_by(torneio_id=torneio.id).delete()
         Confronto.query.filter_by(torneio_id=torneio.id).delete()
         Inscricao.query.filter_by(torneio_id=torneio.id).delete()
