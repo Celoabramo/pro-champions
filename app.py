@@ -2093,6 +2093,32 @@ def enviar_print(torneio_id, confronto_id):
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
+@app.route("/manutencao/limpar-tudo-pre-lancamento-q7wz4nx1", methods=["GET", "POST"])
+@login_required
+def _limpar_tudo_pre_lancamento_temporario():
+    # Rota temporária de uso único — apaga TODOS os dados de teste (federação,
+    # usuários, times, torneio, partidas, notificações) pra deixar o banco
+    # limpo antes do lançamento de verdade. Remover depois de usar.
+    # Só quem já é organizador pode disparar (não abre pra qualquer login).
+    if not current_user.is_organizador:
+        abort(403)
+
+    Notificacao.query.delete()
+    Confronto.query.delete()
+    Inscricao.query.delete()
+    Grupo.query.delete()
+    Torneio.query.delete()
+    # Quebra as referências circulares (User<->Team, User<->Federacao) antes
+    # de apagar os dois lados.
+    User.query.update({"time_id": None, "federacao_id": None})
+    Team.query.delete()
+    Federacao.query.delete()
+    User.query.delete()
+    db.session.commit()
+
+    return "ok, banco limpo pro lancamento"
+
+
 @app.route("/manutencao/reset-pagamento-teste-r5g9k2p8", methods=["GET", "POST"])
 @login_required
 def _reset_status_pagamento_teste_temporario():
