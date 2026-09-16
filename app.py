@@ -48,6 +48,10 @@ load_dotenv()
 
 app = Flask(__name__)
 
+# E-mail do dono do site — o único que pode promover outros usuários a
+# organizador (só organizadores podem criar federação/campeonato).
+ADMIN_EMAIL = "marcelinhopolar@gmail.com"
+
 # Chave secreta usada pelo Flask para proteger sessões de login e os
 # tokens CSRF dos formulários. Em produção isso PRECISA vir de uma
 # variável de ambiente — o valor fixo abaixo é só um fallback para rodar
@@ -198,6 +202,12 @@ def injetar_static_versionado():
 def injetar_ano_atual():
     """Ano exibido no © do rodapé — para não precisar atualizar na mão todo ano."""
     return dict(ano_atual=datetime.utcnow().year)
+
+
+@app.context_processor
+def injetar_eh_admin_site():
+    eh_admin = current_user.is_authenticated and current_user.email == ADMIN_EMAIL
+    return dict(eh_admin_site=eh_admin)
 
 
 def _texto_marquee(nomes, minimo=16):
@@ -407,6 +417,29 @@ def perfil_pix():
     return render_template("perfil_pix.html", usuario=current_user, tipos=pagamentos.TIPOS_CHAVE_PIX)
 
 
+@app.route("/admin/organizadores", methods=["GET", "POST"])
+@login_required
+def admin_organizadores():
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        usuario = User.query.filter_by(email=email).first()
+        if not usuario:
+            flash(f"Nenhum usuário encontrado com o e-mail {email}.", "erro")
+        elif usuario.is_organizador:
+            flash(f"{usuario.nickname} já é organizador.", "erro")
+        else:
+            usuario.is_organizador = True
+            db.session.commit()
+            flash(f"{usuario.nickname} ({usuario.email}) agora é organizador!", "sucesso")
+        return redirect(url_for("admin_organizadores"))
+
+    organizadores = User.query.filter_by(is_organizador=True).order_by(User.nickname).all()
+    return render_template("admin_organizadores.html", organizadores=organizadores)
+
+
 @app.route("/federacao/criar", methods=["POST"])
 @login_required
 def criar_federacao():
@@ -501,6 +534,25 @@ def enviar_logo_federacao():
     db.session.commit()
 
     flash("Logo da federação atualizada!", "sucesso")
+    return redirect(url_for("perfil"))
+
+
+@app.route("/federacao/whatsapp", methods=["POST"])
+@login_required
+def salvar_link_whatsapp_federacao():
+    if not current_user.federacao or current_user.federacao.dono_id != current_user.id:
+        flash("Só o dono da federação pode configurar o link do grupo.", "erro")
+        return redirect(url_for("perfil"))
+
+    link = request.form.get("link_grupo_whatsapp", "").strip()
+    if link and not (link.startswith("https://chat.whatsapp.com/") or link.startswith("http://chat.whatsapp.com/")):
+        flash("Link inválido — use o link de convite do grupo (começa com chat.whatsapp.com).", "erro")
+        return redirect(url_for("perfil"))
+
+    current_user.link_grupo_whatsapp = link or None
+    db.session.commit()
+
+    flash("Link do grupo de WhatsApp salvo!" if link else "Link do grupo de WhatsApp removido.", "sucesso")
     return redirect(url_for("perfil"))
 
 
@@ -2091,6 +2143,28 @@ def enviar_print(torneio_id, confronto_id):
         flash("Print lido! Falta o outro time enviar o dele para confirmar o resultado.", "sucesso")
 
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
+
+@app.route("/manutencao/migrar-whatsapp-coluna-h3jm8vqe", methods=["GET", "POST"])
+@login_required
+def _migrar_coluna_whatsapp_temporario():
+    # Rota temporária de uso único — adiciona a coluna nova (link do grupo
+    # de WhatsApp) na tabela users, que já existia antes dessa mudança
+    # (db.create_all() só cria tabela que não existe, não altera as que já
+    # existem). A coluna é "deferred" no model (ver models.py), então
+    # login/cadastro continuam funcionando normalmente até essa rota rodar
+    # — só quem acessar o link do WhatsApp esbarraria nisso antes da
+    # migração. Restrita ao dono do site. Remover essa rota assim que
+    # confirmar que rodou.
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+    try:
+        db.session.execute(db.text("ALTER TABLE users ADD COLUMN link_grupo_whatsapp VARCHAR(255)"))
+        db.session.commit()
+    except Exception as erro:
+        db.session.rollback()
+        return f"erro (coluna já deve existir?): {erro}", 200
+    return "ok, coluna link_grupo_whatsapp adicionada"
 
 
 @app.route("/manutencao/limpar-tudo-pre-lancamento-q7wz4nx1", methods=["GET", "POST"])

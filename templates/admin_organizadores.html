@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Promover organizadores — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    <h1>Promover organizadores</h1>
+    <p class="perfil-email">Digite o e-mail de quem já criou conta no site para liberar a criação de federação/campeonato.</p>
+
+    <div class="perfil-bloco">
+        <form method="POST" class="form-escudo">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="email" name="email" placeholder="email@exemplo.com" required style="flex:1;">
+            <button type="submit" class="botao-principal-pequeno">Tornar organizador</button>
+        </form>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Organizadores atuais ({{ organizadores|length }})</h2>
+        {% if organizadores %}
+            <ul class="lista-membros">
+                {% for org in organizadores %}
+                    <li>{{ org.nickname }} — {{ org.email }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="texto-fraco-pequeno">Nenhum organizador ainda.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -5,6 +5,13 @@
     <h1>{{ usuario.nickname }}</h1>
     <p class="perfil-email">{{ usuario.email }}</p>
 
+    {% if eh_admin_site %}
+        <div class="perfil-bloco">
+            <h2>Administração</h2>
+            <a href="{{ url_for('admin_organizadores') }}" class="link-bloco">Promover organizadores</a>
+        </div>
+    {% endif %}
+
     <div class="perfil-bloco">
         <h2>Time</h2>
         {% if usuario.time %}
@@ -90,6 +97,21 @@
                     {% endfor %}
                 </ul>
             </div>
+
+            {% if federacao.dono_id == usuario.id %}
+                <div class="perfil-bloco perfil-bloco-aninhado">
+                    <h2>Grupo de WhatsApp</h2>
+                    <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
+                        Link de convite do grupo da federação — aparece como botão na página pública dela.
+                    </p>
+                    <form method="POST" action="{{ url_for('salvar_link_whatsapp_federacao') }}" class="form-escudo">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="url" name="link_grupo_whatsapp" placeholder="https://chat.whatsapp.com/..."
+                               value="{{ usuario.link_grupo_whatsapp or '' }}">
+                        <button type="submit" class="botao-principal-pequeno">Salvar</button>
+                    </form>
+                </div>
+            {% endif %}
 
             <div class="perfil-bloco perfil-bloco-aninhado">
                 <h2>Convidar admin</h2>

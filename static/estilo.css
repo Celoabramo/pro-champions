@@ -975,7 +975,27 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 .card-federacao-meta { color: var(--texto-fraco); font-size: 13px; margin: 0; }
 .destaque-aberto { color: var(--acento); font-weight: 600; }
 
-.detalhe-federacao .cabecalho-federacao { margin-bottom: 24px; }
+.detalhe-federacao .cabecalho-federacao { margin-bottom: 24px; flex-wrap: wrap; }
+.detalhe-federacao .cabecalho-federacao > div { flex: 1; min-width: 160px; }
+
+.botao-whatsapp-federacao {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: #25d366;
+    color: #06301b;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.botao-whatsapp-federacao:hover { filter: brightness(1.05); }
+.botao-whatsapp-federacao-vazio { background: var(--linha); color: var(--texto-fraco); }
 
 .grid-stats-federacao {
     display: grid;
