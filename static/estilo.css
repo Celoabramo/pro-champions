@@ -1083,6 +1083,11 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
     margin-left: 8px;
 }
 
+.chip-jogo {
+    color: var(--acento);
+    background: var(--acento-fraco);
+}
+
 .chip-geracao {
     display: inline-flex;
     align-items: center;

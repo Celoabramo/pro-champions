@@ -45,6 +45,25 @@
             </label>
         </div>
 
+        <label>Jogo</label>
+        <div class="opcoes-formato">
+            {% for codigo, nome in jogos.items() %}
+                <label class="opcao-formato">
+                    <input type="radio" name="jogo" value="{{ codigo }}" {% if codigo == jogo_padrao %}checked{% endif %}>
+                    <div>
+                        <strong>{{ nome }}</strong>
+                        <span class="texto-fraco-pequeno">
+                            {% if codigo == 'fc27' %}
+                                Edição nova. Se ainda não tiver lançado, marque a data do campeonato para depois do lançamento.
+                            {% else %}
+                                Campeonato disputado no {{ nome }}.
+                            {% endif %}
+                        </span>
+                    </div>
+                </label>
+            {% endfor %}
+        </div>
+
         <label>Geração</label>
         <div class="opcoes-formato">
             <label class="opcao-formato">

@@ -31,6 +31,19 @@
             </div>
 
             <div>
+                <span class="filtro-titulo">Jogo</span>
+                <div class="filtro-glider" style="--total-radio: {{ jogos|length + 1 }};">
+                    <input type="radio" id="filtro-jogo-todos" name="jogo" value="" onchange="this.form.submit()" {% if not jogo_selecionado %}checked{% endif %}>
+                    <label for="filtro-jogo-todos">Todos</label>
+                    {% for codigo, nome in jogos.items() %}
+                        <input type="radio" id="filtro-jogo-{{ codigo }}" name="jogo" value="{{ codigo }}" onchange="this.form.submit()" {% if jogo_selecionado == codigo %}checked{% endif %}>
+                        <label for="filtro-jogo-{{ codigo }}">{{ nome }}</label>
+                    {% endfor %}
+                    <div class="glider-container-h"><div class="glider-h"></div></div>
+                </div>
+            </div>
+
+            <div>
                 <span class="filtro-titulo">Geração</span>
                 <div class="filtro-glider" style="--total-radio: 3;">
                     <input type="radio" id="filtro-ger-todas" name="geracao" value="" onchange="this.form.submit()" {% if not geracao_selecionada %}checked{% endif %}>
@@ -43,7 +56,7 @@
                 </div>
             </div>
 
-            {% if federacao_selecionada or geracao_selecionada %}
+            {% if federacao_selecionada or geracao_selecionada or jogo_selecionado %}
                 <a href="{{ url_for('campeonatos') }}" class="link-limpar-filtro">Limpar</a>
             {% endif %}
         </form>
@@ -97,6 +110,7 @@
                         {% if torneio.data_campeonato %}{{ torneio.data_campeonato.strftime('%d/%m/%Y') }}{% if torneio.hora_campeonato %} às {{ torneio.hora_campeonato.strftime('%H:%M') }}{% endif %} · {% endif %}
                         {{ torneio.times_inscritos|length }} time(s) inscrito(s) · {{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}
                     </p>
+                    <span class="chip-geracao chip-jogo">{{ torneio.nome_jogo }}</span>
                     <span class="chip-geracao">{{ 'Antiga geração' if torneio.geracao == 'antiga' else 'Nova geração' }}</span>
                     <br>
                     {% if torneio.valor_inscricao > 0 %}

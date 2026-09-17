@@ -22,6 +22,17 @@ def gerar_codigo_convite():
     return "".join(secrets.choice(alfabeto) for _ in range(6))
 
 
+# Jogos em que um campeonato pode ser disputado. A chave é o que vai pro
+# banco (Torneio.jogo); o valor é o nome que aparece na tela. Quando sair
+# uma edição nova é só adicionar uma linha aqui — todo lugar que mostra ou
+# filtra por jogo lê deste dicionário.
+JOGOS = {
+    "fc26": "FC 26",
+    "fc27": "FC 27",
+}
+JOGO_PADRAO = "fc26"
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 
@@ -161,6 +172,18 @@ class Inscricao(db.Model):
     reembolso_transferencia_id = db.Column(db.String(80), nullable=True)
     reembolso_status = db.Column(db.String(20), nullable=True)
 
+    @property
+    def foi_reembolsada(self):
+        """O dinheiro saiu (ou está saindo) de volta pro time.
+
+        Só "concluido" e "pendente" contam. "falhou" NÃO: a tentativa não
+        transferiu nada, então o time continua pago e inscrito — tratar
+        "falhou" como reembolsado sumia com um time que pagou de verdade
+        (aconteceu em produção: capitão sem chave Pix, reembolso falhou e o
+        time desapareceu da lista de inscritos).
+        """
+        return self.reembolso_status in ("concluido", "pendente")
+
     __table_args__ = (db.UniqueConstraint("torneio_id", "time_id", name="uq_inscricao_torneio_time"),)
 
     def __repr__(self):
@@ -198,6 +221,16 @@ class Torneio(db.Model):
     # afeta nenhuma regra do campeonato, é pra jogador saber em qual
     # geração de console o campeonato vai rolar.
     geracao = db.Column(db.String(20), nullable=False, default="nova")
+
+    # jogo: em qual edição do jogo o campeonato é disputado (ver JOGOS). Só
+    # informativo, igual a geracao. server_default garante que os campeonatos
+    # que já existiam antes dessa coluna fiquem marcados como FC 26 — todos
+    # foram criados quando só existia essa edição.
+    jogo = db.Column(db.String(10), nullable=False, default=JOGO_PADRAO, server_default=JOGO_PADRAO)
+
+    @property
+    def nome_jogo(self):
+        return JOGOS.get(self.jogo, self.jogo or JOGOS[JOGO_PADRAO])
 
     # Todo campeonato pertence a uma federação — pode ser administrado por
     # qualquer admin dela, não só por quem criou. `criado_por` só guarda
@@ -247,7 +280,7 @@ class Torneio(db.Model):
         """
         return [
             i.time for i in self.inscricoes
-            if i.status == "pago" and i.time is not None and i.reembolso_status is None
+            if i.status == "pago" and i.time is not None and not i.foi_reembolsada
         ]
 
     def __repr__(self):

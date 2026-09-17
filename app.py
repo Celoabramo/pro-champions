@@ -36,7 +36,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from models import db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo
+from models import db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo, JOGOS, JOGO_PADRAO
 import email_util
 import pagamentos
 import validacao_ia
@@ -891,6 +891,12 @@ def campeonatos():
     else:
         geracao = None
 
+    jogo = request.args.get("jogo")
+    if jogo in JOGOS:
+        consulta = consulta.filter(Torneio.jogo == jogo)
+    else:
+        jogo = None
+
     lista = consulta.order_by(
         ordem_status,
         Torneio.data_campeonato.is_(None),
@@ -908,6 +914,8 @@ def campeonatos():
         federacao_selecionada=federacao_id,
         federacao_obj=federacao_obj,
         geracao_selecionada=geracao,
+        jogo_selecionado=jogo,
+        jogos=JOGOS,
     )
 
 
@@ -1117,6 +1125,11 @@ def criar_campeonato():
             flash("Geração do campeonato inválida.", "erro")
             return redirect(url_for("criar_campeonato"))
 
+        jogo = request.form.get("jogo", JOGO_PADRAO)
+        if jogo not in JOGOS:
+            flash("Jogo do campeonato inválido.", "erro")
+            return redirect(url_for("criar_campeonato"))
+
         novo_campeonato = Torneio(
             nome=nome,
             descricao=descricao,
@@ -1127,6 +1140,7 @@ def criar_campeonato():
             hora_campeonato=hora_campeonato,
             formato=formato,
             geracao=geracao,
+            jogo=jogo,
             federacao_id=current_user.federacao_id,
             criado_por_id=current_user.id,
         )
@@ -1136,7 +1150,13 @@ def criar_campeonato():
         flash("Campeonato criado!", "sucesso")
         return redirect(url_for("detalhe_campeonato", torneio_id=novo_campeonato.id))
 
-    return render_template("criar_campeonato.html", tamanhos=TAMANHOS_VALIDOS, hoje=date.today().isoformat())
+    return render_template(
+        "criar_campeonato.html",
+        tamanhos=TAMANHOS_VALIDOS,
+        hoje=date.today().isoformat(),
+        jogos=JOGOS,
+        jogo_padrao=JOGO_PADRAO,
+    )
 
 
 @app.route("/campeonatos/<int:torneio_id>")
@@ -1152,7 +1172,7 @@ def detalhe_campeonato(torneio_id):
                 torneio_id=torneio.id, time_id=current_user.time.id, status="pendente"
             ).first()
 
-    eh_organizador = current_user.is_authenticated and current_user.federacao_id == torneio.federacao_id
+    eh_organizador = _pode_administrar_torneio(torneio)
     times_pagos = len(torneio.times_inscritos)
     pode_gerar_chaveamento = (
         eh_organizador
@@ -1202,6 +1222,20 @@ def detalhe_campeonato(torneio_id):
         rodadas_bracket=_estrutura_bracket(torneio) if torneio.status != "aberto" else None,
         tem_contestacao_aberta=_tem_contestacao_aberta(torneio) if eh_organizador else False,
     )
+
+
+def _pode_administrar_torneio(torneio):
+    """Quem pode mexer num campeonato: qualquer admin da federação dona dele,
+    ou o admin do site.
+
+    O admin do site entra aqui porque ele precisa conseguir intervir em
+    campeonato de qualquer federação — excluir um que não fechou os times,
+    remover e reembolsar um time, destravar uma partida — sem depender do
+    organizador estar disponível.
+    """
+    if not current_user.is_authenticated:
+        return False
+    return current_user.email == ADMIN_EMAIL or current_user.federacao_id == torneio.federacao_id
 
 
 def _vagas_ocupadas(torneio, ignorar_inscricao_id=None):
@@ -1751,7 +1785,7 @@ def _estrutura_bracket(torneio):
 def gerar_chaveamento(torneio_id):
     torneio = Torneio.query.get_or_404(torneio_id)
 
-    if torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(torneio):
         flash("Só um admin da federação pode gerar o chaveamento.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
@@ -2075,7 +2109,7 @@ def _repassar_lucro_federacao(torneio):
 def pagar_premio(torneio_id):
     torneio = Torneio.query.get_or_404(torneio_id)
 
-    if torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(torneio):
         flash("Só um admin da federação pode confirmar o pagamento do prêmio.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
@@ -2149,7 +2183,7 @@ def remover_time_do_campeonato(torneio_id, inscricao_id):
     if inscricao.torneio_id != torneio.id:
         abort(404)
 
-    if torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(torneio):
         flash("Só um admin da federação pode remover um time do campeonato.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
@@ -2180,7 +2214,7 @@ def remover_time_do_campeonato(torneio_id, inscricao_id):
 def excluir_campeonato(torneio_id):
     torneio = Torneio.query.get_or_404(torneio_id)
 
-    if torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(torneio):
         flash("Só um admin da federação pode excluir o campeonato.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
@@ -2189,7 +2223,7 @@ def excluir_campeonato(torneio_id):
     # reembolsar (ou remover) cada time pago antes.
     pagas_sem_reembolso = [
         i for i in torneio.inscricoes
-        if i.status == "pago" and i.reembolso_status not in ("concluido", "pendente", "sem_saldo")
+        if i.status == "pago" and not i.foi_reembolsada and i.reembolso_status != "sem_saldo"
     ]
     if pagas_sem_reembolso and torneio.status != "finalizado":
         flash(
@@ -2241,7 +2275,7 @@ def detalhe_confronto(torneio_id, confronto_id):
         abort(404)
 
     meu_lado = time_do_confronto(confronto, current_user)
-    eh_organizador = current_user.is_authenticated and current_user.federacao_id == confronto.torneio.federacao_id
+    eh_organizador = _pode_administrar_torneio(confronto.torneio)
     ja_contestado = bool(
         Notificacao.query.filter_by(confronto_id=confronto.id, tipo="placar_contestado").first()
     )
@@ -2365,7 +2399,7 @@ def resolver_confronto_manual(torneio_id, confronto_id):
     if confronto.torneio_id != torneio_id:
         abort(404)
 
-    if confronto.torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(confronto.torneio):
         flash("Só um admin da federação pode resolver a partida manualmente.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
@@ -2424,7 +2458,7 @@ def iniciar_confronto(torneio_id, confronto_id):
     if confronto.torneio_id != torneio_id:
         abort(404)
 
-    if confronto.torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(confronto.torneio):
         flash("Só um admin da federação pode marcar o início da partida.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
@@ -2459,7 +2493,7 @@ def escolher_wo(torneio_id, confronto_id):
     if confronto.torneio_id != torneio_id:
         abort(404)
 
-    if confronto.torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(confronto.torneio):
         flash("Só um admin da federação pode declarar W.O.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
@@ -2484,7 +2518,7 @@ def confirmar_wo(torneio_id, confronto_id, opcao):
     if opcao not in OPCOES_WO:
         abort(404)
 
-    if confronto.torneio.federacao_id != current_user.federacao_id:
+    if not _pode_administrar_torneio(confronto.torneio):
         flash("Só um admin da federação pode declarar W.O.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
@@ -2792,6 +2826,9 @@ def _garantir_colunas_novas():
         ("inscricoes", "reembolso_status", "VARCHAR(20)"),
         ("confrontos", "nick_fc_time1", "VARCHAR(40)"),
         ("confrontos", "nick_fc_time2", "VARCHAR(40)"),
+        # NOT NULL DEFAULT preenche as linhas que já existem com 'fc26' na
+        # hora — sem isso a coluna nasceria nula nos campeonatos antigos.
+        ("torneios", "jogo", f"VARCHAR(10) NOT NULL DEFAULT '{JOGO_PADRAO}'"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

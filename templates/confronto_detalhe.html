@@ -43,9 +43,9 @@
         {% set meu_time_nick = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
         {% set meu_nick = confronto.nick_fc_time1 if meu_lado == 1 else confronto.nick_fc_time2 if meu_lado == 2 %}
         <div class="perfil-bloco">
-            <h2>Combinar a partida no FC 26</h2>
+            <h2>Combinar a partida no {{ confronto.torneio.nome_jogo }}</h2>
             <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
-                Cada capitão coloca aqui o nick dele <strong>exatamente como aparece no FC 26</strong>.
+                Cada capitão coloca aqui o nick dele <strong>exatamente como aparece no {{ confronto.torneio.nome_jogo }}</strong>.
                 Quando os dois enviarem, vocês se acham dentro do jogo e combinam entre si quem manda o convite.
             </p>
 
@@ -79,7 +79,7 @@
                       class="form-escudo">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="text" name="nick_fc" maxlength="40" value="{{ meu_nick or '' }}"
-                           placeholder="Seu nick igual está no FC 26" aria-label="Seu nick no FC 26" style="flex:1; min-width:160px;">
+                           placeholder="Seu nick igual está no {{ confronto.torneio.nome_jogo }}" aria-label="Seu nick no {{ confronto.torneio.nome_jogo }}" style="flex:1; min-width:160px;">
                     <button type="submit" class="botao-principal-pequeno">{{ 'Atualizar nick' if meu_nick else 'Enviar nick' }}</button>
                 </form>
             {% elif meu_lado %}
