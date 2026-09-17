@@ -978,6 +978,31 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 .card-federacao-meta { color: var(--texto-fraco); font-size: 13px; margin: 0; }
 .destaque-aberto { color: var(--acento); font-weight: 600; }
 
+/* Diretório de times (/times) — reaproveita o card das federações. */
+.form-busca-times { display: flex; align-items: center; gap: 10px; margin: 4px 0 20px; flex-wrap: wrap; }
+.campo-busca-times {
+    flex: 1;
+    min-width: 200px;
+    max-width: 380px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--linha);
+    background: var(--fundo-card);
+    color: var(--texto);
+    font-size: 14px;
+    font-family: inherit;
+}
+.campo-busca-times:focus { outline: none; border-color: var(--acento); }
+.card-time { flex-wrap: wrap; }
+.card-time .card-federacao-info { flex: 1; min-width: 0; }
+.card-time .tag { font-size: 14px; }
+.card-time-titulos { margin: 0 0 0 auto; flex-shrink: 0; }
+@media (max-width: 640px) {
+    /* No celular o chip de títulos desce pra própria linha em vez de
+       espremer o texto do card. */
+    .card-time-titulos { margin-left: 0; flex-basis: 100%; }
+}
+
 .detalhe-federacao .cabecalho-federacao { margin-bottom: 24px; flex-wrap: wrap; }
 .detalhe-federacao .cabecalho-federacao > div { flex: 1; min-width: 160px; }
 

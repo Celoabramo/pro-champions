@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Times — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="lista-campeonatos">
+    <div class="eyebrow-secao">
+        <span class="rotulo">Pro Clubs</span>
+        <span class="linha-pontilhada"></span>
+        <span class="meta">{{ total }} no total</span>
+    </div>
+    <div class="cabecalho-secao">
+        <h1>Times</h1>
+        {% if current_user.is_authenticated and not current_user.time_id %}
+            <a href="{{ url_for('time') }}" class="botao-secundario-pequeno botao-cinza">Criar ou entrar num time</a>
+        {% endif %}
+    </div>
+
+    <form method="GET" class="form-busca-times" role="search">
+        <input type="search" name="q" value="{{ busca }}" placeholder="Buscar por nome ou tag" aria-label="Buscar time" class="campo-busca-times">
+        <button type="submit" class="botao-secundario-pequeno">Buscar</button>
+        {% if busca %}
+            <a href="{{ url_for('times') }}" class="link-limpar-filtro">Limpar</a>
+        {% endif %}
+    </form>
+
+    {% if times %}
+        <div class="cards-federacao">
+            {% for time in times %}
+                <a href="{{ url_for('detalhe_time', time_id=time.id) }}" class="card-federacao card-time">
+                    {{ macros.escudo_time(time, 'logo-federacao-card') }}
+                    <div class="card-federacao-info">
+                        <h2>{{ time.nome }} <span class="tag">[{{ time.tag }}]</span></h2>
+                        <p class="card-federacao-meta">
+                            Capitão: {{ time.capitao.nickname if time.capitao else '—' }}
+                            · {{ time.membros|length }} membro(s)
+                            · {{ jogados.get(time.id, 0) }} campeonato(s) jogado(s)
+                        </p>
+                    </div>
+                    {% if titulos.get(time.id) %}
+                        <span class="chip-premio card-time-titulos"><span class="trofeu-chip" aria-hidden="true">🏆</span> {{ titulos.get(time.id) }} título(s)</span>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        </div>
+    {% elif busca %}
+        <p class="texto-fraco-pequeno">Nenhum time encontrado com "{{ busca }}".</p>
+    {% else %}
+        <p class="texto-fraco-pequeno">Nenhum time criado ainda.</p>
+    {% endif %}
+</section>
+{% endblock %}

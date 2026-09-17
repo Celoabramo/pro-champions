@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}{{ time_obj.nome }} — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="time-atual">
+    <a href="{{ url_for('times') }}" class="link-voltar">← Voltar para times</a>
+    <div class="cabecalho-time">
+        {{ macros.escudo_time(time_obj, 'escudo-time-grande') }}
+        <div>
+            <h1>{{ time_obj.nome }} <span class="tag">[{{ time_obj.tag }}]</span></h1>
+            <p class="perfil-email">Capitão: {{ time_obj.capitao.nickname if time_obj.capitao else '—' }} · Esquema {{ time_obj.formacao }}</p>
+        </div>
+    </div>
+
+    {% if titulos %}
+        <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> {{ titulos }} título(s)</span>
+    {% endif %}
+    <span class="chip-geracao">{{ historico|length }} campeonato(s) jogado(s)</span>
+
+    {% if current_user.is_authenticated and current_user.time_id == time_obj.id %}
+        <p class="texto-fraco-pequeno" style="margin-top:14px;">
+            Esse é o seu time — <a href="{{ url_for('time') }}" style="color: var(--acento); font-weight:600;">gerenciar meu time</a>.
+        </p>
+    {% endif %}
+
+    <div class="perfil-bloco">
+        <h2>Elenco ({{ time_obj.membros|length }})</h2>
+        <ul class="lista-membros">
+            {% for membro in time_obj.membros %}
+                <li>{{ membro.nickname }}{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Campeonatos</h2>
+        {% if historico %}
+            <ul class="lista-membros">
+                {% for torneio in historico %}
+                    <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}" style="color: inherit; font-weight:600;">{{ torneio.nome }}</a>
+                        <span class="texto-fraco-pequeno">
+                            {{ torneio.federacao.nome }}{% if torneio.data_campeonato %} · {{ torneio.data_campeonato.strftime('%d/%m/%Y') }}{% endif %} · {{ torneio.nome_jogo }}
+                        </span>
+                        {% if torneio.time_campeao_id == time_obj.id %}
+                            <span class="chip-premio" style="margin:0;"><span class="trofeu-chip" aria-hidden="true">🏆</span> Campeão</span>
+                        {% elif torneio.status == 'finalizado' %}
+                            <span class="chip-geracao" style="margin:0;">Finalizado</span>
+                        {% elif torneio.status == 'em_andamento' %}
+                            <span class="chip-geracao" style="margin:0;">Em andamento</span>
+                        {% else %}
+                            <span class="chip-geracao" style="margin:0;">Inscrito</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="texto-fraco-pequeno">Esse time ainda não jogou nenhum campeonato.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

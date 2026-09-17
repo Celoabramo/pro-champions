@@ -997,6 +997,92 @@ def detalhe_federacao(federacao_id):
     )
 
 
+def _titulos_por_time():
+    """{time_id: quantidade de campeonatos que ele venceu}."""
+    return dict(
+        db.session.query(Torneio.time_campeao_id, db.func.count(Torneio.id))
+        .filter(Torneio.time_campeao_id.isnot(None))
+        .group_by(Torneio.time_campeao_id)
+        .all()
+    )
+
+
+def _campeonatos_jogados_por_time():
+    """{time_id: quantidade de campeonatos em que ele entrou de verdade}.
+
+    Conta inscrição paga que não foi devolvida — time reembolsado saiu do
+    campeonato antes de jogar, então não conta como participação.
+    """
+    return dict(
+        db.session.query(Inscricao.time_id, db.func.count(Inscricao.id))
+        .filter(
+            Inscricao.status == "pago",
+            db.or_(
+                Inscricao.reembolso_status.is_(None),
+                Inscricao.reembolso_status.notin_(["concluido", "pendente"]),
+            ),
+        )
+        .group_by(Inscricao.time_id)
+        .all()
+    )
+
+
+@app.route("/times")
+def times():
+    """Diretório público de todos os times do site.
+
+    Existe pra jogador achar time (e time achar jogador) sem precisar de
+    código de convite na mão — é a base do mercado de transferências e do
+    ranking (ver ROADMAP.md). Ordena por títulos, depois por campeonatos
+    jogados, pra quem mais compete aparecer primeiro.
+    """
+    busca = request.args.get("q", "").strip()
+    consulta = Team.query
+    if busca:
+        padrao = f"%{busca}%"
+        consulta = consulta.filter(db.or_(Team.nome.ilike(padrao), Team.tag.ilike(padrao)))
+    lista = consulta.all()
+
+    titulos = _titulos_por_time()
+    jogados = _campeonatos_jogados_por_time()
+    lista.sort(key=lambda t: (-titulos.get(t.id, 0), -jogados.get(t.id, 0), t.nome.lower()))
+
+    return render_template(
+        "times.html",
+        times=lista,
+        titulos=titulos,
+        jogados=jogados,
+        busca=busca,
+        total=Team.query.count(),
+    )
+
+
+@app.route("/times/<int:time_id>")
+def detalhe_time(time_id):
+    """Página pública de um time: elenco, títulos e histórico de campeonatos."""
+    time_obj = Team.query.get_or_404(time_id)
+
+    # Só campeonatos em que o time entrou de verdade (mesma regra do
+    # diretório): inscrição paga e não devolvida.
+    inscricoes = [
+        i for i in Inscricao.query.filter_by(time_id=time_obj.id, status="pago").all()
+        if not i.foi_reembolsada and i.torneio is not None
+    ]
+    historico = sorted(
+        (i.torneio for i in inscricoes),
+        key=lambda t: (t.data_campeonato or date.min, t.criado_em or datetime.min),
+        reverse=True,
+    )
+    titulos = sum(1 for t in historico if t.time_campeao_id == time_obj.id)
+
+    return render_template(
+        "time_detalhe.html",
+        time_obj=time_obj,
+        historico=historico,
+        titulos=titulos,
+    )
+
+
 TAMANHOS_VALIDOS = [4, 8, 16, 32]
 
 # A AbacatePay cobra uma taxa fixa (não percentual) por Pix — na prática,
