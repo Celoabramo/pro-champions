@@ -30,6 +30,8 @@
         'partida_finalizada': ('Partida', 'selo-status-aberto'),
         'repasse_pagamento': ('Pagamento', 'selo-status-em_andamento'),
         'placar_contestado': ('Contestação', 'selo-status-divergente'),
+        'pedido_entrada': ('Recrutamento', 'selo-status-aberto'),
+        'pedido_respondido': ('Recrutamento', 'selo-status-aberto'),
     } %}
 
     {% if notificacoes %}
@@ -40,6 +42,8 @@
                     {% set url_notificacao = url_for('detalhe_confronto', torneio_id=n.torneio_id, confronto_id=n.confronto_id) %}
                 {% elif n.torneio_id %}
                     {% set url_notificacao = url_for('detalhe_campeonato', torneio_id=n.torneio_id) %}
+                {% elif n.tipo in ('pedido_entrada', 'pedido_respondido') %}
+                    {% set url_notificacao = url_for('time') %}
                 {% else %}
                     {% set url_notificacao = None %}
                 {% endif %}

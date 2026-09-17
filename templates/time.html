@@ -95,6 +95,47 @@
         </div>
 
         {% if usuario.id == usuario.time.capitao_id %}
+            <div class="perfil-bloco" style="border-left-color: {{ 'var(--acento)' if usuario.time.recrutando else 'var(--linha)' }};">
+                <h2>Recrutamento {% if usuario.time.recrutando %}<span class="selo-status selo-status-aberto" style="margin-left:8px;">Recrutando</span>{% endif %}</h2>
+                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                    Com o recrutamento aberto, o time aparece com vaga no <a href="{{ url_for('times') }}" style="color: var(--acento); font-weight:600;">diretório de times</a> e jogadores sem time podem pedir pra entrar. Você decide quem entra.
+                </p>
+                <form method="POST" action="{{ url_for('atualizar_recrutamento') }}" class="form-escudo" style="flex-direction:column; align-items:stretch; gap:10px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label style="display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer;">
+                        <input type="checkbox" name="recrutando" value="1" {% if usuario.time.recrutando %}checked{% endif %}>
+                        Estamos recrutando jogadores
+                    </label>
+                    <input type="text" name="mensagem_recrutamento" maxlength="160" class="campo-busca-times" style="max-width:none;"
+                           placeholder="Recado (ex: procuramos lateral e goleiro, jogos à noite)" value="{{ usuario.time.mensagem_recrutamento or '' }}">
+                    <div><button type="submit" class="botao-secundario-pequeno">Salvar</button></div>
+                </form>
+
+                {% if pedidos_recebidos %}
+                    <h3 style="margin:18px 0 8px; font-size:14px; text-transform:uppercase; letter-spacing:0.04em; color: var(--texto-fraco);">Pedidos pra entrar ({{ pedidos_recebidos|length }})</h3>
+                    <ul class="lista-membros">
+                        {% for pedido in pedidos_recebidos %}
+                            <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                <span><strong>{{ pedido.usuario.nickname }}</strong> <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + pedido.usuario.faixa_nivel if pedido.usuario.faixa_nivel }}">Nv {{ pedido.usuario.nivel }}</span></span>
+                                {% if pedido.mensagem %}<span class="texto-fraco-pequeno">“{{ pedido.mensagem }}”</span>{% endif %}
+                                <span style="margin-left:auto; display:inline-flex; gap:6px;">
+                                    <form method="POST" action="{{ url_for('responder_pedido_entrada', pedido_id=pedido.id, resposta='aceitar') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="botao-principal-pequeno">Aceitar</button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('responder_pedido_entrada', pedido_id=pedido.id, resposta='recusar') }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="botao-secundario-pequeno">Recusar</button>
+                                    </form>
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% elif usuario.time.recrutando %}
+                    <p class="texto-fraco-pequeno" style="margin-top:12px;">Nenhum pedido pendente por enquanto.</p>
+                {% endif %}
+            </div>
+
             <a href="{{ url_for('passar_bracadeira') }}" class="link-bloco">Passar a braçadeira</a>
         {% endif %}
 
@@ -123,6 +164,32 @@
 
                 <button type="submit" class="botao-principal" style="margin-top:18px;">Criar time</button>
             </form>
+        </div>
+
+        <div class="perfil-bloco">
+            <h2>Procurar um time</h2>
+            <p class="texto-fraco-pequeno" style="margin-bottom:10px;">
+                Times recrutando aparecem no diretório — você manda um pedido e o capitão decide.
+            </p>
+            <a href="{{ url_for('times', recrutando=1) }}" class="botao-secundario">Ver times recrutando</a>
+            {% if meus_pedidos %}
+                <ul class="lista-membros" style="margin-top:14px;">
+                    {% for pedido in meus_pedidos %}
+                        <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <a href="{{ url_for('detalhe_time', time_id=pedido.time_id) }}" style="color: inherit; font-weight:600;">{{ pedido.time.nome if pedido.time else 'time removido' }}</a>
+                            {% if pedido.status == 'pendente' %}
+                                <span class="selo-status selo-status-em_andamento">Aguardando o capitão</span>
+                                <form method="POST" action="{{ url_for('cancelar_pedido_entrada', pedido_id=pedido.id) }}" style="margin-left:auto;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="botao-secundario-pequeno">Cancelar</button>
+                                </form>
+                            {% elif pedido.status == 'aceito' %}<span class="selo-status selo-status-aberto">Aceito</span>
+                            {% elif pedido.status == 'recusado' %}<span class="selo-status selo-status-divergente">Recusado</span>
+                            {% else %}<span class="selo-status selo-status-finalizado">Cancelado</span>{% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
         </div>
 
         <div class="perfil-bloco">

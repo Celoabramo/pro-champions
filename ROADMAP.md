@@ -1,6 +1,6 @@
 # Roadmap Pro Champions — visão geral e ordem recomendada
 
-Status: itens 1 a 4 implementados em 2026-09-17; 5 e 6 ainda planejados. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
+Status: itens 1 a 5 implementados em 2026-09-17; só o 6 (escalação/posições) ainda está planejado. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
 
 Cada item abaixo tem uma descrição rápida; os três maiores têm plano detalhado em arquivo separado. A ordem é a recomendada e tem uma razão específica: **cada peça deixa a próxima mais valiosa ou mais barata de construir** — não é só "o mais fácil primeiro".
 
@@ -18,7 +18,7 @@ Ranking geral do site por temporada (reseta), pontuação por pódio (campeão 3
 ### 4. XP e nível — ✅ feito (2026-09-17, XP = reais ganhos em prêmio; prêmios de vice/3º junto) — ver [PLANO_XP_NIVEL.md](PLANO_XP_NIVEL.md)
 Progressão de carreira (não confundir com o ranking da temporada, que reseta): XP acumula pra sempre, por jogador (perfil, segue a pessoa quando ela troca de time) e por time, separadamente. Reaproveita os mesmos dois gatilhos que o ranking já vai ter (partida validada, campeonato finalizado) — por isso é a extensão mais barata da fila, construir logo depois do item 3.
 
-### 5. Mercado de transferências
+### 5. Mercado de transferências — ✅ feito (2026-09-17)
 Capitão marca o time como "recrutando" (+ mensagem); jogador manda pedido de entrada (notificação pro capitão, reaproveitando o sistema de `Notificacao` que já existe); capitão aceita ou recusa; entrada usa a mesma trava de hoje (1 time por jogador, mesma lógica de `entrar_time`/`sair_time`). Não inventa regra nova de posse de time. Com o item 4 pronto, quem for recrutar já vê o nível do jogador antes de chamar — não decide às cegas.
 
 ### 6. Escalação e posições — ver [PLANO_ESCALACAO_POSICOES.md](PLANO_ESCALACAO_POSICOES.md)

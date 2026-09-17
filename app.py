@@ -39,6 +39,7 @@ from werkzeug.utils import secure_filename
 from models import (
     db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
     Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO, XP_DESTAQUE,
+    PedidoEntrada,
 )
 import email_util
 import pagamentos
@@ -884,7 +885,153 @@ def limpar_notificacoes():
 @app.route("/time")
 @login_required
 def time():
-    return render_template("time.html", usuario=current_user, formacoes=FORMACOES_VALIDAS)
+    pedidos_recebidos = []
+    if current_user.time and current_user.time.capitao_id == current_user.id:
+        pedidos_recebidos = (
+            PedidoEntrada.query.filter_by(time_id=current_user.time_id, status="pendente")
+            .order_by(PedidoEntrada.criado_em.asc())
+            .all()
+        )
+    meus_pedidos = []
+    if not current_user.time_id:
+        meus_pedidos = (
+            PedidoEntrada.query.filter_by(usuario_id=current_user.id)
+            .order_by(PedidoEntrada.criado_em.desc())
+            .limit(10)
+            .all()
+        )
+    return render_template(
+        "time.html",
+        usuario=current_user,
+        formacoes=FORMACOES_VALIDAS,
+        pedidos_recebidos=pedidos_recebidos,
+        meus_pedidos=meus_pedidos,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Mercado de transferências (item 5 do ROADMAP.md)
+# ---------------------------------------------------------------------------
+
+@app.route("/time/recrutamento", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute")
+def atualizar_recrutamento():
+    """Capitão liga/desliga o "recrutando" e o recado que aparece no diretório."""
+    time_atual = current_user.time
+    if not time_atual or time_atual.capitao_id != current_user.id:
+        flash("Só o capitão pode mexer no recrutamento do time.", "erro")
+        return redirect(url_for("time"))
+
+    time_atual.recrutando = request.form.get("recrutando") == "1"
+    mensagem = request.form.get("mensagem_recrutamento", "").strip()[:160]
+    time_atual.mensagem_recrutamento = mensagem or None
+    db.session.commit()
+
+    if time_atual.recrutando:
+        flash("Time marcado como recrutando — ele aparece com vaga aberta no diretório de times.", "sucesso")
+    else:
+        flash("Recrutamento fechado.", "sucesso")
+    return redirect(url_for("time"))
+
+
+@app.route("/times/<int:time_id>/pedir-entrada", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute")
+def pedir_entrada(time_id):
+    """Jogador sem time pede pra entrar num time que está recrutando. O
+    capitão recebe uma notificação e decide."""
+    time_obj = Team.query.get_or_404(time_id)
+
+    if current_user.time_id:
+        flash("Você já faz parte de um time. Saia dele antes de pedir pra entrar em outro.", "erro")
+        return redirect(url_for("detalhe_time", time_id=time_id))
+    if not time_obj.recrutando:
+        flash(f"{time_obj.nome} não está recrutando no momento.", "erro")
+        return redirect(url_for("detalhe_time", time_id=time_id))
+    if PedidoEntrada.query.filter_by(time_id=time_obj.id, usuario_id=current_user.id, status="pendente").first():
+        flash("Você já mandou um pedido pra esse time — aguarde o capitão responder.", "erro")
+        return redirect(url_for("detalhe_time", time_id=time_id))
+
+    pedido = PedidoEntrada(
+        time_id=time_obj.id,
+        usuario_id=current_user.id,
+        mensagem=request.form.get("mensagem", "").strip()[:200] or None,
+    )
+    db.session.add(pedido)
+    if time_obj.capitao:
+        criar_notificacao(
+            time_obj.capitao,
+            "pedido_entrada",
+            f"{current_user.nickname} (nível {current_user.nivel}) pediu pra entrar no {time_obj.nome}. Responda em \"Meu time\".",
+        )
+    db.session.commit()
+    flash(f"Pedido enviado pro capitão do {time_obj.nome}! Você recebe uma notificação quando ele responder.", "sucesso")
+    return redirect(url_for("detalhe_time", time_id=time_id))
+
+
+@app.route("/time/pedidos/<int:pedido_id>/cancelar", methods=["POST"])
+@login_required
+def cancelar_pedido_entrada(pedido_id):
+    pedido = PedidoEntrada.query.get_or_404(pedido_id)
+    if pedido.usuario_id != current_user.id:
+        abort(404)
+    if pedido.status == "pendente":
+        pedido.status = "cancelado"
+        pedido.respondido_em = datetime.utcnow()
+        db.session.commit()
+        flash("Pedido cancelado.", "sucesso")
+    return redirect(request.referrer or url_for("time"))
+
+
+@app.route("/time/pedidos/<int:pedido_id>/<resposta>", methods=["POST"])
+@login_required
+@limiter.limit("30 per minute")
+def responder_pedido_entrada(pedido_id, resposta):
+    """Capitão aceita ou recusa. Aceitar coloca o jogador no time pela
+    mesma trava de sempre (1 time por jogador) e recusa sozinho os outros
+    pedidos pendentes dele."""
+    if resposta not in ("aceitar", "recusar"):
+        abort(404)
+    pedido = PedidoEntrada.query.get_or_404(pedido_id)
+    time_obj = pedido.time
+    if time_obj is None or time_obj.capitao_id != current_user.id:
+        flash("Só o capitão do time pode responder esse pedido.", "erro")
+        return redirect(url_for("time"))
+    if pedido.status != "pendente":
+        flash("Esse pedido já foi respondido.", "erro")
+        return redirect(url_for("time"))
+
+    jogador = pedido.usuario
+    pedido.respondido_em = datetime.utcnow()
+
+    if resposta == "recusar" or jogador is None:
+        pedido.status = "recusado"
+        if jogador is not None:
+            criar_notificacao(jogador, "pedido_respondido", f"O {time_obj.nome} recusou seu pedido de entrada.")
+        db.session.commit()
+        flash("Pedido recusado.", "sucesso")
+        return redirect(url_for("time"))
+
+    if jogador.time_id:
+        # Entrou em outro time enquanto o pedido esperava — não dá pra
+        # estar em dois.
+        pedido.status = "recusado"
+        db.session.commit()
+        flash(f"{jogador.nickname} já entrou em outro time nesse meio-tempo — pedido recusado automaticamente.", "erro")
+        return redirect(url_for("time"))
+
+    jogador.time_id = time_obj.id
+    pedido.status = "aceito"
+    # Os outros pedidos pendentes dele perdem o sentido.
+    for outro in PedidoEntrada.query.filter_by(usuario_id=jogador.id, status="pendente").all():
+        if outro.id != pedido.id:
+            outro.status = "recusado"
+            outro.respondido_em = datetime.utcnow()
+    criar_notificacao(jogador, "pedido_respondido", f"O {time_obj.nome} aceitou seu pedido — você entrou no time!")
+    db.session.commit()
+    flash(f"{jogador.nickname} entrou no {time_obj.nome}!", "sucesso")
+    return redirect(url_for("time"))
 
 
 @app.route("/time/criar", methods=["POST"])
@@ -992,6 +1139,7 @@ def sair_time():
         db.session.commit()
 
         Inscricao.query.filter_by(time_id=time_atual.id).delete()
+        PedidoEntrada.query.filter_by(time_id=time_atual.id).delete()
         _apagar_upload("escudos", time_atual.escudo_imagem)
         db.session.delete(time_atual)
         db.session.commit()
@@ -1265,10 +1413,13 @@ def times():
     jogados, pra quem mais compete aparecer primeiro.
     """
     busca = request.args.get("q", "").strip()
+    so_recrutando = request.args.get("recrutando") == "1"
     consulta = Team.query
     if busca:
         padrao = f"%{busca}%"
         consulta = consulta.filter(db.or_(Team.nome.ilike(padrao), Team.tag.ilike(padrao)))
+    if so_recrutando:
+        consulta = consulta.filter(Team.recrutando.is_(True))
     lista = consulta.all()
 
     titulos = _titulos_por_time()
@@ -1281,6 +1432,7 @@ def times():
         titulos=titulos,
         jogados=jogados,
         busca=busca,
+        so_recrutando=so_recrutando,
         total=Team.query.count(),
     )
 
@@ -1313,12 +1465,19 @@ def detalhe_time(time_id):
     for pontuacao in pontuacoes:
         extrato.setdefault(pontuacao.temporada, []).append(pontuacao)
 
+    pedido_pendente = None
+    if current_user.is_authenticated:
+        pedido_pendente = PedidoEntrada.query.filter_by(
+            time_id=time_obj.id, usuario_id=current_user.id, status="pendente"
+        ).first()
+
     return render_template(
         "time_detalhe.html",
         time_obj=time_obj,
         historico=historico,
         titulos=titulos,
         extrato=extrato,
+        pedido_pendente=pedido_pendente,
     )
 
 
@@ -3467,6 +3626,9 @@ def _garantir_colunas_novas():
         ("torneios", "xp_creditado", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("users", "xp_total", "INTEGER NOT NULL DEFAULT 0"),
         ("teams", "xp_total", "INTEGER NOT NULL DEFAULT 0"),
+        # Mercado de transferências.
+        ("teams", "recrutando", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("teams", "mensagem_recrutamento", "VARCHAR(160)"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

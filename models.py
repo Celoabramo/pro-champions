@@ -412,6 +412,12 @@ class Team(ComXP, db.Model):
     # XP de carreira do time — não se transfere quando um jogador sai.
     xp_total = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
+    # Mercado de transferências: o capitão marca o time como "recrutando"
+    # (com um recado curto) e jogadores sem time mandam pedido de entrada
+    # pela página pública do time — ver PedidoEntrada.
+    recrutando = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    mensagem_recrutamento = db.Column(db.String(160), nullable=True)
+
     capitao_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     capitao = db.relationship("User", foreign_keys=[capitao_id])
 
@@ -620,3 +626,28 @@ class PontuacaoRanking(db.Model):
 
     def __repr__(self):
         return f"<PontuacaoRanking t{self.temporada_id} torneio={self.torneio_id} time={self.time_id} {self.colocacao}>"
+
+
+class PedidoEntrada(db.Model):
+    """Pedido de um jogador pra entrar num time que está recrutando.
+
+    status: pendente | aceito | recusado | cancelado. Aceitar usa a mesma
+    regra de sempre (1 time por jogador): o jogador precisa continuar sem
+    time na hora que o capitão aceita, senão o pedido é recusado sozinho.
+    """
+
+    __tablename__ = "pedidos_entrada"
+
+    id = db.Column(db.Integer, primary_key=True)
+    time_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    mensagem = db.Column(db.String(200), nullable=True)
+    status = db.Column(db.String(12), nullable=False, default="pendente")
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+    respondido_em = db.Column(db.DateTime, nullable=True)
+
+    time = db.relationship("Team", foreign_keys=[time_id])
+    usuario = db.relationship("User", foreign_keys=[usuario_id])
+
+    def __repr__(self):
+        return f"<PedidoEntrada usuario={self.usuario_id} time={self.time_id} {self.status}>"

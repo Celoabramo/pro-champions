@@ -17,8 +17,12 @@
 
     <form method="GET" class="form-busca-times" role="search">
         <input type="search" name="q" value="{{ busca }}" placeholder="Buscar por nome ou tag" aria-label="Buscar time" class="campo-busca-times">
+        <label style="display:flex; align-items:center; gap:6px; font-size:14px; cursor:pointer; white-space:nowrap;">
+            <input type="checkbox" name="recrutando" value="1" onchange="this.form.submit()" {% if so_recrutando %}checked{% endif %}>
+            Só recrutando
+        </label>
         <button type="submit" class="botao-secundario-pequeno">Buscar</button>
-        {% if busca %}
+        {% if busca or so_recrutando %}
             <a href="{{ url_for('times') }}" class="link-limpar-filtro">Limpar</a>
         {% endif %}
     </form>
@@ -35,6 +39,11 @@
                             · {{ time.membros|length }} membro(s)
                             · {{ jogados.get(time.id, 0) }} campeonato(s) jogado(s)
                         </p>
+                        {% if time.recrutando %}
+                            <p class="card-federacao-meta" style="margin-top:4px;">
+                                <span class="destaque-aberto">Recrutando</span>{% if time.mensagem_recrutamento %} · {{ time.mensagem_recrutamento }}{% endif %}
+                            </p>
+                        {% endif %}
                     </div>
                     {% if titulos.get(time.id) %}
                         <span class="chip-premio card-time-titulos"><span class="trofeu-chip" aria-hidden="true">🏆</span> {{ titulos.get(time.id) }} título(s)</span>
@@ -42,8 +51,8 @@
                 </a>
             {% endfor %}
         </div>
-    {% elif busca %}
-        <p class="texto-fraco-pequeno">Nenhum time encontrado com "{{ busca }}".</p>
+    {% elif busca or so_recrutando %}
+        <p class="texto-fraco-pequeno">Nenhum time encontrado{% if busca %} com "{{ busca }}"{% endif %}{% if so_recrutando %} recrutando agora{% endif %}.</p>
     {% else %}
         <p class="texto-fraco-pequeno">Nenhum time criado ainda.</p>
     {% endif %}

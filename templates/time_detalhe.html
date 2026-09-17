@@ -20,6 +20,35 @@
     <span class="chip-geracao">{{ historico|length }} campeonato(s) jogado(s)</span>
     <span class="chip-geracao">{{ time_obj.xp_total }} XP</span>
 
+    {% if time_obj.recrutando %}
+        <div class="perfil-bloco" style="border-left-color: var(--acento);">
+            <h2>Recrutando <span class="selo-status selo-status-aberto" style="margin-left:8px;">Vaga aberta</span></h2>
+            {% if time_obj.mensagem_recrutamento %}<p style="margin:0 0 10px;">“{{ time_obj.mensagem_recrutamento }}”</p>{% endif %}
+            {% if not current_user.is_authenticated %}
+                <p class="texto-fraco-pequeno"><a href="{{ url_for('login') }}" style="color: var(--acento); font-weight:600;">Entre</a> na sua conta pra pedir uma vaga nesse time.</p>
+            {% elif current_user.time_id == time_obj.id %}
+                <p class="texto-fraco-pequeno">Esse é o seu time — os pedidos chegam em "Meu time".</p>
+            {% elif current_user.time_id %}
+                <p class="texto-fraco-pequeno">Você já tem time. Pra pedir vaga aqui, saia do seu time atual primeiro.</p>
+            {% elif pedido_pendente %}
+                <p class="texto-fraco-pequeno" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span class="selo-status selo-status-em_andamento">Pedido enviado</span> aguardando o capitão responder.
+                    <form method="POST" action="{{ url_for('cancelar_pedido_entrada', pedido_id=pedido_pendente.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="botao-secundario-pequeno">Cancelar pedido</button>
+                    </form>
+                </p>
+            {% else %}
+                <form method="POST" action="{{ url_for('pedir_entrada', time_id=time_obj.id) }}" class="form-escudo" style="flex-direction:column; align-items:stretch; gap:10px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="mensagem" maxlength="200" class="campo-busca-times" style="max-width:none;" placeholder="Recado pro capitão (opcional — posição, horários...)">
+                    <div><button type="submit" class="botao-principal-pequeno">Pedir pra entrar</button></div>
+                </form>
+                <p class="texto-fraco-pequeno" style="margin-top:8px;">O capitão vê seu nível {{ current_user.nivel }} e decide. Você recebe uma notificação com a resposta.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+
     {% if current_user.is_authenticated and current_user.time_id == time_obj.id %}
         <p class="texto-fraco-pequeno" style="margin-top:14px;">
             Esse é o seu time — <a href="{{ url_for('time') }}" style="color: var(--acento); font-weight:600;">gerenciar meu time</a>.
