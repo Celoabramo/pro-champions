@@ -1191,7 +1191,12 @@ def detalhe_federacao(federacao_id):
             .distinct()
             .count()
         )
-        premios_pagos = sum(t.valor_premio for t in torneios if t.premio_status == "concluido")
+        premios_pagos = sum(
+            valor
+            for t in torneios
+            for valor, status in _status_premios(t).values()
+            if status == "concluido"
+        )
 
         # Gols marcados por time nas partidas já confirmadas (só "validado"
         # tem placar de verdade — W.O. não tem gols pra contar).
@@ -1369,21 +1374,31 @@ def criar_campeonato():
             flash("Número de chaves inválido.", "erro")
             return redirect(url_for("criar_campeonato"))
 
-        premio_texto = request.form.get("valor_premio", "").strip().replace(",", ".")
-        try:
-            valor_premio = float(premio_texto) if premio_texto else 0
-            if valor_premio < 0:
-                raise ValueError
-        except ValueError:
-            flash("Valor do prêmio inválido.", "erro")
-            return redirect(url_for("criar_campeonato"))
+        premios = {}
+        for campo, rotulo in (("valor_premio", "do campeão"), ("valor_premio_vice", "do vice"), ("valor_premio_terceiro", "do 3º lugar")):
+            premio_texto = request.form.get(campo, "").strip().replace(",", ".")
+            try:
+                premios[campo] = float(premio_texto) if premio_texto else 0
+                if premios[campo] < 0:
+                    raise ValueError
+            except ValueError:
+                flash(f"Valor do prêmio {rotulo} inválido.", "erro")
+                return redirect(url_for("criar_campeonato"))
+            if 0 < premios[campo] < VALOR_MINIMO_PIX_ABACATEPAY:
+                flash(
+                    f"Prêmio {rotulo} precisa ser de pelo menos R$ {VALOR_MINIMO_PIX_ABACATEPAY:.2f} (mínimo exigido pela "
+                    "AbacatePay pra qualquer Pix) ou R$ 0,00 (sem prêmio).",
+                    "erro",
+                )
+                return redirect(url_for("criar_campeonato"))
+        valor_premio = premios["valor_premio"]
+        valor_premio_vice = premios["valor_premio_vice"]
+        valor_premio_terceiro = premios["valor_premio_terceiro"]
 
-        if 0 < valor_premio < VALOR_MINIMO_PIX_ABACATEPAY:
-            flash(
-                f"Prêmio precisa ser de pelo menos R$ {VALOR_MINIMO_PIX_ABACATEPAY:.2f} (mínimo exigido pela "
-                "AbacatePay pra qualquer Pix) ou R$ 0,00 (sem prêmio).",
-                "erro",
-            )
+        # Prêmio de vice/terceiro sem prêmio de campeão (ou maior que o do
+        # campeão) não faz sentido — pódio é decrescente.
+        if not (valor_premio >= valor_premio_vice >= valor_premio_terceiro):
+            flash("Os prêmios precisam ser decrescentes: campeão ≥ vice ≥ 3º lugar.", "erro")
             return redirect(url_for("criar_campeonato"))
 
         if valor > 0:
@@ -1398,7 +1413,7 @@ def criar_campeonato():
             # plataforma (nunca do prêmio nem do repasse), então entram
             # aqui como custo direto do lucro estimado da plataforma.
             arrecadacao_liquida_maxima = max_times * max(valor - TAXA_ABACATEPAY_ESTIMADA, 0)
-            custo_premio_maximo = (valor_premio + TAXA_ABACATEPAY_ESTIMADA) if valor_premio > 0 else 0
+            custo_premio_maximo = _custo_premios([valor_premio, valor_premio_vice, valor_premio_terceiro])
             base_para_divisao = arrecadacao_liquida_maxima - custo_premio_maximo
             lucro_plataforma_estimado = (
                 base_para_divisao * (1 - FATIA_FEDERACAO_NO_LUCRO)
@@ -1407,10 +1422,11 @@ def criar_campeonato():
             )
 
             if lucro_plataforma_estimado < LUCRO_MINIMO_PLATAFORMA:
+                total_premios = valor_premio + valor_premio_vice + valor_premio_terceiro
                 flash(
-                    f"Com {max_times} times a R$ {valor:.2f} e prêmio de R$ {valor_premio:.2f}, o lucro "
+                    f"Com {max_times} times a R$ {valor:.2f} e R$ {total_premios:.2f} em prêmios, o lucro "
                     f"da plataforma fica em torno de R$ {lucro_plataforma_estimado:.2f} — abaixo do mínimo "
-                    f"de R$ {LUCRO_MINIMO_PLATAFORMA:.2f}. Aumente o valor da inscrição, reduza o prêmio ou "
+                    f"de R$ {LUCRO_MINIMO_PLATAFORMA:.2f}. Aumente o valor da inscrição, reduza os prêmios ou "
                     "escolha um chaveamento com mais times.",
                     "erro",
                 )
@@ -1456,6 +1472,8 @@ def criar_campeonato():
             valor_inscricao=valor,
             max_times=max_times,
             valor_premio=valor_premio,
+            valor_premio_vice=valor_premio_vice,
+            valor_premio_terceiro=valor_premio_terceiro,
             data_campeonato=data_campeonato,
             hora_campeonato=hora_campeonato,
             formato=formato,
@@ -1502,8 +1520,8 @@ def detalhe_campeonato(torneio_id):
     )
     # Quanto o prêmio ficaria se o organizador começasse agora, com menos
     # times do que as vagas — usado no aviso antes de confirmar.
-    premio_se_comecar_agora = _premio_ajustado_para(torneio, times_pagos) if pode_gerar_chaveamento else torneio.valor_premio
-    premio_pendente = torneio.valor_premio > 0 and torneio.premio_status != "concluido"
+    premios_se_comecar_agora = _premios_ajustados_para(torneio, times_pagos) if pode_gerar_chaveamento else torneio.premios
+    premio_pendente = bool(_premios_pendentes(torneio))
     repasse_pendente = torneio.repasse_federacao_status not in ("concluido", "sem_lucro", "abaixo_minimo")
     # Só depois de encerrado: com a disputa de 3º lugar ainda em aberto, o
     # campeão já é conhecido mas o campeonato não acabou — e pagar apaga os
@@ -1543,7 +1561,9 @@ def detalhe_campeonato(torneio_id):
         eh_organizador=eh_organizador,
         pode_gerar_chaveamento=pode_gerar_chaveamento,
         times_pagos=times_pagos,
-        premio_se_comecar_agora=premio_se_comecar_agora,
+        premios_se_comecar_agora=premios_se_comecar_agora,
+        total_premios_se_comecar_agora=round(sum(premios_se_comecar_agora.values()), 2),
+        status_premios=_status_premios(torneio),
         pode_pagar_premio=pode_pagar_premio,
         eh_membro_campeao=eh_membro_campeao,
         grupos_info=grupos_info,
@@ -1968,11 +1988,31 @@ def _tentar_finalizar_torneio(torneio):
         f'O campeonato "{torneio.nome}" foi finalizado — {torneio.time_campeao.nome} é o campeão!',
     )
     _registrar_pontos_ranking(torneio)
+    _creditar_xp(torneio)
     # Campeonato sem dinheiro envolvido não tem tela de "confirmar
     # pagamentos" — então é aqui mesmo que os prints saem, senão eles
     # ficariam acumulando no volume pra sempre.
-    if torneio.valor_inscricao <= 0 and torneio.valor_premio <= 0:
+    if torneio.valor_inscricao <= 0 and not torneio.premios:
         _limpar_prints_do_torneio(torneio)
+
+
+def _creditar_xp(torneio):
+    """XP = reais de prêmio (ver PLANO_XP_NIVEL.md): cada colocação com
+    prêmio credita o valor em XP pro time e pra cada jogador que está no
+    elenco agora. Idempotente via Torneio.xp_creditado. Campeonato sem
+    prêmio não dá XP."""
+    if torneio.xp_creditado:
+        return
+    torneio.xp_creditado = True
+    colocacoes = _colocacoes_do_torneio(torneio)
+    for colocacao, valor in torneio.premios.items():
+        time_obj = colocacoes.get(colocacao)
+        if time_obj is None:
+            continue
+        xp = int(round(valor))
+        time_obj.xp_total = (time_obj.xp_total or 0) + xp
+        for membro in time_obj.membros:
+            membro.xp_total = (membro.xp_total or 0) + xp
 
 
 def _colocacoes_do_torneio(torneio):
@@ -2150,34 +2190,76 @@ def _avancar_grupo(confronto):
     )
 
 
-def _premio_ajustado_para(torneio, num_times):
-    """Prêmio possível com `num_times` pagando, em vez das vagas todas.
+PREMIO_CAMPOS = {
+    # colocação -> (campo do valor, campo do status, campo do id da transferência, rótulo)
+    "campeao": ("valor_premio", "premio_status", "premio_transferencia_id", "campeão"),
+    "vice": ("valor_premio_vice", "premio_vice_status", "premio_vice_transferencia_id", "vice"),
+    "terceiro": ("valor_premio_terceiro", "premio_terceiro_status", "premio_terceiro_transferencia_id", "3º lugar"),
+}
 
-    O prêmio foi calibrado na criação pra sobrar o lucro mínimo da
+
+def _custo_premios(valores):
+    """Quanto sai da conta pra pagar esses prêmios: cada um custa valor +
+    taxa de envio da AbacatePay. Prêmio zero não custa nada."""
+    return sum(v + TAXA_ABACATEPAY_ESTIMADA for v in valores if v and v > 0)
+
+
+def _status_premios(torneio):
+    """{colocacao: (valor, status)} dos prêmios acima de zero."""
+    return {
+        c: (getattr(torneio, campos[0]) or 0, getattr(torneio, campos[1]))
+        for c, campos in PREMIO_CAMPOS.items()
+        if (getattr(torneio, campos[0]) or 0) > 0
+    }
+
+
+def _premios_pendentes(torneio):
+    """Colocações com prêmio ainda não resolvido (nem pago, nem a caminho,
+    nem sem ninguém pra receber)."""
+    return [
+        c for c, (valor, status) in _status_premios(torneio).items()
+        if status not in ("concluido", "sem_colocado")
+    ]
+
+
+def _premios_ajustados_para(torneio, num_times):
+    """Prêmios possíveis com `num_times` pagando, em vez das vagas todas.
+
+    Os prêmios foram calibrados na criação pra sobrar o lucro mínimo da
     plataforma com o campeonato CHEIO. Começando com menos times entra menos
-    dinheiro, e manter o prêmio cheio faria a plataforma pagar a diferença do
-    próprio bolso. Aqui a gente refaz a mesma conta da criação, só que com o
-    número real de times, e devolve o maior prêmio que ainda respeita o piso
-    (nunca aumenta o prêmio — no máximo mantém o que já estava combinado).
+    dinheiro, e manter os prêmios cheios faria a plataforma pagar a
+    diferença do próprio bolso. Aqui a gente refaz a mesma conta da criação,
+    só que com o número real de times, e reduz os três prêmios na mesma
+    proporção até caber no piso (nunca aumenta — no máximo mantém o que já
+    estava combinado). Prêmio que cair abaixo do mínimo de Pix vira zero.
+
+    Devolve {colocacao: valor} só com os prêmios acima de zero.
     """
-    if torneio.valor_premio <= 0 or num_times >= torneio.max_times:
-        return torneio.valor_premio
+    premios = dict(torneio.premios)
+    if not premios or num_times >= torneio.max_times:
+        return premios
 
     leituras = (num_times - 1) * 2 * 1.2
     custo_ia = leituras * CUSTO_IA_POR_LEITURA_ESTIMADO
     arrecadacao = num_times * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
 
     # Da fórmula do lucro da plataforma:
-    #   (arrecadacao - premio - taxa) * (1 - fatia) - taxa - ia = lucro_minimo
+    #   (arrecadacao - custo_premios) * (1 - fatia) - taxa - ia = lucro_minimo
+    # com custo_premios = soma(premio + taxa) — a taxa de envio de cada
+    # prêmio entra no custo, então sai do "teto" antes de dividir.
     base_necessaria = (LUCRO_MINIMO_PLATAFORMA + TAXA_ABACATEPAY_ESTIMADA + custo_ia) / (1 - FATIA_FEDERACAO_NO_LUCRO)
-    premio_possivel = arrecadacao - TAXA_ABACATEPAY_ESTIMADA - base_necessaria
+    teto_total = arrecadacao - base_necessaria - len(premios) * TAXA_ABACATEPAY_ESTIMADA
+    total_atual = sum(premios.values())
+    if teto_total >= total_atual:
+        return premios
 
-    premio = min(torneio.valor_premio, premio_possivel)
-    if premio < VALOR_MINIMO_PIX_ABACATEPAY:
-        # Não sobra nem o mínimo que a AbacatePay envia num Pix — fica sem
-        # prêmio em dinheiro (o campeonato continua valendo, só não paga).
-        return 0
-    return round(premio, 2)
+    fator = max(teto_total, 0) / total_atual
+    ajustados = {}
+    for colocacao, valor in premios.items():
+        novo = round(valor * fator, 2)
+        if novo >= VALOR_MINIMO_PIX_ABACATEPAY:
+            ajustados[colocacao] = novo
+    return ajustados
 
 
 def _estrutura_bracket(torneio):
@@ -2262,10 +2344,11 @@ def gerar_chaveamento(torneio_id):
     # o prêmio cai junto, senão a plataforma banca a diferença do próprio
     # bolso. O organizador é avisado disso antes de confirmar (ver o popup na
     # tela do campeonato).
-    premio_antigo = torneio.valor_premio
-    premio_novo = _premio_ajustado_para(torneio, len(times))
-    if premio_novo != premio_antigo:
-        torneio.valor_premio = premio_novo
+    premios_antigos = torneio.premios
+    premios_novos = _premios_ajustados_para(torneio, len(times))
+    if premios_novos != premios_antigos:
+        for colocacao, campos in PREMIO_CAMPOS.items():
+            setattr(torneio, campos[0], premios_novos.get(colocacao, 0))
 
     # Ranking: o campeonato entra na temporada aberta neste momento (é
     # quando ele de fato acontece) e a elegibilidade fica travada aqui —
@@ -2323,13 +2406,16 @@ def gerar_chaveamento(torneio_id):
                 f"{byes} time(s) passam direto de fase por W.O."
             )
 
-    if premio_novo != premio_antigo:
-        mensagem_sucesso += f" Prêmio ajustado de R$ {premio_antigo:.2f} para R$ {premio_novo:.2f} (começou com menos times)."
+    if premios_novos != premios_antigos:
+        total_antigo = round(sum(premios_antigos.values()), 2)
+        total_novo = round(sum(premios_novos.values()), 2)
+        rotulo = "Prêmios ajustados" if len(premios_antigos) > 1 else "Prêmio ajustado"
+        mensagem_sucesso += f" {rotulo} de R$ {total_antigo:.2f} para R$ {total_novo:.2f} (começou com menos times)."
         notificar_federacao(
             torneio,
             "campeonato_iniciado",
-            f'O prêmio do "{torneio.nome}" foi ajustado de R$ {premio_antigo:.2f} para '
-            f'R$ {premio_novo:.2f} porque o campeonato começou com {len(times)} de {torneio.max_times} times.',
+            f'{rotulo} do "{torneio.nome}": de R$ {total_antigo:.2f} para R$ {total_novo:.2f}, '
+            f'porque o campeonato começou com {len(times)} de {torneio.max_times} times.',
         )
 
     torneio.status = "em_andamento"
@@ -2457,44 +2543,59 @@ def _reembolsar_inscricao(inscricao):
     )
 
 
-def _pagar_premio_campeao(torneio):
-    """Tenta transferir o prêmio para o capitão do time campeão. Devolve
-    (mensagem_ou_None, erro_ou_None) — só um dos dois vem preenchido.
-    Não faz nada (devolve None, None) se já pago, sem prêmio, ou se já tem
-    uma transferência "pendente" — nesse caso a AbacatePay já aceitou o
-    envio e só está confirmando; tentar de novo criaria um segundo envio
-    real em cima do primeiro."""
-    if torneio.valor_premio <= 0 or torneio.premio_status in ("concluido", "pendente"):
+def _pagar_premio_colocacao(torneio, colocacao, colocacoes):
+    """Tenta transferir o prêmio de uma colocação (campeao/vice/terceiro)
+    pro capitão do time que ficou nela. Devolve (mensagem_ou_None,
+    erro_ou_None) — só um dos dois vem preenchido.
+
+    Não faz nada (None, None) se não tem prêmio pra essa colocação, se já
+    foi pago, ou se já tem uma transferência "pendente" — nesse caso a
+    AbacatePay já aceitou o envio e só está confirmando; tentar de novo
+    criaria um segundo envio real em cima do primeiro. Se a colocação não
+    existe (ex.: W.O. duplo na disputa de 3º), marca "sem_colocado" e o
+    valor fica na conta — entra no lucro dividido com a federação.
+    """
+    campo_valor, campo_status, campo_transferencia, rotulo = PREMIO_CAMPOS[colocacao]
+    valor = getattr(torneio, campo_valor) or 0
+    status = getattr(torneio, campo_status)
+    if valor <= 0 or status in ("concluido", "pendente", "sem_colocado"):
         return None, None
 
-    capitao = torneio.time_campeao.capitao
-    if not capitao.chave_pix or not capitao.tipo_chave_pix:
-        torneio.premio_status = "falhou"
-        return None, f"{capitao.nickname} (capitão do {torneio.time_campeao.nome}) ainda não cadastrou uma chave Pix para receber o prêmio."
+    time_obj = colocacoes.get(colocacao)
+    if time_obj is None:
+        setattr(torneio, campo_status, "sem_colocado")
+        return None, None
+
+    capitao = time_obj.capitao
+    if capitao is None or not capitao.chave_pix or not capitao.tipo_chave_pix:
+        setattr(torneio, campo_status, "falhou")
+        quem = capitao.nickname if capitao else "O capitão"
+        return None, f"{quem} (capitão do {time_obj.nome}, {rotulo}) ainda não cadastrou uma chave Pix para receber o prêmio."
 
     # A AbacatePay cobra a mesma taxa fixa também em cima de QUALQUER envio
-    # (não só no recebimento) — manda-se valor_premio + taxa pra o campeão
-    # receber o valor cheio anunciado, e quem absorve a taxa é a fatia da
-    # plataforma (nunca o prêmio), como prometido nos termos de uso.
+    # (não só no recebimento) — manda-se valor + taxa pra o time receber o
+    # valor cheio anunciado, e quem absorve a taxa é a fatia da plataforma
+    # (nunca o prêmio), como prometido nos termos de uso.
     try:
         transferencia = pagamentos.enviar_pix(
-            valor_reais=torneio.valor_premio + TAXA_ABACATEPAY_ESTIMADA,
+            valor_reais=valor + TAXA_ABACATEPAY_ESTIMADA,
             chave_pix=capitao.chave_pix,
             tipo_chave=capitao.tipo_chave_pix,
-            descricao=f"Prêmio {torneio.nome} - {torneio.time_campeao.nome}",
-            external_id=f"premio-torneio-{torneio.id}",
+            descricao=f"Premio {rotulo} {torneio.nome} - {time_obj.nome}",
+            external_id=f"premio-{colocacao}-torneio-{torneio.id}" if colocacao != "campeao" else f"premio-torneio-{torneio.id}",
         )
     except pagamentos.PagamentoIndisponivel as erro:
-        torneio.premio_status = "falhou"
-        return None, f"Prêmio: não deu para pagar agora ({erro})."
+        setattr(torneio, campo_status, "falhou")
+        return None, f"Prêmio do {rotulo}: não deu para pagar agora ({erro})."
 
-    torneio.premio_transferencia_id = transferencia.get("id")
+    setattr(torneio, campo_transferencia, transferencia.get("id"))
     status_abacatepay = (transferencia.get("status") or "").upper()
-    torneio.premio_status = "concluido" if status_abacatepay in ("COMPLETED", "PAID") else "pendente"
+    novo_status = "concluido" if status_abacatepay in ("COMPLETED", "PAID") else "pendente"
+    setattr(torneio, campo_status, novo_status)
 
-    if torneio.premio_status == "concluido":
-        return f"Prêmio de R$ {torneio.valor_premio:.2f} pago para {torneio.time_campeao.nome}!", None
-    return "Transferência do prêmio enviada — status ainda pendente na AbacatePay.", None
+    if novo_status == "concluido":
+        return f"Prêmio do {rotulo} (R$ {valor:.2f}) pago para {time_obj.nome}!", None
+    return f"Transferência do prêmio do {rotulo} enviada — status ainda pendente na AbacatePay.", None
 
 
 def _repassar_lucro_federacao(torneio):
@@ -2519,7 +2620,12 @@ def _repassar_lucro_federacao(torneio):
     # antes de calcular o que sobra pra dividir entre federação e plataforma.
     times_inscritos = len(torneio.times_inscritos)
     total_arrecadado_liquido = times_inscritos * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
-    custo_premio = (torneio.valor_premio + TAXA_ABACATEPAY_ESTIMADA) if torneio.valor_premio > 0 else 0
+    # Todos os prêmios (campeão, vice, 3º) entram como custo — menos os que
+    # ficaram sem ninguém pra receber (colocação inexistente): esse dinheiro
+    # nunca saiu, então volta pro lucro dividido.
+    custo_premio = _custo_premios([
+        valor for c, (valor, status) in _status_premios(torneio).items() if status != "sem_colocado"
+    ])
     lucro = total_arrecadado_liquido - custo_premio
     if lucro <= 0:
         torneio.repasse_federacao_status = "sem_lucro"
@@ -2580,7 +2686,7 @@ def pagar_premio(torneio_id):
         flash("A disputa de 3º lugar ainda não terminou — o campeonato só encerra (e o prêmio só sai) depois dela.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
-    premio_ja_feito = torneio.valor_premio <= 0 or torneio.premio_status == "concluido"
+    premio_ja_feito = not _premios_pendentes(torneio)
     repasse_ja_feito = torneio.repasse_federacao_status in ("concluido", "sem_lucro")
     if premio_ja_feito and repasse_ja_feito:
         flash("Não tem mais nada pendente para pagar nesse campeonato.", "erro")
@@ -2590,37 +2696,47 @@ def pagar_premio(torneio_id):
     # o próximo — se o dinheiro já saiu de verdade pela AbacatePay, isso
     # não pode ficar só na memória. Um erro no meio (rede, bug, timeout)
     # não pode apagar o registro de uma transferência que já aconteceu.
-    msg_premio, erro_premio = _pagar_premio_campeao(torneio)
-    db.session.commit()
-
+    #
     # A AbacatePay recusa dois saques feitos rápido demais em sequência
-    # ("aguarde alguns segundos antes de solicitar outro saque") — essa
-    # pequena pausa evita esbarrar nesse limite ao mandar prêmio e repasse
-    # no mesmo clique.
-    _dormir(2)
+    # ("aguarde alguns segundos antes de solicitar outro saque") — a pausa
+    # entre um envio e o próximo evita esbarrar nesse limite ao mandar
+    # prêmios e repasse no mesmo clique.
+    colocacoes = _colocacoes_do_torneio(torneio)
+    mensagens, erros = [], []
+    for colocacao in PREMIO_CAMPOS:
+        mensagem, erro = _pagar_premio_colocacao(torneio, colocacao, colocacoes)
+        db.session.commit()
+        if mensagem or erro:
+            mensagens.append(mensagem)
+            erros.append(erro)
+            _dormir(2)
     msg_repasse, erro_repasse = _repassar_lucro_federacao(torneio)
     db.session.commit()
+    mensagens.append(msg_repasse)
+    erros.append(erro_repasse)
 
     # O admin que apertou o botão precisa saber o resultado (deu certo ou
     # deu errado) de cada transferência — dinheiro de verdade não pode
     # ficar silencioso.
-    for mensagem in filter(None, [msg_premio, msg_repasse]):
+    for mensagem in filter(None, mensagens):
         notificar_federacao(torneio, "repasse_pagamento", mensagem)
-    for erro in filter(None, [erro_premio, erro_repasse]):
+    for erro in filter(None, erros):
         notificar_federacao(torneio, "repasse_pagamento", f"⚠ {erro}")
     db.session.commit()
 
-    for mensagem in filter(None, [msg_premio, msg_repasse]):
+    for mensagem in filter(None, mensagens):
         flash(mensagem, "sucesso")
-    for erro in filter(None, [erro_premio, erro_repasse]):
+    for erro in filter(None, erros):
         flash(erro, "erro")
-    if not any([msg_premio, erro_premio, msg_repasse, erro_repasse]):
+    if not any(mensagens) and not any(erros):
         flash("Já tem uma transferência pendente de confirmação na AbacatePay — aguarde antes de tentar de novo.", "sucesso")
 
     # Campeonato encerrado e sem pendência de pagamento: os prints já
     # cumpriram o papel deles (prova em caso de contestação) e podem sair,
     # pra não acumular arquivo no volume sem fim.
-    premio_resolvido = torneio.valor_premio <= 0 or torneio.premio_status in ("concluido", "pendente")
+    premio_resolvido = all(
+        status in ("concluido", "pendente", "sem_colocado") for _, status in _status_premios(torneio).values()
+    )
     repasse_resolvido = torneio.repasse_federacao_status in ("concluido", "pendente", "sem_lucro", "abaixo_minimo")
     if premio_resolvido and repasse_resolvido:
         apagados = _limpar_prints_do_torneio(torneio)
@@ -3298,6 +3414,16 @@ def _garantir_colunas_novas():
         ("torneios", "temporada_id", "INTEGER REFERENCES temporadas(id)"),
         ("torneios", "elegivel_ranking", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("confrontos", "eh_disputa_3_lugar", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        # Prêmios de vice/terceiro e XP.
+        ("torneios", "valor_premio_vice", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("torneios", "valor_premio_terceiro", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("torneios", "premio_vice_transferencia_id", "VARCHAR(80)"),
+        ("torneios", "premio_vice_status", "VARCHAR(20)"),
+        ("torneios", "premio_terceiro_transferencia_id", "VARCHAR(80)"),
+        ("torneios", "premio_terceiro_status", "VARCHAR(20)"),
+        ("torneios", "xp_creditado", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("users", "xp_total", "INTEGER NOT NULL DEFAULT 0"),
+        ("teams", "xp_total", "INTEGER NOT NULL DEFAULT 0"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

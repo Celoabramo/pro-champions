@@ -1,6 +1,8 @@
 # Plano — Sistema de XP e nível (jogador e time)
 
-Status: **planejado, nada implementado ainda**. Escrito em 2026-09-17 pra ser executado depois, possivelmente por outra sessão/modelo — por isso está detalhado o suficiente pra não depender da conversa que o gerou. Ver também [PLANO_TEMPORADA_RANKING.md](PLANO_TEMPORADA_RANKING.md) — este sistema reaproveita a mesma infraestrutura.
+Status: **implementado em 2026-09-17**, com uma regra diferente da planejada abaixo, decidida pelo Marcelo na hora de executar: **XP = reais ganhos em prêmio** (1 real de prêmio = 1 XP pro time e pra cada jogador do elenco naquele momento), em vez de XP por partida/colocação. Campeonato sem prêmio não dá XP. A curva de nível está em `models.py` (`nivel_por_xp`): nível 10 ≈ R$1.080, 20 ≈ R$3.300, 50 ≈ R$13.700, 100 ≈ R$39.400 em prêmios. Junto entraram os prêmios opcionais de vice e 3º lugar (entram na fórmula do lucro na criação, no ajuste por bye e no repasse da federação). Pendente: decorações visuais por marco de nível (10, 20, 50, 100 — bordinha em volta do escudo/avatar), o Marcelo pediu pra pensar depois.
+
+As seções abaixo são o plano original, mantidas como referência do raciocínio.
 
 ## 1. Diferença importante em relação ao ranking da Temporada
 

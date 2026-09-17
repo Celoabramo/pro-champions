@@ -35,6 +35,12 @@
     {% if torneio.valor_premio > 0 %}
         <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> Prêmio R$ {{ "%.2f"|format(torneio.valor_premio) }}</span>
     {% endif %}
+    {% if torneio.valor_premio_vice > 0 %}
+        <span class="chip-premio chip-premio-secundario">2º R$ {{ "%.2f"|format(torneio.valor_premio_vice) }}</span>
+    {% endif %}
+    {% if torneio.valor_premio_terceiro > 0 %}
+        <span class="chip-premio chip-premio-secundario">3º R$ {{ "%.2f"|format(torneio.valor_premio_terceiro) }}</span>
+    {% endif %}
     <span class="chip-formato">{{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}</span>
     <span class="chip-geracao chip-jogo">{{ torneio.nome_jogo }}</span>
 
@@ -184,7 +190,7 @@
         </script>
     {% elif eh_organizador and pode_gerar_chaveamento %}
         {% set faltando = torneio.max_times - times_pagos %}
-        {% set premio_cai = torneio.valor_premio > 0 and premio_se_comecar_agora != torneio.valor_premio %}
+        {% set premio_cai = torneio.total_premios > 0 and total_premios_se_comecar_agora != torneio.total_premios %}
         <div class="bloco-chaveamento" style="text-align:center;">
             {% if faltando > 0 %}
                 <p class="texto-aviso" style="color: var(--erro); margin-bottom:14px;">
@@ -192,16 +198,19 @@
                     Dá para começar assim mesmo com {{ times_pagos }}: quem sobrar sem adversário no sorteio
                     passa direto de fase por W.O.
                     {% if premio_cai %}
-                        <br><br>Como entrou menos dinheiro de inscrição, o prêmio cairia de
+                        <br><br>Como entrou menos dinheiro de inscrição, {% if torneio.premios|length > 1 %}os prêmios cairiam de
+                        <strong>R$ {{ "%.2f"|format(torneio.total_premios) }}</strong> no total para
+                        <strong>R$ {{ "%.2f"|format(total_premios_se_comecar_agora) }}</strong>
+                        (campeão R$ {{ "%.2f"|format(premios_se_comecar_agora.get('campeao', 0)) }}{% if torneio.valor_premio_vice > 0 %}, vice R$ {{ "%.2f"|format(premios_se_comecar_agora.get('vice', 0)) }}{% endif %}{% if torneio.valor_premio_terceiro > 0 %}, 3º R$ {{ "%.2f"|format(premios_se_comecar_agora.get('terceiro', 0)) }}{% endif %}){% else %}o prêmio cairia de
                         <strong>R$ {{ "%.2f"|format(torneio.valor_premio) }}</strong> para
-                        <strong>R$ {{ "%.2f"|format(premio_se_comecar_agora) }}</strong>.
+                        <strong>R$ {{ "%.2f"|format(premios_se_comecar_agora.get('campeao', 0)) }}</strong>{% endif %}.
                     {% endif %}
                 </p>
             {% else %}
                 <p class="texto-fraco-pequeno" style="margin-bottom:14px;">As vagas estão preenchidas — já dá para sortear o chaveamento.</p>
             {% endif %}
             <form method="POST" action="{{ url_for('gerar_chaveamento', torneio_id=torneio.id) }}"
-                  onsubmit="return confirm({% if faltando > 0 %}'Começar com {{ times_pagos }} de {{ torneio.max_times }} times?\n\n{{ faltando }} vaga(s) ficam vazias e quem cair nelas passa de fase por W.O.{% if premio_cai %}\n\nO prêmio vai cair de R$ {{ "%.2f"|format(torneio.valor_premio) }} para R$ {{ "%.2f"|format(premio_se_comecar_agora) }}, porque entrou menos dinheiro de inscrição.{% endif %}\n\nDepois de sortear, as inscrições fecham e não dá para voltar atrás. Tem certeza?'{% else %}'Sortear o chaveamento e começar o campeonato?\n\nDepois disso as inscrições fecham e não dá para voltar atrás.'{% endif %});">
+                  onsubmit="return confirm({% if faltando > 0 %}'Começar com {{ times_pagos }} de {{ torneio.max_times }} times?\n\n{{ faltando }} vaga(s) ficam vazias e quem cair nelas passa de fase por W.O.{% if premio_cai %}\n\n{{ 'Os prêmios vão cair' if torneio.premios|length > 1 else 'O prêmio vai cair' }} de R$ {{ "%.2f"|format(torneio.total_premios) }} para R$ {{ "%.2f"|format(total_premios_se_comecar_agora) }}, porque entrou menos dinheiro de inscrição.{% endif %}\n\nDepois de sortear, as inscrições fecham e não dá para voltar atrás. Tem certeza?'{% else %}'Sortear o chaveamento e começar o campeonato?\n\nDepois disso as inscrições fecham e não dá para voltar atrás.'{% endif %});">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="botao-principal">Gerar chaveamento</button>
             </form>
@@ -245,9 +254,26 @@
         <div class="perfil-bloco podio-bloco">
             <h2>Pódio</h2>
             <ol class="podio-lista">
-                <li><span class="podio-pos">1º</span> {{ macros.escudo_time(colocacoes.campeao, 'escudo-time-pequeno') }} <span>{{ colocacoes.campeao.nome }}</span></li>
-                {% if colocacoes.vice %}<li><span class="podio-pos">2º</span> {{ macros.escudo_time(colocacoes.vice, 'escudo-time-pequeno') }} <span>{{ colocacoes.vice.nome }}</span></li>{% endif %}
-                {% if colocacoes.terceiro %}<li><span class="podio-pos">3º</span> {{ macros.escudo_time(colocacoes.terceiro, 'escudo-time-pequeno') }} <span>{{ colocacoes.terceiro.nome }}</span></li>{% endif %}
+                {% for colocacao, pos in [('campeao', '1º'), ('vice', '2º'), ('terceiro', '3º')] %}
+                    {% set time_col = colocacoes.get(colocacao) %}
+                    {% if time_col %}
+                        <li>
+                            <span class="podio-pos">{{ pos }}</span>
+                            {{ macros.escudo_time(time_col, 'escudo-time-pequeno') }}
+                            <span>{{ time_col.nome }}</span>
+                            {% if status_premios.get(colocacao) %}
+                                {% set valor, st = status_premios[colocacao] %}
+                                <span class="texto-fraco-pequeno" style="margin-left:auto; display:inline-flex; align-items:center; gap:6px;">
+                                    R$ {{ "%.2f"|format(valor) }}
+                                    {% if st == 'concluido' %}<span class="selo-status selo-status-aberto">Pago</span>
+                                    {% elif st == 'pendente' %}<span class="selo-status selo-status-em_andamento">A caminho</span>
+                                    {% elif st == 'falhou' %}<span class="selo-status selo-status-divergente">Falhou</span>
+                                    {% else %}<span class="selo-status selo-status-finalizado">A pagar</span>{% endif %}
+                                </span>
+                            {% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
             </ol>
             {% if torneio.elegivel_ranking and torneio.temporada %}
                 <p class="texto-fraco-pequeno" style="margin-top:10px;">

@@ -7,7 +7,7 @@
     <div class="cabecalho-time">
         {{ macros.escudo_time(time_obj, 'escudo-time-grande') }}
         <div>
-            <h1>{{ time_obj.nome }} <span class="tag">[{{ time_obj.tag }}]</span></h1>
+            <h1>{{ time_obj.nome }} <span class="tag">[{{ time_obj.tag }}]</span> <span class="selo-nivel" title="{{ time_obj.xp_total }} XP">Nível {{ time_obj.nivel }}</span></h1>
             <p class="perfil-email">Capitão: {{ time_obj.capitao.nickname if time_obj.capitao else '—' }} · Esquema {{ time_obj.formacao }}</p>
         </div>
     </div>
@@ -16,6 +16,7 @@
         <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> {{ titulos }} título(s)</span>
     {% endif %}
     <span class="chip-geracao">{{ historico|length }} campeonato(s) jogado(s)</span>
+    <span class="chip-geracao">{{ time_obj.xp_total }} XP</span>
 
     {% if current_user.is_authenticated and current_user.time_id == time_obj.id %}
         <p class="texto-fraco-pequeno" style="margin-top:14px;">
@@ -27,7 +28,7 @@
         <h2>Elenco ({{ time_obj.membros|length }})</h2>
         <ul class="lista-membros">
             {% for membro in time_obj.membros %}
-                <li>{{ membro.nickname }}{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+                <li>{{ membro.nickname }} <span class="selo-nivel selo-nivel-pequeno" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
             {% endfor %}
         </ul>
     </div>

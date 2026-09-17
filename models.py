@@ -33,7 +33,54 @@ JOGOS = {
 JOGO_PADRAO = "fc26"
 
 
-class User(UserMixin, db.Model):
+# XP e nível (ver PLANO_XP_NIVEL.md). XP = reais ganhos em prêmio: cada real
+# de prêmio vira 1 XP pro time e pra cada jogador do elenco na hora. Só se
+# guarda xp_total; o nível é calculado daqui, assim dá pra recalibrar a
+# curva sem migração nem recalcular ninguém.
+#
+# Curva: nível N exige 40 × (N-1)^1.5 XP. Nível 10 ≈ R$1.080 em prêmios,
+# 20 ≈ R$3.300, 50 ≈ R$13.700, 100 ≈ R$39.400.
+def nivel_por_xp(xp):
+    xp = max(int(xp or 0), 0)
+    nivel = 1 + int((xp / 40) ** (2 / 3))
+    # Ajuste fino nas bordas: a raiz em ponto flutuante pode cair um nível
+    # abaixo/acima bem no limiar — confere contra a tabela exata.
+    while xp_para_nivel(nivel + 1) <= xp:
+        nivel += 1
+    while nivel > 1 and xp_para_nivel(nivel) > xp:
+        nivel -= 1
+    return nivel
+
+
+def xp_para_nivel(nivel):
+    """XP acumulado mínimo pra estar no nível dado."""
+    if nivel <= 1:
+        return 0
+    return int(round(40 * (nivel - 1) ** 1.5))
+
+
+class ComXP:
+    """Mixin de quem tem xp_total (User e Team)."""
+
+    @property
+    def nivel(self):
+        return nivel_por_xp(self.xp_total)
+
+    @property
+    def xp_proximo_nivel(self):
+        return xp_para_nivel(self.nivel + 1)
+
+    @property
+    def progresso_nivel(self):
+        """0–100: quanto do caminho entre o nível atual e o próximo já foi."""
+        base = xp_para_nivel(self.nivel)
+        topo = self.xp_proximo_nivel
+        if topo <= base:
+            return 100
+        return int(min(100, max(0, (int(self.xp_total or 0) - base) * 100 / (topo - base))))
+
+
+class User(UserMixin, ComXP, db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -84,6 +131,9 @@ class User(UserMixin, db.Model):
     # grupo cadastrado em vez de sumir. A coluna já existe em produção
     # (migração rodada separadamente antes desse campo voltar ao model).
     link_grupo_whatsapp = db.Column(db.String(255), nullable=True)
+
+    # XP de carreira do jogador — segue a pessoa quando ela troca de time.
+    xp_total = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     def __repr__(self):
         return f"<User {self.nickname}>"
@@ -261,6 +311,34 @@ class Torneio(db.Model):
     premio_transferencia_id = db.Column(db.String(80), nullable=True)
     premio_status = db.Column(db.String(20), nullable=True)
 
+    # Prêmios opcionais de vice e terceiro, mesmo ciclo do prêmio do
+    # campeão (status: None | concluido | pendente | falhou | sem_colocado,
+    # esse último quando a colocação não existe — ex.: W.O. duplo na
+    # disputa de 3º). Entram na conta do lucro na criação e no repasse.
+    valor_premio_vice = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    valor_premio_terceiro = db.Column(db.Float, nullable=False, default=0, server_default="0")
+    premio_vice_transferencia_id = db.Column(db.String(80), nullable=True)
+    premio_vice_status = db.Column(db.String(20), nullable=True)
+    premio_terceiro_transferencia_id = db.Column(db.String(80), nullable=True)
+    premio_terceiro_status = db.Column(db.String(20), nullable=True)
+
+    # XP creditado no encerramento (idempotente — ver _creditar_xp em app.py).
+    xp_creditado = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
+    @property
+    def premios(self):
+        """{colocacao: valor} só com prêmios acima de zero."""
+        todos = {
+            "campeao": self.valor_premio or 0,
+            "vice": self.valor_premio_vice or 0,
+            "terceiro": self.valor_premio_terceiro or 0,
+        }
+        return {c: v for c, v in todos.items() if v > 0}
+
+    @property
+    def total_premios(self):
+        return round(sum(self.premios.values()), 2)
+
     # Repasse dos 80% do lucro (arrecadação das inscrições menos o prêmio)
     # pro admin dono da federação — os outros 20% ficam parados na conta
     # AbacatePay mesmo, sem transferência nenhuma (é a parte da plataforma).
@@ -297,7 +375,7 @@ class Torneio(db.Model):
         return f"<Torneio {self.nome}>"
 
 
-class Team(db.Model):
+class Team(ComXP, db.Model):
     __tablename__ = "teams"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -310,6 +388,9 @@ class Team(db.Model):
     # Escudo do time. Sem imagem enviada, a tela usa um escudo genérico
     # de placeholder (ver ESCUDO_GENERICO em app.py).
     escudo_imagem = db.Column(db.String(255), nullable=True)
+
+    # XP de carreira do time — não se transfere quando um jogador sai.
+    xp_total = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     capitao_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     capitao = db.relationship("User", foreign_keys=[capitao_id])

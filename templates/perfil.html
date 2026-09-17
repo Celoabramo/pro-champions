@@ -2,8 +2,15 @@
 {% block titulo %}Meu perfil — Pro Champions{% endblock %}
 {% block conteudo %}
 <section class="perfil">
-    <h1>{{ usuario.nickname }}</h1>
+    <h1>{{ usuario.nickname }} <span class="selo-nivel" title="{{ usuario.xp_total }} XP">Nível {{ usuario.nivel }}</span></h1>
     <p class="perfil-email">{{ usuario.email }}</p>
+    <div class="xp-bloco">
+        <div class="xp-linha">
+            <span><strong>{{ usuario.xp_total }} XP</strong> · próximo nível em {{ usuario.xp_proximo_nivel }} XP</span>
+            <span class="texto-fraco-pequeno">1 XP por real ganho em prêmio</span>
+        </div>
+        <div class="meta-progresso" style="margin:6px 0 0;"><div class="meta-progresso-barra" style="width: {{ usuario.progresso_nivel }}%;"></div></div>
+    </div>
 
     {% if eh_admin_site %}
         <div class="perfil-bloco">

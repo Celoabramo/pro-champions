@@ -85,11 +85,21 @@
         <label for="valor_premio">Prêmio para o campeão (R$, deixe 0 se não tiver)</label>
         <input type="text" id="valor_premio" name="valor_premio" placeholder="0.00">
 
+        <label for="valor_premio_vice">Prêmio para o vice (R$, opcional)</label>
+        <input type="text" id="valor_premio_vice" name="valor_premio_vice" placeholder="0.00">
+
+        <label for="valor_premio_terceiro">Prêmio para o 3º lugar (R$, opcional)</label>
+        <input type="text" id="valor_premio_terceiro" name="valor_premio_terceiro" placeholder="0.00">
+        <p class="texto-fraco-pequeno" style="margin:2px 0 0;">
+            O 3º lugar é decidido numa disputa entre os perdedores da semifinal. Os prêmios precisam ser
+            decrescentes (campeão ≥ vice ≥ 3º) e todos entram na conta do lucro da plataforma.
+        </p>
+
         <button type="submit" class="botao-principal">Criar campeonato</button>
     </form>
     <p class="texto-fraco-pequeno" style="margin-top:16px;">
-        A inscrição é paga via Pix. O prêmio (se você definir um) é pago automaticamente para o
-        capitão do time campeão quando você declarar o resultado final.
+        A inscrição é paga via Pix. Os prêmios (se você definir) são pagos para o capitão de cada time
+        premiado quando você confirmar os pagamentos no fim do campeonato.
     </p>
 </section>
 {% endblock %}

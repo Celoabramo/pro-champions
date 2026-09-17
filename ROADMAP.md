@@ -1,6 +1,6 @@
 # Roadmap Pro Champions — visão geral e ordem recomendada
 
-Status: itens 1, 2 e 3 implementados em 2026-09-17; 4, 5 e 6 ainda planejados. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
+Status: itens 1 a 4 implementados em 2026-09-17; 5 e 6 ainda planejados. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
 
 Cada item abaixo tem uma descrição rápida; os três maiores têm plano detalhado em arquivo separado. A ordem é a recomendada e tem uma razão específica: **cada peça deixa a próxima mais valiosa ou mais barata de construir** — não é só "o mais fácil primeiro".
 
@@ -15,7 +15,7 @@ Página pública listando todo time cadastrado (escudo, tag, capitão, membros),
 ### 3. Temporada 1 / Ranking geral — ✅ feito (2026-09-17) — ver [PLANO_TEMPORADA_RANKING.md](PLANO_TEMPORADA_RANKING.md)
 Ranking geral do site por temporada (reseta), pontuação por pódio (campeão 3 / vice 2 / terceiro 1), jogo de 3º lugar de verdade no chaveamento, só conta campeonato pago e cheio (anti-farm), prêmio de R$1.000 condicionado a bater 100 times participando. **É a única peça deste roadmap que mexe em dinheiro real** — a que precisa de mais cuidado de teste antes de subir.
 
-### 4. XP e nível — ver [PLANO_XP_NIVEL.md](PLANO_XP_NIVEL.md)
+### 4. XP e nível — ✅ feito (2026-09-17, XP = reais ganhos em prêmio; prêmios de vice/3º junto) — ver [PLANO_XP_NIVEL.md](PLANO_XP_NIVEL.md)
 Progressão de carreira (não confundir com o ranking da temporada, que reseta): XP acumula pra sempre, por jogador (perfil, segue a pessoa quando ela troca de time) e por time, separadamente. Reaproveita os mesmos dois gatilhos que o ranking já vai ter (partida validada, campeonato finalizado) — por isso é a extensão mais barata da fila, construir logo depois do item 3.
 
 ### 5. Mercado de transferências

@@ -29,7 +29,7 @@
                 <a href="{{ url_for('detalhe_time', time_id=time.id) }}" class="card-federacao card-time">
                     {{ macros.escudo_time(time, 'logo-federacao-card') }}
                     <div class="card-federacao-info">
-                        <h2>{{ time.nome }} <span class="tag">[{{ time.tag }}]</span></h2>
+                        <h2>{{ time.nome }} <span class="tag">[{{ time.tag }}]</span> <span class="selo-nivel selo-nivel-pequeno" title="{{ time.xp_total }} XP">Nv {{ time.nivel }}</span></h2>
                         <p class="card-federacao-meta">
                             Capitão: {{ time.capitao.nickname if time.capitao else '—' }}
                             · {{ time.membros|length }} membro(s)

@@ -8,7 +8,7 @@
         <div class="cabecalho-time">
             {{ macros.escudo_time(usuario.time, 'escudo-time-grande') }}
             <div>
-                <h1>{{ usuario.time.nome }} <span class="tag">[{{ usuario.time.tag }}]</span></h1>
+                <h1>{{ usuario.time.nome }} <span class="tag">[{{ usuario.time.tag }}]</span> <span class="selo-nivel" title="{{ usuario.time.xp_total }} XP">Nível {{ usuario.time.nivel }}</span></h1>
                 <p class="perfil-email">Capitão: {{ usuario.time.capitao.nickname }}</p>
                 <p class="texto-fraco-pequeno" style="margin:4px 0 0;">
                     <a href="{{ url_for('detalhe_time', time_id=usuario.time.id) }}" style="color: var(--acento); font-weight:600;">Ver página pública do time</a>

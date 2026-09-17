@@ -2358,3 +2358,25 @@ dialog.popup-imagem img {
 .tabela-ranking .linha-lider .ranking-pos { color: var(--dourado); }
 .tabela-ranking .linha-lider td { background: rgba(232, 185, 35, 0.06); }
 .tabela-ranking .escudo-time-pequeno { width: 26px; height: 26px; border-radius: 6px; }
+
+/* Prêmios de vice/3º e XP/nível */
+.chip-premio-secundario { opacity: 0.85; font-weight: 600; }
+.selo-nivel {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dourado);
+    background: rgba(232, 185, 35, 0.12);
+    border: 1px solid rgba(232, 185, 35, 0.35);
+    padding: 3px 9px;
+    border-radius: 999px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.selo-nivel-pequeno { font-size: 10px; padding: 2px 7px; }
+.xp-bloco { margin: 6px 0 18px; max-width: 420px; }
+.xp-linha { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
