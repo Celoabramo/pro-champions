@@ -36,7 +36,10 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from models import db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo, JOGOS, JOGO_PADRAO
+from models import (
+    db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
+    Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO,
+)
 import email_util
 import pagamentos
 import validacao_ia
@@ -484,6 +487,226 @@ def admin_organizadores():
 
     organizadores = User.query.filter_by(is_organizador=True).order_by(User.nickname).all()
     return render_template("admin_organizadores.html", organizadores=organizadores)
+
+
+# ---------------------------------------------------------------------------
+# Ranking por temporada (ver PLANO_TEMPORADA_RANKING.md)
+# ---------------------------------------------------------------------------
+
+def _tabela_ranking(temporada):
+    """Classificação da temporada: uma linha por time que jogou pelo menos
+    um campeonato elegível (pago e cheio) nela, com pontos, títulos, vices,
+    terceiros, campeonatos jogados e partidas jogadas.
+
+    Ordem (e desempate, nessa sequência): mais pontos, mais títulos, mais
+    vices, MENOS partidas jogadas, nome. A regra de desempate está nos
+    termos de uso — não mudar aqui sem mudar lá.
+
+    Devolve (linhas, times_participantes).
+    """
+    torneios = Torneio.query.filter_by(temporada_id=temporada.id, elegivel_ranking=True).all()
+    torneio_ids = [t.id for t in torneios]
+    linhas = {}
+
+    def linha(time_obj):
+        if time_obj.id not in linhas:
+            linhas[time_obj.id] = {
+                "time": time_obj, "pontos": 0, "titulos": 0, "vices": 0, "terceiros": 0,
+                "campeonatos": 0, "partidas": 0,
+            }
+        return linhas[time_obj.id]
+
+    if torneio_ids:
+        # Participação: inscrição paga e não devolvida num campeonato elegível.
+        inscricoes = Inscricao.query.filter(
+            Inscricao.torneio_id.in_(torneio_ids), Inscricao.status == "pago"
+        ).all()
+        for inscricao in inscricoes:
+            if inscricao.time is not None and not inscricao.foi_reembolsada:
+                linha(inscricao.time)["campeonatos"] += 1
+
+        # Partidas jogadas de verdade (bye não conta — não teve adversário).
+        confrontos = Confronto.query.filter(
+            Confronto.torneio_id.in_(torneio_ids), Confronto.status.in_(["validado", "wo"])
+        ).all()
+        for confronto in confrontos:
+            if confronto.time1 is None or confronto.time2 is None:
+                continue
+            for time_obj in (confronto.time1, confronto.time2):
+                if time_obj.id in linhas:
+                    linhas[time_obj.id]["partidas"] += 1
+
+    for pontuacao in PontuacaoRanking.query.filter_by(temporada_id=temporada.id).all():
+        if pontuacao.time is None:
+            continue
+        item = linha(pontuacao.time)
+        item["pontos"] += pontuacao.pontos
+        if pontuacao.colocacao == "campeao":
+            item["titulos"] += 1
+        elif pontuacao.colocacao == "vice":
+            item["vices"] += 1
+        elif pontuacao.colocacao == "terceiro":
+            item["terceiros"] += 1
+
+    ordenadas = sorted(
+        linhas.values(),
+        key=lambda l: (-l["pontos"], -l["titulos"], -l["vices"], l["partidas"], l["time"].nome.lower()),
+    )
+    for posicao, item in enumerate(ordenadas, start=1):
+        item["posicao"] = posicao
+    return ordenadas, len(ordenadas)
+
+
+@app.route("/ranking")
+def ranking():
+    temporada = _temporada_aberta()
+    if temporada is None:
+        # Sem temporada aberta: mostra a última encerrada (se tiver), pra
+        # página não ficar vazia entre uma temporada e outra.
+        temporada = Temporada.query.filter_by(status="encerrada").order_by(Temporada.numero.desc()).first()
+    linhas, participantes = _tabela_ranking(temporada) if temporada else ([], 0)
+    dias_restantes = None
+    if temporada and temporada.status == "aberta":
+        dias_restantes = max((temporada.data_fim - date.today()).days, 0)
+    return render_template(
+        "ranking.html",
+        temporada=temporada,
+        linhas=linhas,
+        participantes=participantes,
+        dias_restantes=dias_restantes,
+        hoje=date.today(),
+    )
+
+
+@app.route("/ranking/historico")
+def ranking_historico():
+    temporadas = Temporada.query.filter_by(status="encerrada").order_by(Temporada.numero.desc()).all()
+    tabelas = {t.id: _tabela_ranking(t) for t in temporadas}
+    return render_template("ranking_historico.html", temporadas=temporadas, tabelas=tabelas)
+
+
+def _pagar_premio_temporada(temporada, campeao):
+    """Transfere o prêmio da temporada pro capitão do 1º colocado. Mesmas
+    regras do prêmio de campeonato: (mensagem, erro), nunca reenvia em cima
+    de concluído/pendente, manda valor + taxa pra chegar o valor cheio."""
+    if temporada.premio_pago_status in ("concluido", "pendente"):
+        return None, None
+    capitao = campeao.capitao
+    if capitao is None or not capitao.chave_pix or not capitao.tipo_chave_pix:
+        temporada.premio_pago_status = "falhou"
+        return None, (
+            f"{capitao.nickname if capitao else 'O capitão'} (capitão do {campeao.nome}) ainda não cadastrou "
+            "uma chave Pix para receber o prêmio da temporada."
+        )
+    try:
+        transferencia = pagamentos.enviar_pix(
+            valor_reais=temporada.valor_premio + TAXA_ABACATEPAY_ESTIMADA,
+            chave_pix=capitao.chave_pix,
+            tipo_chave=capitao.tipo_chave_pix,
+            descricao=f"Premio {temporada.nome} - {campeao.nome}",
+            external_id=f"premio-temporada-{temporada.id}",
+        )
+    except pagamentos.PagamentoIndisponivel as erro:
+        temporada.premio_pago_status = "falhou"
+        return None, f"Prêmio da temporada: não deu para pagar agora ({erro})."
+
+    temporada.premio_transferencia_id = transferencia.get("id")
+    status_abacatepay = (transferencia.get("status") or "").upper()
+    temporada.premio_pago_status = "concluido" if status_abacatepay in ("COMPLETED", "PAID") else "pendente"
+    if temporada.premio_pago_status == "concluido":
+        return f"Prêmio de R$ {temporada.valor_premio:.2f} da {temporada.nome} pago para {campeao.nome}!", None
+    return "Transferência do prêmio da temporada enviada — status ainda pendente na AbacatePay.", None
+
+
+@app.route("/admin/temporadas", methods=["GET", "POST"])
+@login_required
+def admin_temporadas():
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+
+    if request.method == "POST":
+        try:
+            numero = int(request.form.get("numero", ""))
+            data_inicio = datetime.strptime(request.form.get("data_inicio", ""), "%Y-%m-%d").date()
+            data_fim = datetime.strptime(request.form.get("data_fim", ""), "%Y-%m-%d").date()
+            meta_times = int(request.form.get("meta_times", "100"))
+            valor_premio = float(request.form.get("valor_premio", "1000").replace(",", "."))
+        except ValueError:
+            flash("Preencha número, datas, meta e prêmio da temporada com valores válidos.", "erro")
+            return redirect(url_for("admin_temporadas"))
+
+        nome = request.form.get("nome", "").strip() or f"Temporada {numero}"
+        if data_fim <= data_inicio:
+            flash("A data de fim precisa ser depois da de início.", "erro")
+        elif numero <= 0 or meta_times <= 0 or valor_premio < 0:
+            flash("Número, meta e prêmio precisam ser positivos.", "erro")
+        elif Temporada.query.filter_by(numero=numero).first():
+            flash(f"Já existe uma temporada de número {numero}.", "erro")
+        elif _temporada_aberta():
+            # Só uma aberta por vez — senão um campeonato não saberia em qual
+            # temporada pontuar.
+            flash("Já tem uma temporada aberta. Encerre ela antes de abrir outra.", "erro")
+        else:
+            db.session.add(Temporada(
+                numero=numero, nome=nome, data_inicio=data_inicio, data_fim=data_fim,
+                meta_times=meta_times, valor_premio=valor_premio,
+            ))
+            db.session.commit()
+            flash(f"{nome} aberta! Campeonatos pagos e cheios sorteados a partir de agora valem ponto.", "sucesso")
+        return redirect(url_for("admin_temporadas"))
+
+    temporadas = Temporada.query.order_by(Temporada.numero.desc()).all()
+    resumo = {}
+    for temporada in temporadas:
+        linhas, participantes = _tabela_ranking(temporada)
+        resumo[temporada.id] = {"lider": linhas[0] if linhas else None, "participantes": participantes}
+    return render_template("admin_temporadas.html", temporadas=temporadas, resumo=resumo, hoje=date.today().isoformat())
+
+
+@app.route("/admin/temporadas/<int:temporada_id>/encerrar", methods=["POST"])
+@login_required
+@limiter.limit("5 per minute")
+def encerrar_temporada(temporada_id):
+    """Fecha a temporada: trava o 1º lugar e paga o prêmio se a meta de
+    times foi batida. Exige a senha do admin — sai dinheiro de verdade."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+    temporada = Temporada.query.get_or_404(temporada_id)
+
+    if not check_password_hash(current_user.senha_hash, request.form.get("senha", "")):
+        flash("Senha incorreta. A temporada não foi encerrada.", "erro")
+        return redirect(url_for("admin_temporadas"))
+
+    if temporada.status == "aberta":
+        linhas, participantes = _tabela_ranking(temporada)
+        temporada.status = "encerrada"
+        temporada.time_campeao_id = linhas[0]["time"].id if linhas else None
+        if temporada.time_campeao_id is None:
+            temporada.premio_pago_status = "sem_meta"
+            flash(f"{temporada.nome} encerrada sem nenhum time pontuando — sem campeão e sem prêmio.", "sucesso")
+        elif participantes < temporada.meta_times:
+            temporada.premio_pago_status = "sem_meta"
+            flash(
+                f"{temporada.nome} encerrada. {linhas[0]['time'].nome} terminou em 1º, mas a temporada teve "
+                f"{participantes} time(s) de {temporada.meta_times} — o prêmio de R$ {temporada.valor_premio:.2f} não é pago.",
+                "sucesso",
+            )
+        else:
+            flash(f"{temporada.nome} encerrada. {linhas[0]['time'].nome} é o campeão da temporada!", "sucesso")
+        db.session.commit()
+
+    # Pagamento (ou nova tentativa, se falhou antes) — só com meta batida.
+    if temporada.time_campeao_id and temporada.premio_pago_status not in ("sem_meta", "concluido", "pendente"):
+        mensagem, erro = _pagar_premio_temporada(temporada, temporada.time_campeao)
+        db.session.commit()
+        if mensagem:
+            flash(mensagem, "sucesso")
+        if erro:
+            flash(erro, "erro")
+    elif temporada.premio_pago_status in ("concluido", "pendente"):
+        flash("O prêmio dessa temporada já foi enviado.", "erro")
+
+    return redirect(url_for("admin_temporadas"))
 
 
 @app.route("/federacao/criar", methods=["POST"])
@@ -1075,11 +1298,22 @@ def detalhe_time(time_id):
     )
     titulos = sum(1 for t in historico if t.time_campeao_id == time_obj.id)
 
+    # Extrato de pontos do ranking, por temporada (mais recente primeiro).
+    pontuacoes = (
+        PontuacaoRanking.query.filter_by(time_id=time_obj.id)
+        .order_by(PontuacaoRanking.temporada_id.desc(), PontuacaoRanking.criado_em.desc())
+        .all()
+    )
+    extrato = {}
+    for pontuacao in pontuacoes:
+        extrato.setdefault(pontuacao.temporada, []).append(pontuacao)
+
     return render_template(
         "time_detalhe.html",
         time_obj=time_obj,
         historico=historico,
         titulos=titulos,
+        extrato=extrato,
     )
 
 
@@ -1271,7 +1505,15 @@ def detalhe_campeonato(torneio_id):
     premio_se_comecar_agora = _premio_ajustado_para(torneio, times_pagos) if pode_gerar_chaveamento else torneio.valor_premio
     premio_pendente = torneio.valor_premio > 0 and torneio.premio_status != "concluido"
     repasse_pendente = torneio.repasse_federacao_status not in ("concluido", "sem_lucro", "abaixo_minimo")
-    pode_pagar_premio = eh_organizador and torneio.time_campeao_id and (premio_pendente or repasse_pendente)
+    # Só depois de encerrado: com a disputa de 3º lugar ainda em aberto, o
+    # campeão já é conhecido mas o campeonato não acabou — e pagar apaga os
+    # prints, que a disputa ainda vai precisar.
+    pode_pagar_premio = (
+        eh_organizador
+        and torneio.status == "finalizado"
+        and torneio.time_campeao_id
+        and (premio_pendente or repasse_pendente)
+    )
     eh_membro_campeao = (
         current_user.is_authenticated
         and torneio.time_campeao_id is not None
@@ -1306,6 +1548,8 @@ def detalhe_campeonato(torneio_id):
         eh_membro_campeao=eh_membro_campeao,
         grupos_info=grupos_info,
         rodadas_bracket=_estrutura_bracket(torneio) if torneio.status != "aberto" else None,
+        disputa_terceiro=Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first(),
+        colocacoes=_colocacoes_do_torneio(torneio) if torneio.status == "finalizado" else {},
         tem_contestacao_aberta=_tem_contestacao_aberta(torneio) if eh_organizador else False,
     )
 
@@ -1619,9 +1863,16 @@ def _avancar_mata_mata(confronto):
     fica travada até o organizador resolver isso manualmente.
     """
     torneio = confronto.torneio
+
+    # A disputa de 3º lugar não alimenta fase nenhuma: terminar ela só pode
+    # (no máximo) liberar o encerramento do campeonato.
+    if confronto.eh_disputa_3_lugar:
+        _tentar_finalizar_torneio(torneio)
+        return
+
     confrontos_fase = (
         Confronto.query
-        .filter_by(torneio_id=torneio.id, fase=confronto.fase)
+        .filter_by(torneio_id=torneio.id, fase=confronto.fase, eh_disputa_3_lugar=False)
         .order_by(Confronto.ordem)
         .all()
     )
@@ -1633,19 +1884,11 @@ def _avancar_mata_mata(confronto):
         return
 
     if len(vencedores) == 1:
-        campeao = vencedores[0]
-        torneio.time_campeao_id = campeao.id
-        torneio.status = "finalizado"
-        notificar_federacao(
-            torneio,
-            "campeonato_finalizado",
-            f'O campeonato "{torneio.nome}" foi finalizado — {campeao.nome} é o campeão!',
-        )
-        # Campeonato sem dinheiro envolvido não tem tela de "confirmar
-        # pagamentos" — então é aqui mesmo que os prints saem, senão eles
-        # ficariam acumulando no volume pra sempre.
-        if torneio.valor_inscricao <= 0 and torneio.valor_premio <= 0:
-            _limpar_prints_do_torneio(torneio)
+        # Final decidida: o campeão fica conhecido na hora, mas o campeonato
+        # só encerra quando a disputa de 3º lugar (se existir) também
+        # terminar — ver _tentar_finalizar_torneio.
+        torneio.time_campeao_id = vencedores[0].id
+        _tentar_finalizar_torneio(torneio)
         return
 
     proxima_fase = FASES_POR_TAMANHO.get(len(vencedores), f"Fase de {len(vencedores)}")
@@ -1665,6 +1908,126 @@ def _avancar_mata_mata(confronto):
             time1_id=vencedores[i].id,
             time2_id=vencedores[i + 1].id,
         ))
+
+    if proxima_fase == "Final":
+        _criar_disputa_terceiro_lugar(torneio, confrontos_fase)
+
+
+FASE_DISPUTA_TERCEIRO = "Disputa de 3º lugar"
+
+
+def _perdedor_confronto(confronto):
+    """O time que perdeu — ou None se o confronto não teve adversário (bye)
+    ou não tem vencedor definido (W.O. duplo)."""
+    vencedor = _vencedor_confronto(confronto)
+    if vencedor is None or confronto.time1_id is None or confronto.time2_id is None:
+        return None
+    return confronto.time2 if vencedor.id == confronto.time1_id else confronto.time1
+
+
+def _criar_disputa_terceiro_lugar(torneio, semifinais):
+    """Monta o jogo de 3º lugar entre os dois perdedores da semifinal, junto
+    com a final.
+
+    Só existe quando as DUAS semifinais tiveram um perdedor de verdade. Num
+    campeonato de 3 times numa chave de 4, uma semifinal é bye (o time que
+    sobrou nunca jogou) — aí só tem um perdedor real, que já fica em 3º sem
+    precisar jogar (ver _colocacoes_do_torneio).
+    """
+    perdedores = [_perdedor_confronto(c) for c in semifinais]
+    if len(perdedores) != 2 or any(p is None for p in perdedores):
+        return
+    if Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first():
+        return
+    db.session.add(Confronto(
+        torneio_id=torneio.id,
+        fase=FASE_DISPUTA_TERCEIRO,
+        ordem=0,
+        time1_id=perdedores[0].id,
+        time2_id=perdedores[1].id,
+        eh_disputa_3_lugar=True,
+    ))
+
+
+def _tentar_finalizar_torneio(torneio):
+    """Encerra o campeonato quando não sobra jogo nenhum: final decidida E
+    disputa de 3º lugar (se existir) terminada. Encerrar é o que libera o
+    pagamento do prêmio, apaga os prints (campeonato grátis) e registra os
+    pontos do ranking — tudo isso precisa que todas as colocações já
+    estejam definidas."""
+    if torneio.status == "finalizado" or not torneio.time_campeao_id:
+        return
+    disputa = Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first()
+    if disputa and disputa.status not in ("validado", "wo"):
+        return
+
+    torneio.status = "finalizado"
+    notificar_federacao(
+        torneio,
+        "campeonato_finalizado",
+        f'O campeonato "{torneio.nome}" foi finalizado — {torneio.time_campeao.nome} é o campeão!',
+    )
+    _registrar_pontos_ranking(torneio)
+    # Campeonato sem dinheiro envolvido não tem tela de "confirmar
+    # pagamentos" — então é aqui mesmo que os prints saem, senão eles
+    # ficariam acumulando no volume pra sempre.
+    if torneio.valor_inscricao <= 0 and torneio.valor_premio <= 0:
+        _limpar_prints_do_torneio(torneio)
+
+
+def _colocacoes_do_torneio(torneio):
+    """{colocacao: time} com campeão, vice e terceiro de um campeonato
+    encerrado. Qualquer um pode faltar (chave de 2 não tem 3º; W.O. duplo
+    na disputa de 3º deixa a vaga vazia)."""
+    colocacoes = {}
+    if torneio.time_campeao:
+        colocacoes["campeao"] = torneio.time_campeao
+
+    final = Confronto.query.filter_by(torneio_id=torneio.id, fase="Final", eh_disputa_3_lugar=False).first()
+    if final is not None:
+        vice = _perdedor_confronto(final)
+        if vice is not None:
+            colocacoes["vice"] = vice
+
+    disputa = Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first()
+    if disputa is not None:
+        terceiro = _vencedor_confronto(disputa)
+        if terceiro is not None:
+            colocacoes["terceiro"] = terceiro
+    else:
+        # Sem disputa: só rola quando uma semifinal foi bye. O único
+        # perdedor real de semifinal é o 3º.
+        semifinais = Confronto.query.filter_by(torneio_id=torneio.id, fase="Semifinal", eh_disputa_3_lugar=False).all()
+        perdedores = [p for p in (_perdedor_confronto(c) for c in semifinais) if p is not None]
+        if len(perdedores) == 1:
+            colocacoes["terceiro"] = perdedores[0]
+
+    return colocacoes
+
+
+def _registrar_pontos_ranking(torneio):
+    """Credita os pontos da temporada (campeão 3, vice 2, terceiro 1) num
+    campeonato elegível recém-encerrado. Idempotente: se já tem ponto
+    registrado pra esse campeonato, não registra de novo. Temporada já
+    encerrada não recebe ponto — o prêmio dela já foi decidido."""
+    if not torneio.elegivel_ranking or not torneio.temporada_id:
+        return
+    if torneio.temporada is None or torneio.temporada.status != "aberta":
+        return
+    if PontuacaoRanking.query.filter_by(torneio_id=torneio.id).first():
+        return
+    for colocacao, time_obj in _colocacoes_do_torneio(torneio).items():
+        db.session.add(PontuacaoRanking(
+            temporada_id=torneio.temporada_id,
+            torneio_id=torneio.id,
+            time_id=time_obj.id,
+            colocacao=colocacao,
+            pontos=PONTOS_POR_COLOCACAO[colocacao],
+        ))
+
+
+def _temporada_aberta():
+    return Temporada.query.filter_by(status="aberta").order_by(Temporada.numero.desc()).first()
 
 
 def _classificacao_grupo(grupo):
@@ -1903,6 +2266,16 @@ def gerar_chaveamento(torneio_id):
     premio_novo = _premio_ajustado_para(torneio, len(times))
     if premio_novo != premio_antigo:
         torneio.valor_premio = premio_novo
+
+    # Ranking: o campeonato entra na temporada aberta neste momento (é
+    # quando ele de fato acontece) e a elegibilidade fica travada aqui —
+    # pago e cheio. Depois disso não muda mais, mesmo que a temporada
+    # feche ou um time seja removido.
+    temporada = _temporada_aberta()
+    torneio.temporada_id = temporada.id if temporada else None
+    torneio.elegivel_ranking = bool(
+        temporada and torneio.valor_inscricao > 0 and len(times) >= torneio.max_times
+    )
 
     if torneio.formato == "fase_grupos":
         _gerar_grupos(torneio, times)
@@ -2203,6 +2576,10 @@ def pagar_premio(torneio_id):
         flash("Declare o campeão antes de pagar o prêmio.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
+    if torneio.status != "finalizado":
+        flash("A disputa de 3º lugar ainda não terminou — o campeonato só encerra (e o prêmio só sai) depois dela.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
     premio_ja_feito = torneio.valor_premio <= 0 or torneio.premio_status == "concluido"
     repasse_ja_feito = torneio.repasse_federacao_status in ("concluido", "sem_lucro")
     if premio_ja_feito and repasse_ja_feito:
@@ -2331,6 +2708,7 @@ def excluir_campeonato(torneio_id):
         # para eles.
         _limpar_prints_do_torneio(torneio)
         Notificacao.query.filter_by(torneio_id=torneio.id).delete()
+        PontuacaoRanking.query.filter_by(torneio_id=torneio.id).delete()
         Confronto.query.filter_by(torneio_id=torneio.id).delete()
         Inscricao.query.filter_by(torneio_id=torneio.id).delete()
         Grupo.query.filter_by(torneio_id=torneio.id).delete()
@@ -2915,6 +3293,11 @@ def _garantir_colunas_novas():
         # NOT NULL DEFAULT preenche as linhas que já existem com 'fc26' na
         # hora — sem isso a coluna nasceria nula nos campeonatos antigos.
         ("torneios", "jogo", f"VARCHAR(10) NOT NULL DEFAULT '{JOGO_PADRAO}'"),
+        # Ranking por temporada. A tabela temporadas nasce no create_all()
+        # logo acima, então a FK já existe quando esse ALTER roda.
+        ("torneios", "temporada_id", "INTEGER REFERENCES temporadas(id)"),
+        ("torneios", "elegivel_ranking", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("confrontos", "eh_disputa_3_lugar", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

@@ -288,7 +288,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     padding: 0 14px;
 }
 
-@media (max-width: 760px) {
+/* Com 6 links logado (Campeonatos, Federações, Times, Ranking, Meu perfil,
+   Meu time) a pílula não cabe mais em tela média — aperta um pouco antes de
+   cair pro menu de celular. */
+@media (max-width: 1040px) {
+    .pilula-links a { padding: 8px 11px; font-size: 13px; }
+    .marca-pilula { padding-right: 10px; margin-right: 4px; }
+}
+
+@media (max-width: 860px) {
     .pilula-links, .usuario-area { display: none; }
     .botao-menu-mobile { display: inline-flex; }
 
@@ -2320,3 +2328,33 @@ dialog.popup-imagem img {
 }
 
 .pagina-legal .perfil-bloco p a { color: var(--acento); }
+
+/* Disputa de 3º lugar — fora da progressão da chave, embaixo dela. */
+.disputa-terceiro { margin: 18px auto 0; max-width: 360px; text-align: center; }
+.disputa-terceiro .bracket-jogo { margin: 0 auto; }
+.podio-lista { list-style: none; padding: 0; margin: 0; }
+.podio-lista li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--linha); font-size: 16px; font-weight: 600; }
+.podio-lista li:last-child { border-bottom: none; }
+.podio-pos { color: var(--dourado); font-weight: 800; min-width: 28px; }
+.podio-lista li:nth-child(2) .podio-pos { color: #c0c0c0; }
+.podio-lista li:nth-child(3) .podio-pos { color: #cd7f32; }
+
+/* Ranking por temporada (/ranking) */
+.temporada-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.temporada-cabecalho h2 { margin: 0; }
+.temporada-cabecalho .chip-premio { margin: 0; }
+.meta-progresso { height: 10px; background: var(--linha); border-radius: 999px; overflow: hidden; margin: 14px 0 6px; }
+.meta-progresso-barra { height: 100%; background: linear-gradient(90deg, var(--acento), var(--dourado)); border-radius: 999px; transition: width 0.4s; }
+.meta-texto { margin: 0; }
+.tabela-ranking-wrap { overflow-x: auto; }
+.tabela-ranking { font-size: 14px; min-width: 520px; }
+.tabela-ranking th, .tabela-ranking td { padding: 8px 8px 8px 0; white-space: nowrap; }
+.tabela-ranking tbody tr { border-bottom: 1px solid var(--linha); }
+.tabela-ranking .ranking-pos { color: var(--texto-fraco); font-weight: 700; width: 40px; }
+.tabela-ranking .ranking-time a { display: inline-flex; align-items: center; gap: 8px; color: inherit; font-weight: 600; }
+.tabela-ranking .ranking-time .tag { font-size: 12px; }
+.tabela-ranking .ranking-pontos { font-weight: 800; color: var(--acento); font-size: 16px; }
+.tabela-ranking .linha-top10 .ranking-pos { color: var(--texto); }
+.tabela-ranking .linha-lider .ranking-pos { color: var(--dourado); }
+.tabela-ranking .linha-lider td { background: rgba(232, 185, 35, 0.06); }
+.tabela-ranking .escudo-time-pequeno { width: 26px; height: 26px; border-radius: 6px; }

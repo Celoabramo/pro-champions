@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block titulo %}Temporadas do ranking — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    <h1>Temporadas do ranking</h1>
+    <p class="perfil-email">Só uma temporada fica aberta por vez. Campeonatos pagos e cheios sorteados enquanto ela está aberta valem ponto.</p>
+
+    {% for temporada in temporadas %}
+        {% set info = resumo[temporada.id] %}
+        <div class="perfil-bloco" style="border-left-color: {{ 'var(--acento)' if temporada.status == 'aberta' else 'var(--linha)' }};">
+            <h2>{{ temporada.nome }} <span class="selo-status {{ 'selo-status-aberto' if temporada.status == 'aberta' else 'selo-status-finalizado' }}" style="margin-left:8px;">{{ 'Aberta' if temporada.status == 'aberta' else 'Encerrada' }}</span></h2>
+            <p class="texto-fraco-pequeno">
+                {{ temporada.data_inicio.strftime('%d/%m/%Y') }} até {{ temporada.data_fim.strftime('%d/%m/%Y') }}
+                · meta {{ temporada.meta_times }} times · prêmio R$ {{ "%.2f"|format(temporada.valor_premio) }}
+            </p>
+            <p style="margin-top:8px;">
+                <strong>{{ info.participantes }} / {{ temporada.meta_times }}</strong> times participando
+                {% if info.lider %} · líder: <strong>{{ info.lider.time.nome }}</strong> ({{ info.lider.pontos }} pts){% else %} · ninguém pontuou ainda{% endif %}
+            </p>
+
+            {% if temporada.status == 'aberta' %}
+                <form method="POST" action="{{ url_for('encerrar_temporada', temporada_id=temporada.id) }}" class="form-escudo" style="margin-top:14px;"
+                      onsubmit="return confirm('Encerrar a {{ temporada.nome }}? Isso trava o 1º lugar{% if info.participantes >= temporada.meta_times %} e ENVIA R$ {{ "%.2f"|format(temporada.valor_premio) }} por Pix pro capitão do {{ info.lider.time.nome if info.lider else 'campeão' }}{% else %} — a meta não foi batida, então NÃO sai prêmio{% endif %}. Não dá pra desfazer.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="password" name="senha" placeholder="Sua senha para confirmar" required autocomplete="current-password" class="campo-busca-times" style="flex:1;">
+                    <button type="submit" class="botao-secundario-pequeno" style="color: var(--erro); border-color: var(--erro);">Encerrar temporada</button>
+                </form>
+            {% else %}
+                <p class="texto-fraco-pequeno" style="margin-top:8px;">
+                    Campeão: <strong>{{ temporada.time_campeao.nome if temporada.time_campeao else '—' }}</strong>
+                    · prêmio:
+                    {% if temporada.premio_pago_status == 'concluido' %}pago
+                    {% elif temporada.premio_pago_status == 'pendente' %}transferência pendente na AbacatePay
+                    {% elif temporada.premio_pago_status == 'sem_meta' %}não pago (meta não batida)
+                    {% elif temporada.premio_pago_status == 'falhou' %}<span style="color: var(--erro);">falhou — veja o aviso e tente de novo abaixo</span>
+                    {% else %}—{% endif %}
+                </p>
+                {% if temporada.premio_pago_status == 'falhou' %}
+                    <form method="POST" action="{{ url_for('encerrar_temporada', temporada_id=temporada.id) }}" class="form-escudo" style="margin-top:10px;"
+                          onsubmit="return confirm('Tentar pagar de novo o prêmio de R$ {{ "%.2f"|format(temporada.valor_premio) }} pro capitão do {{ temporada.time_campeao.nome if temporada.time_campeao else 'campeão' }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="password" name="senha" placeholder="Sua senha para confirmar" required autocomplete="current-password" class="campo-busca-times" style="flex:1;">
+                        <button type="submit" class="botao-principal-pequeno">Tentar pagar o prêmio de novo</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    {% if not temporadas or temporadas[0].status != 'aberta' %}
+        <div class="perfil-bloco formulario">
+            <h2>Abrir nova temporada</h2>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="numero">Número</label>
+                <input type="number" id="numero" name="numero" min="1" value="{{ (temporadas[0].numero + 1) if temporadas else 1 }}" required>
+                <label for="nome">Nome (opcional)</label>
+                <input type="text" id="nome" name="nome" placeholder="Temporada {{ (temporadas[0].numero + 1) if temporadas else 1 }}">
+                <label for="data_inicio">Início</label>
+                <input type="date" id="data_inicio" name="data_inicio" value="{{ hoje }}" required>
+                <label for="data_fim">Fim</label>
+                <input type="date" id="data_fim" name="data_fim" required>
+                <label for="meta_times">Meta de times pro prêmio sair</label>
+                <input type="number" id="meta_times" name="meta_times" min="1" value="100" required>
+                <label for="valor_premio">Prêmio do 1º lugar (R$)</label>
+                <input type="text" id="valor_premio" name="valor_premio" value="1000.00" required>
+                <button type="submit" class="botao-principal">Abrir temporada</button>
+            </form>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

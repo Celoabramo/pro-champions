@@ -1,6 +1,6 @@
 # Plano — Temporada 1 / Ranking geral com prêmio de R$1.000
 
-Status: **planejado, nada implementado ainda**. Escrito em 2026-09-17 pra ser executado depois, possivelmente por outra sessão/modelo — por isso está detalhado o suficiente pra não depender da conversa que o gerou.
+Status: **implementado em 2026-09-17** (commit "Temporada / ranking geral"). Este arquivo fica como referência das regras. Diferenças em relação ao plano original: `temporada_id` é preenchido no **sorteio do chaveamento** (não na criação) — assim campeonato criado antes da temporada abrir também entra, se for sorteado com ela aberta; a temporada é criada e encerrada por uma tela de admin (`/admin/temporadas`), não por comando.
 
 Decisões já fechadas com o Marcelo estão marcadas ✅. Onde eu assumi algo pra fechar o plano, está marcado ⚠️ — checar antes de começar a implementar.
 
@@ -52,7 +52,7 @@ Decisões já fechadas com o Marcelo estão marcadas ✅. Onde eu assumi algo pr
 - `criado_em`
 
 ### `Torneio` ganha 2 colunas
-- `temporada_id` (FK Temporada, nullable) — preenchido sozinho com a temporada `aberta` no momento em que o campeonato é criado (fica `None` se não tiver nenhuma temporada rodando)
+- `temporada_id` (FK Temporada, nullable) — preenchido sozinho com a temporada `aberta` no momento do sorteio do chaveamento (fica `None` se não tiver nenhuma temporada rodando)
 - `elegivel_ranking` (Boolean, default `False`) — calculado e travado no sorteio do chaveamento: `True` só se `valor_inscricao > 0` **e** `times_pagos == max_times` naquele momento
 
 ### `Confronto` ganha 1 coluna

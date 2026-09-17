@@ -115,6 +115,16 @@
                 </div>
             </div>
 
+            {% if disputa_terceiro %}
+                <div class="disputa-terceiro">
+                    <h3 class="fase-titulo">Disputa de 3º lugar</h3>
+                    <p class="texto-fraco-pequeno" style="margin:0 0 10px;">
+                        Os dois times que perderam a semifinal jogam pelo 3º lugar. O campeonato só encerra depois desse jogo e da final.
+                    </p>
+                    {{ macros.bracket_jogo(disputa_terceiro, torneio, 'bracket-jogo-terceiro') }}
+                </div>
+            {% endif %}
+
             <div class="bracket-mobile">
                 {% for fase, vagas_esquerda in rodadas_bracket.esquerda %}
                     {% set vagas_rodada = vagas_esquerda + rodadas_bracket.direita[loop.index0][1] %}
@@ -224,6 +234,32 @@
             <p class="texto-fraco-pequeno">Nenhum time inscrito ainda.</p>
         {% endif %}
     </div>
+
+    {% if torneio.time_campeao and torneio.status != 'finalizado' %}
+        <p class="texto-aviso" style="margin-top:16px;">
+            Final decidida — o campeonato encerra assim que a disputa de 3º lugar terminar.
+        </p>
+    {% endif %}
+
+    {% if colocacoes and (colocacoes.vice or colocacoes.terceiro) %}
+        <div class="perfil-bloco podio-bloco">
+            <h2>Pódio</h2>
+            <ol class="podio-lista">
+                <li><span class="podio-pos">1º</span> {{ macros.escudo_time(colocacoes.campeao, 'escudo-time-pequeno') }} <span>{{ colocacoes.campeao.nome }}</span></li>
+                {% if colocacoes.vice %}<li><span class="podio-pos">2º</span> {{ macros.escudo_time(colocacoes.vice, 'escudo-time-pequeno') }} <span>{{ colocacoes.vice.nome }}</span></li>{% endif %}
+                {% if colocacoes.terceiro %}<li><span class="podio-pos">3º</span> {{ macros.escudo_time(colocacoes.terceiro, 'escudo-time-pequeno') }} <span>{{ colocacoes.terceiro.nome }}</span></li>{% endif %}
+            </ol>
+            {% if torneio.elegivel_ranking and torneio.temporada %}
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">
+                    Valeu pontos na <a href="{{ url_for('ranking') }}" style="color: var(--acento); font-weight:600;">{{ torneio.temporada.nome }}</a>: campeão 3, vice 2, terceiro 1.
+                </p>
+            {% elif torneio.temporada %}
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">
+                    Esse campeonato não valeu pontos no ranking — só campeonato pago e com todas as vagas preenchidas pontua.
+                </p>
+            {% endif %}
+        </div>
+    {% endif %}
 
     {% if torneio.time_campeao %}
         {% if eh_membro_campeao %}

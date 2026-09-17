@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Temporadas anteriores — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="lista-campeonatos">
+    <a href="{{ url_for('ranking') }}" class="link-voltar">← Voltar para o ranking</a>
+    <div class="cabecalho-secao">
+        <h1>Temporadas anteriores</h1>
+    </div>
+
+    {% if temporadas %}
+        {% for temporada in temporadas %}
+            {% set linhas, participantes = tabelas[temporada.id] %}
+            <div class="perfil-bloco" style="border-left-color: var(--dourado);">
+                <h2>{{ temporada.nome }}</h2>
+                <p class="texto-fraco-pequeno">
+                    {{ temporada.data_inicio.strftime('%d/%m/%Y') }} até {{ temporada.data_fim.strftime('%d/%m/%Y') }} · {{ participantes }} time(s) participaram
+                </p>
+                {% if temporada.time_campeao %}
+                    <p style="font-size:18px; font-weight:600; margin:10px 0 4px; display:flex; align-items:center; gap:8px;">
+                        🏆 {{ macros.escudo_time(temporada.time_campeao, 'escudo-time-pequeno') }}
+                        <a href="{{ url_for('detalhe_time', time_id=temporada.time_campeao.id) }}" style="color:inherit;">{{ temporada.time_campeao.nome }}</a>
+                    </p>
+                    <p class="texto-fraco-pequeno">
+                        {% if temporada.premio_pago_status in ('concluido', 'pendente') %}
+                            Prêmio de R$ {{ "%.2f"|format(temporada.valor_premio) }} pago.
+                        {% elif temporada.premio_pago_status == 'sem_meta' %}
+                            Meta de {{ temporada.meta_times }} times não batida — sem prêmio em dinheiro.
+                        {% elif temporada.premio_pago_status == 'falhou' %}
+                            Prêmio de R$ {{ "%.2f"|format(temporada.valor_premio) }} pendente de pagamento.
+                        {% endif %}
+                    </p>
+                {% else %}
+                    <p class="texto-fraco-pequeno">Nenhum time pontuou nesta temporada.</p>
+                {% endif %}
+                {% if linhas|length > 1 %}
+                    <ol class="podio-lista" style="margin-top:10px;">
+                        {% for linha in linhas[:3] %}
+                            <li><span class="podio-pos">{{ linha.posicao }}º</span> <span>{{ linha.time.nome }}</span> <span class="texto-fraco-pequeno">{{ linha.pontos }} pts</span></li>
+                        {% endfor %}
+                    </ol>
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="texto-fraco-pequeno">Nenhuma temporada encerrada ainda.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,18 +1,18 @@
 # Roadmap Pro Champions — visão geral e ordem recomendada
 
-Status: **planejamento, nada aqui foi implementado ainda**. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
+Status: itens 1, 2 e 3 implementados em 2026-09-17; 4, 5 e 6 ainda planejados. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
 
 Cada item abaixo tem uma descrição rápida; os três maiores têm plano detalhado em arquivo separado. A ordem é a recomendada e tem uma razão específica: **cada peça deixa a próxima mais valiosa ou mais barata de construir** — não é só "o mais fácil primeiro".
 
 ## Ordem recomendada
 
-### 1. Seletor FC 26 / FC 27
+### 1. Seletor FC 26 / FC 27 — ✅ feito (2026-09-17)
 Reaproveita o padrão que já existe pro campo `Torneio.geracao` (antiga/nova geração de console) pra um campo novo `Torneio.jogo` ("fc26"/"fc27"). Migração aditiva, default "fc26" pros campeonatos existentes. Pequeno, sem dependência de mais nada — pode ir primeiro. Detalhe: os 3 textos hoje fixos em "FC 26" em `templates/confronto_detalhe.html` precisam virar dinâmicos. Decisão em aberto: deixar criar campeonato de FC 27 antes do lançamento (com aviso) ou travar até a data — perguntar ao Marcelo quando for implementar.
 
-### 2. Diretório de times (`/times`)
+### 2. Diretório de times (`/times`) — ✅ feito (2026-09-17)
 Página pública listando todo time cadastrado (escudo, tag, capitão, membros), filtro por federação. Não precisa de tabela nova — é leitura do que já existe. É a "prateleira" onde os itens 3, 4 e 5 vão se apoiar (mostrar pontos, nível, vaga de recrutamento).
 
-### 3. Temporada 1 / Ranking geral — ver [PLANO_TEMPORADA_RANKING.md](PLANO_TEMPORADA_RANKING.md)
+### 3. Temporada 1 / Ranking geral — ✅ feito (2026-09-17) — ver [PLANO_TEMPORADA_RANKING.md](PLANO_TEMPORADA_RANKING.md)
 Ranking geral do site por temporada (reseta), pontuação por pódio (campeão 3 / vice 2 / terceiro 1), jogo de 3º lugar de verdade no chaveamento, só conta campeonato pago e cheio (anti-farm), prêmio de R$1.000 condicionado a bater 100 times participando. **É a única peça deste roadmap que mexe em dinheiro real** — a que precisa de mais cuidado de teste antes de subir.
 
 ### 4. XP e nível — ver [PLANO_XP_NIVEL.md](PLANO_XP_NIVEL.md)

@@ -40,6 +40,7 @@
                 <a href="{{ url_for('campeonatos') }}" class="{{ 'ativo' if request.endpoint == 'campeonatos' }}">Campeonatos</a>
                 <a href="{{ url_for('federacoes') }}" class="{{ 'ativo' if request.endpoint in ('federacoes', 'detalhe_federacao') }}">Federações</a>
                 <a href="{{ url_for('times') }}" class="{{ 'ativo' if request.endpoint in ('times', 'detalhe_time') }}">Times</a>
+                <a href="{{ url_for('ranking') }}" class="{{ 'ativo' if request.endpoint in ('ranking', 'ranking_historico') }}">Ranking</a>
                 {% if current_user.is_authenticated %}
                     <a href="{{ url_for('perfil') }}" class="{{ 'ativo' if request.endpoint == 'perfil' }}">Meu perfil</a>
                     <a href="{{ url_for('time') }}" class="{{ 'ativo' if request.endpoint == 'time' }}">Meu time</a>
@@ -78,6 +79,7 @@
         <a href="{{ url_for('campeonatos') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'campeonatos' }}">Campeonatos</a>
         <a href="{{ url_for('federacoes') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint in ('federacoes', 'detalhe_federacao') }}">Federações</a>
         <a href="{{ url_for('times') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint in ('times', 'detalhe_time') }}">Times</a>
+        <a href="{{ url_for('ranking') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint in ('ranking', 'ranking_historico') }}">Ranking</a>
         {% if current_user.is_authenticated %}
             <a href="{{ url_for('perfil') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'perfil' }}">Meu perfil</a>
             <a href="{{ url_for('time') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint == 'time' }}">Meu time</a>

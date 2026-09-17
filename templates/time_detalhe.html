@@ -32,6 +32,27 @@
         </ul>
     </div>
 
+    {% if extrato %}
+        <div class="perfil-bloco" style="border-left-color: var(--dourado);">
+            <h2>Pontos no ranking</h2>
+            {% for temporada, pontuacoes in extrato.items() %}
+                <p style="margin:6px 0 4px; font-weight:600;">
+                    <a href="{{ url_for('ranking') }}" style="color: inherit;">{{ temporada.nome }}</a>
+                    <span class="texto-fraco-pequeno">· {{ pontuacoes|sum(attribute='pontos') }} ponto(s){% if temporada.status == 'encerrada' %} · encerrada{% endif %}</span>
+                </p>
+                <ul class="lista-membros">
+                    {% for pontuacao in pontuacoes %}
+                        <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span class="podio-pos">{{ '1º' if pontuacao.colocacao == 'campeao' else ('2º' if pontuacao.colocacao == 'vice' else '3º') }}</span>
+                            <a href="{{ url_for('detalhe_campeonato', torneio_id=pontuacao.torneio.id) }}" style="color: inherit; font-weight:600;">{{ pontuacao.torneio.nome }}</a>
+                            <span class="texto-fraco-pequeno">+{{ pontuacao.pontos }} pt(s)</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <div class="perfil-bloco">
         <h2>Campeonatos</h2>
         {% if historico %}

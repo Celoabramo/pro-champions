@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Ranking — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="lista-campeonatos ranking-pagina">
+    <div class="eyebrow-secao">
+        <span class="rotulo">Ranking geral</span>
+        <span class="linha-pontilhada"></span>
+        <span class="meta">{% if temporada %}{{ temporada.nome }}{% else %}Sem temporada{% endif %}</span>
+    </div>
+    <div class="cabecalho-secao">
+        <h1>Ranking</h1>
+        <a href="{{ url_for('ranking_historico') }}" class="botao-secundario-pequeno botao-cinza">Temporadas anteriores</a>
+    </div>
+
+    {% if not temporada %}
+        <p class="texto-fraco-pequeno">Nenhuma temporada aberta ainda. Quando a primeira começar, os campeonatos pagos e com todas as vagas preenchidas passam a valer pontos aqui.</p>
+    {% else %}
+        <div class="perfil-bloco temporada-bloco">
+            <div class="temporada-cabecalho">
+                <div>
+                    <h2>{{ temporada.nome }}</h2>
+                    <p class="texto-fraco-pequeno" style="margin:2px 0 0;">
+                        {{ temporada.data_inicio.strftime('%d/%m/%Y') }} até {{ temporada.data_fim.strftime('%d/%m/%Y') }}
+                        {% if temporada.status == 'aberta' %}
+                            · {% if dias_restantes > 0 %}faltam {{ dias_restantes }} dia(s){% else %}último dia{% endif %}
+                        {% else %}
+                            · <strong>encerrada</strong>
+                        {% endif %}
+                    </p>
+                </div>
+                {% if temporada.valor_premio > 0 %}
+                    <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> R$ {{ "%.2f"|format(temporada.valor_premio) }} pro 1º lugar</span>
+                {% endif %}
+            </div>
+
+            {% if temporada.valor_premio > 0 %}
+                {% set meta_batida = participantes >= temporada.meta_times %}
+                <div class="meta-progresso" role="progressbar" aria-valuemin="0" aria-valuemax="{{ temporada.meta_times }}" aria-valuenow="{{ participantes }}">
+                    <div class="meta-progresso-barra" style="width: {{ [100, (participantes * 100 / temporada.meta_times)]|min|round(1) }}%;"></div>
+                </div>
+                <p class="texto-fraco-pequeno meta-texto">
+                    <strong>{{ participantes }} / {{ temporada.meta_times }} times</strong> já jogaram campeonato valendo ponto nesta temporada.
+                    {% if temporada.status == 'aberta' %}
+                        {% if meta_batida %}
+                            <span class="destaque-aberto">Meta batida — o prêmio está garantido.</span>
+                        {% else %}
+                            O prêmio de R$ {{ "%.2f"|format(temporada.valor_premio) }} só sai se a temporada chegar a {{ temporada.meta_times }} times — chame outros times pra jogar!
+                        {% endif %}
+                    {% elif temporada.premio_pago_status == 'sem_meta' %}
+                        A meta não foi batida — o prêmio desta temporada não foi pago.
+                    {% elif temporada.premio_pago_status in ('concluido', 'pendente') %}
+                        <span class="destaque-aberto">Prêmio pago para {{ temporada.time_campeao.nome if temporada.time_campeao else 'o campeão' }}.</span>
+                    {% endif %}
+                </p>
+            {% endif %}
+
+            <p class="texto-fraco-pequeno" style="margin-top:10px;">
+                Pontos por campeonato: <strong>campeão 3 · vice 2 · 3º lugar 1</strong>. Só vale campeonato <strong>pago</strong> e com <strong>todas as vagas preenchidas</strong>.
+                Desempate: mais títulos, depois mais vices, depois menos partidas jogadas.
+            </p>
+        </div>
+
+        {% if linhas %}
+            <div class="tabela-ranking-wrap">
+                <table class="tabela-classificacao tabela-ranking">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Time</th>
+                            <th title="Pontos">Pts</th>
+                            <th title="Títulos">🏆</th>
+                            <th title="Vices">2º</th>
+                            <th title="Terceiros">3º</th>
+                            <th title="Campeonatos jogados">Camp.</th>
+                            <th title="Partidas jogadas">Jogos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in linhas %}
+                            <tr class="{{ 'linha-top10' if linha.posicao <= 10 }} {{ 'linha-lider' if linha.posicao == 1 }}">
+                                <td class="ranking-pos">{{ linha.posicao }}º</td>
+                                <td class="ranking-time">
+                                    <a href="{{ url_for('detalhe_time', time_id=linha.time.id) }}">
+                                        {{ macros.escudo_time(linha.time, 'escudo-time-pequeno') }}
+                                        <span>{{ linha.time.nome }} <span class="tag">[{{ linha.time.tag }}]</span></span>
+                                    </a>
+                                </td>
+                                <td class="ranking-pontos">{{ linha.pontos }}</td>
+                                <td>{{ linha.titulos }}</td>
+                                <td>{{ linha.vices }}</td>
+                                <td>{{ linha.terceiros }}</td>
+                                <td>{{ linha.campeonatos }}</td>
+                                <td>{{ linha.partidas }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if linhas|length > 10 %}
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">Os 10 primeiros ficam destacados. Todo time que jogou campeonato valendo ponto aparece na tabela.</p>
+            {% endif %}
+        {% else %}
+            <p class="texto-fraco-pequeno">Nenhum campeonato valendo ponto foi disputado nesta temporada ainda.</p>
+        {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

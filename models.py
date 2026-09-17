@@ -232,6 +232,16 @@ class Torneio(db.Model):
     def nome_jogo(self):
         return JOGOS.get(self.jogo, self.jogo or JOGOS[JOGO_PADRAO])
 
+    # Ranking por temporada (ver PLANO_TEMPORADA_RANKING.md). temporada_id é
+    # preenchido no sorteio do chaveamento com a temporada aberta naquele
+    # momento (None se não tiver nenhuma). elegivel_ranking é travado no
+    # mesmo instante: só campeonato PAGO e CHEIO (todas as vagas ocupadas,
+    # sem ninguém passando de bye) gera ponto — trava contra farmar ponto
+    # com campeonato grátis de 2 times. Nunca é recalculado depois.
+    temporada_id = db.Column(db.Integer, db.ForeignKey("temporadas.id"), nullable=True)
+    temporada = db.relationship("Temporada", foreign_keys=[temporada_id])
+    elegivel_ranking = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
     # Todo campeonato pertence a uma federação — pode ser administrado por
     # qualquer admin dela, não só por quem criou. `criado_por` só guarda
     # quem apertou o botão, pra exibir "Federação X por Fulano" na tela do
@@ -349,6 +359,13 @@ class Confronto(db.Model):
     nick_fc_time1 = db.Column(db.String(40), nullable=True)
     nick_fc_time2 = db.Column(db.String(40), nullable=True)
 
+    # Disputa de 3º lugar: jogo entre os dois perdedores da semifinal,
+    # criado junto com a final. Fica fora da progressão da chave — o
+    # resultado dele não alimenta fase nenhuma, só define o 3º colocado
+    # (ranking e campeonato com prêmio de 3º). fase fica "Disputa de 3º
+    # lugar" pra exibição; o booleano é o que o código consulta.
+    eh_disputa_3_lugar = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
     # Leitura bruta (JSON) que a IA tirou do print de cada time, guardada
     # até os dois times enviarem pra dar pra comparar. leitura_timeN_ok é
     # None enquanto não chega print desse time, True quando a IA leu um
@@ -442,3 +459,63 @@ class Notificacao(db.Model):
 
     def __repr__(self):
         return f"<Notificacao {self.tipo} usuario={self.usuario_id}>"
+
+
+class Temporada(db.Model):
+    """Temporada do ranking geral do site (ver PLANO_TEMPORADA_RANKING.md).
+
+    Só uma fica "aberta" por vez. Quem gera ponto são os campeonatos
+    elegíveis que acontecem enquanto ela está aberta. No fechamento o 1º
+    lugar é travado em time_campeao_id e o prêmio só sai se a meta de
+    times participantes foi batida (premio_pago_status = "sem_meta" caso
+    contrário).
+    """
+
+    __tablename__ = "temporadas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, nullable=False, unique=True)
+    nome = db.Column(db.String(60), nullable=False)
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    meta_times = db.Column(db.Integer, nullable=False, default=100)
+    valor_premio = db.Column(db.Float, nullable=False, default=1000.0)
+    status = db.Column(db.String(20), nullable=False, default="aberta")  # aberta | encerrada
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+
+    # Mesmo vocabulário do prêmio de campeonato: concluido | pendente |
+    # falhou | sem_meta (não bateu a meta, não sai dinheiro).
+    premio_pago_status = db.Column(db.String(20), nullable=True)
+    premio_transferencia_id = db.Column(db.String(80), nullable=True)
+    time_campeao_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
+    time_campeao = db.relationship("Team", foreign_keys=[time_campeao_id])
+
+    def __repr__(self):
+        return f"<Temporada {self.numero} {self.status}>"
+
+
+# Pontos por colocação num campeonato elegível. Um registro por time por
+# campeonato — dá pra mostrar o extrato exato de cada ponto e o resultado de
+# uma temporada fechada nunca muda depois.
+PONTOS_POR_COLOCACAO = {"campeao": 3, "vice": 2, "terceiro": 1}
+
+
+class PontuacaoRanking(db.Model):
+    __tablename__ = "pontuacoes_ranking"
+
+    id = db.Column(db.Integer, primary_key=True)
+    temporada_id = db.Column(db.Integer, db.ForeignKey("temporadas.id"), nullable=False)
+    torneio_id = db.Column(db.Integer, db.ForeignKey("torneios.id"), nullable=False)
+    time_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=False)
+    colocacao = db.Column(db.String(10), nullable=False)  # campeao | vice | terceiro
+    pontos = db.Column(db.Integer, nullable=False)
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+
+    temporada = db.relationship("Temporada", foreign_keys=[temporada_id])
+    torneio = db.relationship("Torneio", foreign_keys=[torneio_id])
+    time = db.relationship("Team", foreign_keys=[time_id])
+
+    __table_args__ = (db.UniqueConstraint("torneio_id", "time_id", name="uq_pontuacao_torneio_time"),)
+
+    def __repr__(self):
+        return f"<PontuacaoRanking t{self.temporada_id} torneio={self.torneio_id} time={self.time_id} {self.colocacao}>"
