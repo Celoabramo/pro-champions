@@ -8,6 +8,7 @@ PagamentoIndisponivel (o chamador decide como avisar o usuário).
 """
 
 import os
+import re
 
 import requests
 
@@ -83,6 +84,30 @@ TIPOS_CHAVE_PIX = {
 }
 
 
+def _formatar_chave_pix(chave, tipo_chave):
+    """Ajusta a chave pro formato que o DICT (diretório do Pix, do Banco
+    Central) realmente usa antes de mandar pra AbacatePay.
+
+    Achado em produção: chave de telefone salva como só os 11 dígitos
+    (ex: "11947010769") é uma chave de verdade — o banco do dono resolve
+    ela certinho — mas a AbacatePay recusava com "Chave Pix inválida para
+    tipo PHONE". O motivo é que o DICT guarda chave de telefone no formato
+    internacional (+55DDNÚMERO), não em dígitos crus; a maioria dos bancos
+    aceita digitar só os números e completa o +55 por trás, mas a API não
+    faz essa complementação sozinha. Só telefone precisa disso — CPF, CNPJ,
+    e-mail e chave aleatória já vão do jeito que a pessoa cadastrou.
+    """
+    if tipo_chave != "PHONE":
+        return chave
+    digitos = re.sub(r"\D", "", chave)
+    # 10 dígitos (DDD + fixo) ou 11 (DDD + celular) é chave sem o país —
+    # completa com 55. Já vindo com 12/13 dígitos (alguém colou com o 55
+    # na frente) não mexe, pra não grudar um 55 duplicado.
+    if len(digitos) in (10, 11):
+        digitos = "55" + digitos
+    return f"+{digitos}"
+
+
 def enviar_pix(valor_reais, chave_pix, tipo_chave, descricao, external_id):
     """Envia um Pix pra uma chave de terceiro (ex: prêmio do campeão).
 
@@ -96,6 +121,6 @@ def enviar_pix(valor_reais, chave_pix, tipo_chave, descricao, external_id):
         "amount": round(valor_reais * 100),
         "externalId": external_id,
         "description": descricao,
-        "pix": {"key": chave_pix, "type": tipo_chave},
+        "pix": {"key": _formatar_chave_pix(chave_pix, tipo_chave), "type": tipo_chave},
     }
     return _chamar("POST", "/pix/send", json=corpo)
