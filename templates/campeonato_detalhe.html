@@ -287,6 +287,28 @@
         </div>
     {% endif %}
 
+    {% if destaques and (destaques.ataque or destaques.defesa) %}
+        <div class="perfil-bloco">
+            <h2>Destaques</h2>
+            <ul class="lista-membros">
+                {% if destaques.ataque %}
+                    <li style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span class="podio-pos" style="min-width:auto;">⚡</span>
+                        <span><strong>Melhor ataque:</strong> {% for time_d, gols in destaques.ataque %}{{ time_d.nome }} ({{ gols }} gol{{ 's' if gols != 1 }}){% if not loop.last %}, {% endif %}{% endfor %}</span>
+                        {% if xp_destaque %}<span class="selo-nivel selo-nivel-pequeno">+{{ xp_destaque }} XP</span>{% endif %}
+                    </li>
+                {% endif %}
+                {% if destaques.defesa %}
+                    <li style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span class="podio-pos" style="min-width:auto;">🛡️</span>
+                        <span><strong>Melhor defesa:</strong> {% for time_d, gols in destaques.defesa %}{{ time_d.nome }} ({{ gols }} sofrido{{ 's' if gols != 1 }}){% if not loop.last %}, {% endif %}{% endfor %}</span>
+                        {% if xp_destaque %}<span class="selo-nivel selo-nivel-pequeno">+{{ xp_destaque }} XP</span>{% endif %}
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    {% endif %}
+
     {% if torneio.time_campeao %}
         {% if eh_membro_campeao %}
             <div class="cartao-campeao">

@@ -38,7 +38,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from models import (
     db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
-    Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO,
+    Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO, XP_DESTAQUE,
 )
 import email_util
 import pagamentos
@@ -1570,6 +1570,8 @@ def detalhe_campeonato(torneio_id):
         rodadas_bracket=_estrutura_bracket(torneio) if torneio.status != "aberto" else None,
         disputa_terceiro=Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first(),
         colocacoes=_colocacoes_do_torneio(torneio) if torneio.status == "finalizado" else {},
+        destaques=_destaques_do_torneio(torneio) if torneio.status == "finalizado" else None,
+        xp_destaque=XP_DESTAQUE if len(torneio.times_inscritos) >= 4 else 0,
         tem_contestacao_aberta=_tem_contestacao_aberta(torneio) if eh_organizador else False,
     )
 
@@ -1996,23 +1998,64 @@ def _tentar_finalizar_torneio(torneio):
         _limpar_prints_do_torneio(torneio)
 
 
+def _destaques_do_torneio(torneio):
+    """Melhor ataque (mais gols marcados) e melhor defesa (menos gols
+    sofridos) do campeonato, contando só partidas validadas com placar
+    real (W.O. não tem gols). Empate leva os dois. Devolve
+    {"ataque": [(time, gols)], "defesa": [(time, gols_sofridos)]} — listas
+    vazias se ninguém jogou partida validada."""
+    gols_pro, gols_contra = Counter(), Counter()
+    jogaram = set()
+    for confronto in torneio.confrontos:
+        if confronto.status != "validado" or confronto.time1 is None or confronto.time2 is None:
+            continue
+        if confronto.placar_time1 is None or confronto.placar_time2 is None:
+            continue
+        for time_obj, feitos, sofridos in (
+            (confronto.time1, confronto.placar_time1, confronto.placar_time2),
+            (confronto.time2, confronto.placar_time2, confronto.placar_time1),
+        ):
+            jogaram.add(time_obj)
+            gols_pro[time_obj.id] += feitos
+            gols_contra[time_obj.id] += sofridos
+    if not jogaram:
+        return {"ataque": [], "defesa": []}
+    maior = max(gols_pro[t.id] for t in jogaram)
+    menor = min(gols_contra[t.id] for t in jogaram)
+    return {
+        "ataque": sorted(((t, gols_pro[t.id]) for t in jogaram if gols_pro[t.id] == maior), key=lambda x: x[0].nome),
+        "defesa": sorted(((t, gols_contra[t.id]) for t in jogaram if gols_contra[t.id] == menor), key=lambda x: x[0].nome),
+    }
+
+
 def _creditar_xp(torneio):
-    """XP = reais de prêmio (ver PLANO_XP_NIVEL.md): cada colocação com
-    prêmio credita o valor em XP pro time e pra cada jogador que está no
-    elenco agora. Idempotente via Torneio.xp_creditado. Campeonato sem
-    prêmio não dá XP."""
+    """XP de carreira (ver PLANO_XP_NIVEL.md), creditado ao time e a cada
+    jogador do elenco naquele momento. Idempotente via Torneio.xp_creditado.
+
+    - Prêmio: 1 real de prêmio = 1 XP, pra cada colocação premiada.
+    - Destaque: melhor ataque e melhor defesa ganham XP_DESTAQUE cada — só
+      em campeonato com pelo menos 4 times, pra não dar pra farmar XP com
+      campeonato grátis de 2 times.
+    """
     if torneio.xp_creditado:
         return
     torneio.xp_creditado = True
-    colocacoes = _colocacoes_do_torneio(torneio)
-    for colocacao, valor in torneio.premios.items():
-        time_obj = colocacoes.get(colocacao)
-        if time_obj is None:
-            continue
-        xp = int(round(valor))
+
+    def creditar(time_obj, xp):
         time_obj.xp_total = (time_obj.xp_total or 0) + xp
         for membro in time_obj.membros:
             membro.xp_total = (membro.xp_total or 0) + xp
+
+    colocacoes = _colocacoes_do_torneio(torneio)
+    for colocacao, valor in torneio.premios.items():
+        time_obj = colocacoes.get(colocacao)
+        if time_obj is not None:
+            creditar(time_obj, int(round(valor)))
+
+    if len(torneio.times_inscritos) >= 4:
+        destaques = _destaques_do_torneio(torneio)
+        for time_obj, _ in destaques["ataque"] + destaques["defesa"]:
+            creditar(time_obj, XP_DESTAQUE)
 
 
 def _colocacoes_do_torneio(torneio):

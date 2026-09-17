@@ -5,9 +5,11 @@
 <section class="time-atual">
     <a href="{{ url_for('times') }}" class="link-voltar">← Voltar para times</a>
     <div class="cabecalho-time">
-        {{ macros.escudo_time(time_obj, 'escudo-time-grande') }}
+        <div class="escudo-faixa {{ 'escudo-faixa-' + time_obj.faixa_nivel if time_obj.faixa_nivel }}">
+            {{ macros.escudo_time(time_obj, 'escudo-time-grande') }}
+        </div>
         <div>
-            <h1>{{ time_obj.nome }} <span class="tag">[{{ time_obj.tag }}]</span> <span class="selo-nivel" title="{{ time_obj.xp_total }} XP">Nível {{ time_obj.nivel }}</span></h1>
+            <h1>{{ time_obj.nome }} <span class="tag">[{{ time_obj.tag }}]</span> <span class="selo-nivel {{ 'selo-nivel-' + time_obj.faixa_nivel if time_obj.faixa_nivel }}" title="{{ time_obj.xp_total }} XP">Nível {{ time_obj.nivel }}</span></h1>
             <p class="perfil-email">Capitão: {{ time_obj.capitao.nickname if time_obj.capitao else '—' }} · Esquema {{ time_obj.formacao }}</p>
         </div>
     </div>
@@ -28,7 +30,7 @@
         <h2>Elenco ({{ time_obj.membros|length }})</h2>
         <ul class="lista-membros">
             {% for membro in time_obj.membros %}
-                <li>{{ membro.nickname }} <span class="selo-nivel selo-nivel-pequeno" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+                <li>{{ membro.nickname }} <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + membro.faixa_nivel if membro.faixa_nivel }}" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
             {% endfor %}
         </ul>
     </div>

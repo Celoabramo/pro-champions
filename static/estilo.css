@@ -2380,3 +2380,35 @@ dialog.popup-imagem img {
 .selo-nivel-pequeno { font-size: 10px; padding: 2px 7px; }
 .xp-bloco { margin: 6px 0 18px; max-width: 420px; }
 .xp-linha { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+
+/* Decoração por marco de nível: bronze (10), prata (20), ouro (50), lenda (100).
+   Jogadores: só o selo. Times: selo + anel no escudo, e só na página do time. */
+.selo-nivel-bronze { color: #e0a068; background: rgba(205, 127, 50, 0.16); border-color: rgba(205, 127, 50, 0.6); }
+.selo-nivel-prata { color: #e6e9ee; background: rgba(192, 197, 206, 0.16); border-color: rgba(192, 197, 206, 0.7); }
+.selo-nivel-ouro { color: #ffd75e; background: rgba(232, 185, 35, 0.2); border-color: #e8b923; box-shadow: 0 0 10px rgba(232, 185, 35, 0.35); }
+.selo-nivel-lenda {
+    color: #0b1410;
+    border-color: transparent;
+    background: linear-gradient(120deg, #e8b923, #fff1b5, #2ecc71, #e8b923);
+    background-size: 300% 300%;
+    animation: brilho-lenda 4s ease infinite;
+    box-shadow: 0 0 14px rgba(232, 185, 35, 0.55);
+}
+.escudo-faixa { position: relative; display: inline-flex; border-radius: 20px; padding: 3px; }
+.escudo-faixa-bronze { background: linear-gradient(135deg, #cd7f32, #8a5a2b, #e0a068); box-shadow: 0 0 12px rgba(205, 127, 50, 0.45); }
+.escudo-faixa-prata { background: linear-gradient(135deg, #c0c5ce, #7d838c, #f2f4f7); box-shadow: 0 0 12px rgba(192, 197, 206, 0.45); }
+.escudo-faixa-ouro { background: linear-gradient(135deg, #e8b923, #a67c00, #fff1b5); box-shadow: 0 0 16px rgba(232, 185, 35, 0.55); }
+.escudo-faixa-lenda {
+    background: linear-gradient(120deg, #e8b923, #fff1b5, #2ecc71, #e8b923);
+    background-size: 300% 300%;
+    animation: brilho-lenda 4s ease infinite;
+    box-shadow: 0 0 22px rgba(232, 185, 35, 0.7);
+}
+@keyframes brilho-lenda {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .selo-nivel-lenda, .escudo-faixa-lenda { animation: none; }
+}

@@ -52,6 +52,11 @@ def nivel_por_xp(xp):
     return nivel
 
 
+# XP por destaque de campeonato (melhor ataque, melhor defesa), além do XP
+# por prêmio — ver _creditar_xp em app.py.
+XP_DESTAQUE = 10
+
+
 def xp_para_nivel(nivel):
     """XP acumulado mínimo pra estar no nível dado."""
     if nivel <= 1:
@@ -69,6 +74,21 @@ class ComXP:
     @property
     def xp_proximo_nivel(self):
         return xp_para_nivel(self.nivel + 1)
+
+    @property
+    def faixa_nivel(self):
+        """Marco de decoração: None | bronze (10) | prata (20) | ouro (50) |
+        lenda (100). Só muda a aparência do selo/escudo."""
+        nivel = self.nivel
+        if nivel >= 100:
+            return "lenda"
+        if nivel >= 50:
+            return "ouro"
+        if nivel >= 20:
+            return "prata"
+        if nivel >= 10:
+            return "bronze"
+        return None
 
     @property
     def progresso_nivel(self):
