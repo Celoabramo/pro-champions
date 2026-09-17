@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Consultar jogador — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    <h1>Consultar jogador</h1>
+    <p class="perfil-email">Busque por nick, e-mail ou nome do time pra ver a chave Pix cadastrada e o time atual.</p>
+
+    <form method="GET" class="form-busca-times" role="search">
+        <input type="search" name="q" value="{{ busca }}" placeholder="Nick, e-mail ou time" aria-label="Buscar jogador" class="campo-busca-times" autofocus>
+        <button type="submit" class="botao-secundario-pequeno">Buscar</button>
+    </form>
+
+    {% if busca %}
+        {% if usuarios %}
+            {% for u in usuarios %}
+                <div class="perfil-bloco">
+                    <h2>{{ u.nickname }} <span class="selo-nivel selo-nivel-pequeno">Nv {{ u.nivel }}</span>{% if u.is_organizador %} <span class="selo-status selo-status-em_andamento" style="margin-left:6px;">Organizador</span>{% endif %}</h2>
+                    <p class="texto-fraco-pequeno">{{ u.email }} · cadastro em {{ u.criado_em.strftime('%d/%m/%Y') if u.criado_em else '—' }}</p>
+                    <ul class="lista-membros" style="margin-top:8px;">
+                        <li><strong>Time:</strong> {% if u.time %}<a href="{{ url_for('detalhe_time', time_id=u.time.id) }}" style="color: var(--acento); font-weight:600;">{{ u.time.nome }} [{{ u.time.tag }}]</a>{% if u.time.capitao_id == u.id %} <span class="selo-capitao">Capitão</span>{% endif %}{% else %}sem time{% endif %}</li>
+                        <li><strong>Chave Pix:</strong>
+                            {% if u.chave_pix %}
+                                <code style="font-size:15px;">{{ u.chave_pix }}</code>
+                                <span class="texto-fraco-pequeno">({{ tipos.get(u.tipo_chave_pix, u.tipo_chave_pix) }} · {{ u.chave_pix|length }} caractere(s))</span>
+                                {% if u.tipo_chave_pix == 'PHONE' and (u.chave_pix|length != 11 or not u.chave_pix.isdigit()) %}
+                                    <span class="selo-status selo-status-divergente" style="margin-left:6px;">Telefone precisa ter 11 dígitos (DDD + número), só números</span>
+                                {% elif u.tipo_chave_pix == 'CPF' and (u.chave_pix|length != 11 or not u.chave_pix.isdigit()) %}
+                                    <span class="selo-status selo-status-divergente" style="margin-left:6px;">CPF precisa ter 11 dígitos, só números</span>
+                                {% elif u.tipo_chave_pix == 'CNPJ' and (u.chave_pix|length != 14 or not u.chave_pix.isdigit()) %}
+                                    <span class="selo-status selo-status-divergente" style="margin-left:6px;">CNPJ precisa ter 14 dígitos, só números</span>
+                                {% elif u.tipo_chave_pix == 'EMAIL' and '@' not in u.chave_pix %}
+                                    <span class="selo-status selo-status-divergente" style="margin-left:6px;">E-mail inválido</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="selo-status selo-status-divergente">não cadastrada</span>
+                            {% endif %}
+                        </li>
+                        <li><strong>Federação:</strong> {{ u.federacao.nome if u.federacao else '—' }}</li>
+                    </ul>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="texto-fraco-pequeno">Ninguém encontrado com "{{ busca }}".</p>
+        {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

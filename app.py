@@ -619,6 +619,28 @@ def _pagar_premio_temporada(temporada, campeao):
     return "Transferência do prêmio da temporada enviada — status ainda pendente na AbacatePay.", None
 
 
+@app.route("/admin/usuarios")
+@login_required
+def admin_usuarios():
+    """Consulta rápida do admin do site: acha um jogador por nick, e-mail
+    ou nome do time e vê a chave Pix cadastrada — pra diagnosticar
+    reembolso/prêmio que falhou sem precisar entrar no banco."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+    busca = request.args.get("q", "").strip()
+    usuarios = []
+    if busca:
+        padrao = f"%{busca}%"
+        usuarios = (
+            User.query.outerjoin(Team, User.time_id == Team.id)
+            .filter(db.or_(User.nickname.ilike(padrao), User.email.ilike(padrao), Team.nome.ilike(padrao)))
+            .order_by(User.nickname)
+            .limit(30)
+            .all()
+        )
+    return render_template("admin_usuarios.html", busca=busca, usuarios=usuarios, tipos=pagamentos.TIPOS_CHAVE_PIX)
+
+
 @app.route("/admin/temporadas", methods=["GET", "POST"])
 @login_required
 def admin_temporadas():
@@ -2731,6 +2753,10 @@ def _reembolsar_inscricao(inscricao):
         )
     except pagamentos.PagamentoIndisponivel as erro:
         inscricao.reembolso_status = "falhou"
+        app.logger.error(
+            f"Reembolso falhou (inscrição {inscricao.id}, time {inscricao.time.nome}, "
+            f"chave {capitao.tipo_chave_pix} {capitao.chave_pix!r}, R$ {valor:.2f}): {erro}"
+        )
         return None, f"Reembolso de {inscricao.time.nome}: não deu para transferir agora ({erro})."
 
     inscricao.reembolso_valor = valor
@@ -2788,6 +2814,10 @@ def _pagar_premio_colocacao(torneio, colocacao, colocacoes):
         )
     except pagamentos.PagamentoIndisponivel as erro:
         setattr(torneio, campo_status, "falhou")
+        app.logger.error(
+            f"Prêmio do {rotulo} falhou (torneio {torneio.id}, time {time_obj.nome}, "
+            f"chave {capitao.tipo_chave_pix} {capitao.chave_pix!r}, R$ {valor:.2f}): {erro}"
+        )
         return None, f"Prêmio do {rotulo}: não deu para pagar agora ({erro})."
 
     setattr(torneio, campo_transferencia, transferencia.get("id"))
@@ -2859,6 +2889,10 @@ def _repassar_lucro_federacao(torneio):
         )
     except pagamentos.PagamentoIndisponivel as erro:
         torneio.repasse_federacao_status = "falhou"
+        app.logger.error(
+            f"Repasse falhou (torneio {torneio.id}, federação {torneio.federacao.nome}, "
+            f"chave {dono.tipo_chave_pix} {dono.chave_pix!r}, R$ {valor_repasse:.2f}): {erro}"
+        )
         return None, f"Repasse da federação: não deu para transferir agora ({erro})."
 
     torneio.repasse_federacao_valor = valor_repasse
