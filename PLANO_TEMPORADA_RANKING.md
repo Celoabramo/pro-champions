@@ -69,7 +69,7 @@ Gatilho: o mesmo momento em que hoje as duas Semifinais terminam e o site monta 
 
 ## 5. Onde aparece no site
 
-- **`/ranking`** (página nova): nome/contagem regressiva da temporada atual, barra de progresso "X / 100 times" (deixa claro se o prêmio está garantido ou não), Top 10 em destaque, tabela completa paginada embaixo (todo mundo consegue ver sua posição e quanto falta pro Top 10).
+- **`/ranking`** (página nova): nome/contagem regressiva da temporada atual, barra de progresso "X / 100 times" (deixa claro se o prêmio está garantido ou não), Top 10 em destaque, tabela completa paginada embaixo (todo mundo consegue ver sua posição e quanto falta pro Top 10). Cada linha da tabela mostra, além da posição e dos pontos: **quantidade de títulos** (`colocacao='campeao'`), **quantidade de vices** (`colocacao='vice'`) e **quantidade de campeonatos jogados** na temporada (contagem de campeonatos `elegivel_ranking=True` em que o time teve inscrição paga — não só os que ele venceu). As 3 primeiras colunas vêm direto de somar/contar linhas de `PontuacaoRanking`; a última precisa contar participação em `Inscricao`/`Torneio`, não só linhas do ledger de pontos.
 - **Perfil do time**: extrato "pontos ganhos na Temporada 1", listando cada campeonato e a colocação (usa a `PontuacaoRanking`).
 - **`/ranking/historico`**: temporadas encerradas, campeão de cada uma, se o prêmio saiu ou não. Vale montar isso desde já mesmo simples, porque a Temporada 1 um dia vai fechar.
 - **Chaveamento**: caixinha visual nova pra "Disputa de 3º lugar", separada da progressão principal (ao lado/abaixo da Final).
