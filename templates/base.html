@@ -191,14 +191,26 @@
             // trava o botão de um formulário que na verdade não foi enviado.
             if (evento.defaultPrevented) return;
 
+            // Só em POST. Formulário GET aqui é filtro/busca (campeonatos,
+            // times): é rápido, não cobra nada e não tem risco de clique
+            // duplo — e os filtros de federação são <button name="federacao">,
+            // que o "disabled" abaixo estragaria (ver comentário lá).
+            var metodo = (evento.target.getAttribute("method") || "get").toLowerCase();
+            if (metodo !== "post") return;
+
             var botao = evento.submitter || evento.target.querySelector('button[type="submit"], input[type="submit"]');
             if (!botao || botao.tagName !== "BUTTON" || botao.dataset.carregando) return;
 
             botao.dataset.carregando = "1";
             botao.dataset.htmlOriginal = botao.innerHTML;
             botao.style.width = botao.getBoundingClientRect().width + "px";
-            botao.disabled = true;
             botao.innerHTML = '<span class="spinner-botao" aria-hidden="true"></span>Enviando...';
+
+            // O "disabled" fica pro próximo ciclo de propósito: o navegador
+            // monta os dados do formulário DEPOIS deste evento, e controle
+            // desabilitado não entra nesses dados — desabilitar agora faria
+            // o name/value do próprio botão sumir silenciosamente do envio.
+            setTimeout(function () { botao.disabled = true; }, 0);
         });
 
         // Se a pessoa voltar pro histórico (botão "voltar" do navegador) e o
