@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}Federações — administração — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    <h1>Federações</h1>
+    <p class="perfil-email">Fatia do lucro de cada campeonato que vai pra federação (o resto fica com a plataforma). Padrão 80%. Muda só os repasses daqui pra frente.</p>
+
+    {% for federacao in federacoes %}
+        <div class="perfil-bloco">
+            <div class="cabecalho-time" style="margin-bottom:6px;">
+                {{ macros.logo_federacao(federacao, 'logo-federacao-mini') }}
+                <h2 style="margin:0;">{{ federacao.nome }}</h2>
+            </div>
+            <ul class="lista-membros">
+                <li><strong>Dono:</strong> {{ federacao.dono.nickname }} ({{ federacao.dono.email }})</li>
+                <li><strong>Admins:</strong> {{ federacao.admins|map(attribute='email')|join(', ') or '—' }}</li>
+                <li><strong>Código de convite de admin:</strong> <code style="font-size:16px; letter-spacing:0.08em;">{{ federacao.codigo_convite }}</code></li>
+                <li><strong>Divisão do lucro:</strong> federação {{ federacao.fatia_lucro_pct }}% · plataforma {{ federacao.fatia_plataforma_pct }}%</li>
+            </ul>
+            <form method="POST" class="form-escudo" style="margin-top:12px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="federacao_id" value="{{ federacao.id }}">
+                <label for="fatia-{{ federacao.id }}" class="texto-fraco-pequeno">Fatia da federação (%)</label>
+                <input type="number" id="fatia-{{ federacao.id }}" name="fatia_pct" min="0" max="95" step="1" value="{{ federacao.fatia_lucro_pct }}" class="campo-busca-times" style="max-width:110px;" required>
+                <button type="submit" class="botao-secundario-pequeno">Salvar</button>
+            </form>
+        </div>
+    {% else %}
+        <p class="texto-fraco-pequeno">Nenhuma federação ainda.</p>
+    {% endfor %}
+</section>
+{% endblock %}

@@ -385,7 +385,7 @@
             <div class="perfil-bloco">
                 <h2>Repasse da federação</h2>
                 <p class="texto-fraco-pequeno">
-                    80% do lucro do campeonato (arrecadação menos o prêmio) para o admin da federação.
+                    {{ torneio.federacao.fatia_lucro_pct }}% do lucro do campeonato (arrecadação menos os prêmios) para o admin da federação.
                     {% if torneio.repasse_federacao_valor %}Valor: R$ {{ "%.2f"|format(torneio.repasse_federacao_valor) }}{% endif %}
                 </p>
                 <p style="margin-top:6px;">

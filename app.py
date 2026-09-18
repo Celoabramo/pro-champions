@@ -619,6 +619,32 @@ def _pagar_premio_temporada(temporada, campeao):
     return "Transferência do prêmio da temporada enviada — status ainda pendente na AbacatePay.", None
 
 
+@app.route("/admin/federacoes", methods=["GET", "POST"])
+@login_required
+def admin_federacoes():
+    """Admin do site ajusta a fatia do lucro de cada federação (padrão
+    80/20) e vê o código de convite de admin de cada uma."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+
+    if request.method == "POST":
+        federacao = Federacao.query.get_or_404(request.form.get("federacao_id", type=int))
+        try:
+            pct = int(request.form.get("fatia_pct", ""))
+            if not 0 <= pct <= 95:
+                raise ValueError
+        except ValueError:
+            flash("A fatia da federação precisa ser um número inteiro entre 0 e 95 (%).", "erro")
+            return redirect(url_for("admin_federacoes"))
+        federacao.fatia_lucro = pct / 100
+        db.session.commit()
+        flash(f"{federacao.nome}: federação fica com {pct}% do lucro, plataforma com {100 - pct}%. Vale pros repasses daqui pra frente.", "sucesso")
+        return redirect(url_for("admin_federacoes"))
+
+    federacoes = Federacao.query.order_by(Federacao.nome).all()
+    return render_template("admin_federacoes.html", federacoes=federacoes)
+
+
 @app.route("/admin/usuarios")
 @login_required
 def admin_usuarios():
@@ -1597,7 +1623,7 @@ def criar_campeonato():
             custo_premio_maximo = _custo_premios([valor_premio, valor_premio_vice, valor_premio_terceiro])
             base_para_divisao = arrecadacao_liquida_maxima - custo_premio_maximo
             lucro_plataforma_estimado = (
-                base_para_divisao * (1 - FATIA_FEDERACAO_NO_LUCRO)
+                base_para_divisao * (1 - _fatia_federacao(current_user.federacao))
                 - TAXA_ABACATEPAY_ESTIMADA  # taxa de envio do repasse pra federação
                 - custo_ia_estimado
             )
@@ -2471,7 +2497,7 @@ def _premios_ajustados_para(torneio, num_times):
     #   (arrecadacao - custo_premios) * (1 - fatia) - taxa - ia = lucro_minimo
     # com custo_premios = soma(premio + taxa) — a taxa de envio de cada
     # prêmio entra no custo, então sai do "teto" antes de dividir.
-    base_necessaria = (LUCRO_MINIMO_PLATAFORMA + TAXA_ABACATEPAY_ESTIMADA + custo_ia) / (1 - FATIA_FEDERACAO_NO_LUCRO)
+    base_necessaria = (LUCRO_MINIMO_PLATAFORMA + TAXA_ABACATEPAY_ESTIMADA + custo_ia) / (1 - _fatia_federacao(torneio.federacao))
     teto_total = arrecadacao - base_necessaria - len(premios) * TAXA_ABACATEPAY_ESTIMADA
     total_atual = sum(premios.values())
     if teto_total >= total_atual:
@@ -2654,7 +2680,14 @@ def gerar_chaveamento(torneio_id):
     return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
 
-FATIA_FEDERACAO_NO_LUCRO = 0.8  # os outros 20% ficam parados na conta AbacatePay (é a parte da plataforma)
+FATIA_FEDERACAO_NO_LUCRO = 0.8  # padrão; cada federação pode ter a sua (Federacao.fatia_lucro)
+
+
+def _fatia_federacao(federacao):
+    """Fatia do lucro que vai pra essa federação (o resto é da plataforma)."""
+    if federacao is None or federacao.fatia_lucro is None:
+        return FATIA_FEDERACAO_NO_LUCRO
+    return federacao.fatia_lucro
 
 # Quanto fica retido num reembolso de inscrição: são as DUAS taxas fixas da
 # AbacatePay que a plataforma já pagou ou vai pagar nessa ida e volta — a de
@@ -2866,7 +2899,7 @@ def _repassar_lucro_federacao(torneio):
     # Valor que a federação deve efetivamente RECEBER (líquido). Pra isso
     # acontecer, precisa se enviar valor_repasse + taxa — a taxa desse envio
     # sai da fatia de 20% da plataforma, nunca do valor repassado.
-    valor_repasse = round(lucro * FATIA_FEDERACAO_NO_LUCRO, 2)
+    valor_repasse = round(lucro * _fatia_federacao(torneio.federacao), 2)
     if valor_repasse < VALOR_MINIMO_PIX_ABACATEPAY:
         # Lucro pequeno demais pra virar um Pix (a AbacatePay recusa qualquer
         # envio abaixo do mínimo dela) — não é erro, só não dá pra repassar
@@ -3663,6 +3696,7 @@ def _garantir_colunas_novas():
         # Mercado de transferências.
         ("teams", "recrutando", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("teams", "mensagem_recrutamento", "VARCHAR(160)"),
+        ("federacoes", "fatia_lucro", "DOUBLE PRECISION NOT NULL DEFAULT 0.8"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

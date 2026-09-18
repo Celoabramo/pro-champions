@@ -180,6 +180,20 @@ class Federacao(db.Model):
 
     admins = db.relationship("User", back_populates="federacao", foreign_keys=[User.federacao_id])
 
+    # Fatia do lucro de cada campeonato que vai pra federação (o resto fica
+    # com a plataforma). Padrão 0.8 (80/20); federação parceira pode ter
+    # outro acordo — o admin do site ajusta em /admin/federacoes. Entra na
+    # conta do piso de lucro na criação, no ajuste por bye e no repasse.
+    fatia_lucro = db.Column(db.Float, nullable=False, default=0.8, server_default="0.8")
+
+    @property
+    def fatia_lucro_pct(self):
+        return int(round((self.fatia_lucro if self.fatia_lucro is not None else 0.8) * 100))
+
+    @property
+    def fatia_plataforma_pct(self):
+        return 100 - self.fatia_lucro_pct
+
     def __repr__(self):
         return f"<Federacao {self.nome}>"
 
