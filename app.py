@@ -1623,6 +1623,16 @@ TAMANHOS_VALIDOS = [4, 8, 16, 32]
 # valor). Esses mínimos existem pra nenhum organizador criar sem querer
 # um campeonato pago que nunca vai sobrar dinheiro suficiente pra pagar
 # o prêmio/repasse depois que a taxa é descontada.
+def _modo_teste_pagamento():
+    """A tela de pagamento tem um atalho de "simular pagamento" que só faz
+    sentido no sandbox da AbacatePay. Ele liga por variável de ambiente — e
+    aqui a leitura é explícita porque, com os.environ.get() puro, qualquer
+    texto vale como ligado: ABACATEPAY_MODO_TESTE=0 (tentando DESLIGAR)
+    ligaria o atalho num campeonato que cobra de verdade.
+    """
+    return os.environ.get("ABACATEPAY_MODO_TESTE", "").strip().lower() in ("1", "true", "sim", "on")
+
+
 TAXA_ABACATEPAY_ESTIMADA = 0.80
 VALOR_MINIMO_INSCRICAO_PAGA = 5.00
 VALOR_MINIMO_PIX_ABACATEPAY = 1.00  # mínimo documentado da própria AbacatePay pra qualquer Pix
@@ -2010,7 +2020,7 @@ def pagamento_pix(torneio_id, inscricao_id):
         "pagamento_pix.html",
         inscricao=inscricao,
         torneio=inscricao.torneio,
-        modo_teste=bool(os.environ.get("ABACATEPAY_MODO_TESTE")),
+        modo_teste=_modo_teste_pagamento(),
         pix_vencido=bool(inscricao.pix_expira_em and inscricao.pix_expira_em <= datetime.utcnow()),
     )
 
@@ -2061,7 +2071,7 @@ def verificar_pagamento(torneio_id, inscricao_id):
 def simular_pagamento_pix(torneio_id, inscricao_id):
     """Só existe com ABACATEPAY_MODO_TESTE=1 — chama o simulate-payment da AbacatePay
     (sandbox) para testar o fluxo inteiro sem precisar pagar um Pix de verdade."""
-    if not os.environ.get("ABACATEPAY_MODO_TESTE"):
+    if not _modo_teste_pagamento():
         abort(404)
 
     inscricao = Inscricao.query.get_or_404(inscricao_id)
