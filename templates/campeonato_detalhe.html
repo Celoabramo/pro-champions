@@ -434,6 +434,24 @@
     {% endif %}
 
     {% if current_user.is_authenticated %}
+        {# O prêmio e o reembolso caem na chave Pix do capitão. Sem ela
+           cadastrada, o pagamento falha lá na frente, quando já não dá pra
+           resolver no calor do campeonato — então avisa aqui, antes. #}
+        {% if current_user.time and current_user.time.capitao_id == current_user.id
+              and not current_user.chave_pix
+              and (torneio.total_premios > 0 or torneio.valor_inscricao > 0) %}
+            <div class="aviso-pix">
+                <strong>Cadastre sua chave Pix</strong>
+                <span>
+                    Você é o capitão do {{ current_user.time.nome }}. É na sua chave Pix que cai
+                    {% if torneio.total_premios > 0 %}o prêmio, se o time for campeão,{% endif %}
+                    {%- if torneio.valor_inscricao > 0 %} e o reembolso, se a inscrição precisar ser devolvida{% endif %}.
+                    Sem ela cadastrada, o pagamento não sai.
+                </span>
+                <a href="{{ url_for('perfil_pix') }}" class="botao-secundario-pequeno">Cadastrar agora</a>
+            </div>
+        {% endif %}
+
         {% if time_ja_inscrito %}
             <p class="texto-fraco-pequeno" style="margin-top:16px;">Seu time já está inscrito nesse campeonato.</p>
         {% elif inscricao_pendente %}

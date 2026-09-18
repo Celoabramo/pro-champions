@@ -941,6 +941,21 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 .preferencias-colapsavel.aberto { grid-template-rows: 1fr; }
 .preferencias-colapsavel-miolo { overflow: hidden; }
 .texto-aviso { color: var(--texto-fraco); line-height: 1.6; margin: 16px 0 28px; font-size: 15px; }
+
+.aviso-pix {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 20px;
+    padding: 14px 16px;
+    border: 1px solid rgba(232, 185, 35, 0.5);
+    border-left: 3px solid var(--dourado);
+    border-radius: var(--raio);
+    background: rgba(232, 185, 35, 0.08);
+}
+.aviso-pix strong { color: var(--dourado); font-size: 14px; }
+.aviso-pix span { color: var(--texto-fraco); font-size: 13.5px; line-height: 1.55; }
 .form-confirmacao { display: flex; gap: 12px; }
 
 .link-excluir { color: var(--texto-fraco); font-size: 13px; transition: color 0.15s; }
