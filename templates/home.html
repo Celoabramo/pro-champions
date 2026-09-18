@@ -27,7 +27,10 @@
 
 {% if not current_user.is_authenticated %}
     {% if nomes_marquee %}
-        <section class="faixa-marquee reveal">
+        <!-- Sem "reveal" aqui de propósito: essa faixa usa transform pra
+             ocupar a largura inteira da tela, e o efeito de revelar
+             sobrescreveria esse transform, jogando ela pra fora do lado. -->
+        <section class="faixa-marquee">
             <div class="faixa-listrada"></div>
             <div class="marquee-linha">
                 <div class="marquee-trilho">
