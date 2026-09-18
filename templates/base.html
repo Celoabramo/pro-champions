@@ -4,6 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block titulo %}Pro Champions{% endblock %}</title>
+    <meta name="description" content="{% block descricao_meta %}Campeonatos de Pro Clubs com inscrição paga, premiação real e resultado validado por IA.{% endblock %}">
+
+    {# Sem isso, quem compartilha um link do site (WhatsApp, Instagram, etc.)
+       cai no favicon como imagem de prévia — e como o favicon tem fundo
+       transparente, o app de mensagem preenche esse fundo com branco, o
+       que fica feio no tema escuro do site. og:image/twitter:image apontam
+       pra uma imagem própria (fundo escuro com o troféu), então a prévia
+       usa ela em vez do favicon. _scheme="https" garante link absoluto em
+       https mesmo com o proxy do Railway não repassando o esquema original. #}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Pro Champions">
+    <meta property="og:title" content="{{ self.titulo() }}">
+    <meta property="og:description" content="{{ self.descricao_meta() }}">
+    <meta property="og:url" content="{{ request.url|replace('http://', 'https://', 1) }}">
+    <meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True, _scheme='https') }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ self.titulo() }}">
+    <meta name="twitter:description" content="{{ self.descricao_meta() }}">
+    <meta name="twitter:image" content="{{ url_for('static', filename='og-image.png', _external=True, _scheme='https') }}">
+
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="any">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
