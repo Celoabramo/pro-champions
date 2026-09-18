@@ -33,6 +33,69 @@ JOGOS = {
 JOGO_PADRAO = "fc26"
 
 
+# Posições e esquemas táticos (ver PLANO_ESCALACAO_POSICOES.md). Códigos
+# iguais aos do FC 26; rótulo curto e nome em português pra tela. Cada
+# esquema é uma lista de linhas, da defesa pro ataque (o goleiro é
+# implícito e fica sempre na linha de trás). Um slot é "CÓDIGO+índice"
+# (ex.: "CB1", "CB2") — é o que fica gravado em User.posicao_escalada.
+POSICOES = {
+    "GK": ("GOL", "Goleiro"),
+    "CB": ("ZAG", "Zagueiro"),
+    "LB": ("LE", "Lateral esquerdo"),
+    "RB": ("LD", "Lateral direito"),
+    "LWB": ("ALE", "Ala esquerdo"),
+    "RWB": ("ALD", "Ala direito"),
+    "CDM": ("VOL", "Volante"),
+    "CM": ("MC", "Meio-campo"),
+    "CAM": ("MEI", "Meia atacante"),
+    "LM": ("ME", "Meia esquerda"),
+    "RM": ("MD", "Meia direita"),
+    "LW": ("PE", "Ponta esquerda"),
+    "RW": ("PD", "Ponta direita"),
+    "CF": ("SA", "Segundo atacante"),
+    "ST": ("ATA", "Atacante"),
+}
+
+FORMACOES = {
+    "3-3-4": [["CB", "CB", "CB"], ["CM", "CM", "CM"], ["LW", "ST", "ST", "RW"]],
+    "3-4-3": [["CB", "CB", "CB"], ["LM", "CM", "CM", "RM"], ["LW", "ST", "RW"]],
+    "3-5-2": [["CB", "CB", "CB"], ["LM", "CDM", "CDM", "RM"], ["CAM"], ["ST", "ST"]],
+    "4-1-2-1-2": [["LB", "CB", "CB", "RB"], ["CDM"], ["LM", "RM"], ["CAM"], ["ST", "ST"]],
+    "4-1-4-1": [["LB", "CB", "CB", "RB"], ["CDM"], ["LM", "CM", "CM", "RM"], ["ST"]],
+    "4-2-2-2": [["LB", "CB", "CB", "RB"], ["CDM", "CDM"], ["CAM", "CAM"], ["ST", "ST"]],
+    "4-2-3-1": [["LB", "CB", "CB", "RB"], ["CDM", "CDM"], ["LM", "CAM", "RM"], ["ST"]],
+    "4-2-4": [["LB", "CB", "CB", "RB"], ["CM", "CM"], ["LW", "ST", "ST", "RW"]],
+    "4-3-2-1": [["LB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["CF", "CF"], ["ST"]],
+    "4-3-3": [["LB", "CB", "CB", "RB"], ["CM", "CM", "CM"], ["LW", "ST", "RW"]],
+    "4-4-2": [["LB", "CB", "CB", "RB"], ["LM", "CM", "CM", "RM"], ["ST", "ST"]],
+    "4-5-1": [["LB", "CB", "CB", "RB"], ["LM", "CM", "CAM", "CM", "RM"], ["ST"]],
+    "5-2-1-2": [["LWB", "CB", "CB", "CB", "RWB"], ["CM", "CM"], ["CAM"], ["ST", "ST"]],
+    "5-3-2": [["LWB", "CB", "CB", "CB", "RWB"], ["CM", "CM", "CM"], ["ST", "ST"]],
+    "5-4-1": [["LWB", "CB", "CB", "CB", "RWB"], ["LM", "CM", "CM", "RM"], ["ST"]],
+}
+
+
+def slots_da_formacao(formacao):
+    """Linhas de slots (da defesa pro ataque, goleiro na primeira linha),
+    cada slot como (chave, código). Ex.: [("GK1","GK")], [("LB1","LB"),
+    ("CB1","CB"),("CB2","CB"),("RB1","RB")], ... Esquema desconhecido
+    (time antigo com valor fora da lista) cai pro 4-4-2."""
+    linhas = FORMACOES.get(formacao) or FORMACOES["4-4-2"]
+    contador = {}
+    resultado = [[("GK1", "GK")]]
+    for linha in linhas:
+        slots = []
+        for codigo in linha:
+            contador[codigo] = contador.get(codigo, 0) + 1
+            slots.append((f"{codigo}{contador[codigo]}", codigo))
+        resultado.append(slots)
+    return resultado
+
+
+def chaves_da_formacao(formacao):
+    return [chave for linha in slots_da_formacao(formacao) for chave, _ in linha]
+
+
 # XP e nível (ver PLANO_XP_NIVEL.md). XP = reais ganhos em prêmio: cada real
 # de prêmio vira 1 XP pro time e pra cada jogador do elenco na hora. Só se
 # guarda xp_total; o nível é calculado daqui, assim dá pra recalibrar a
@@ -154,6 +217,19 @@ class User(UserMixin, ComXP, db.Model):
 
     # XP de carreira do jogador — segue a pessoa quando ela troca de time.
     xp_total = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+
+    # Escalação (ver PLANO_ESCALACAO_POSICOES.md). posicao_preferida é o
+    # código da posição que o jogador declara gostar (ex.: "ST"), livre e
+    # independente de time. posicao_escalada é o slot que ele ocupa no
+    # esquema do time atual (ex.: "CB2") — um slot por jogador, um jogador
+    # por slot dentro do time; zera quando ele sai do time ou o esquema
+    # muda e o slot deixa de existir.
+    posicao_preferida = db.Column(db.String(4), nullable=True)
+    posicao_escalada = db.Column(db.String(6), nullable=True)
+
+    @property
+    def rotulo_posicao_preferida(self):
+        return POSICOES.get(self.posicao_preferida, (None, None))[0]
 
     def __repr__(self):
         return f"<User {self.nickname}>"
@@ -431,6 +507,31 @@ class Team(ComXP, db.Model):
     # pela página pública do time — ver PedidoEntrada.
     recrutando = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     mensagem_recrutamento = db.Column(db.String(160), nullable=True)
+
+    @property
+    def escalacao(self):
+        """Linhas do esquema com quem ocupa cada slot: [[(chave, código,
+        membro_ou_None), ...], ...] da defesa (goleiro) pro ataque."""
+        por_slot = {m.posicao_escalada: m for m in self.membros if m.posicao_escalada}
+        return [
+            [(chave, codigo, por_slot.get(chave)) for chave, codigo in linha]
+            for linha in slots_da_formacao(self.formacao)
+        ]
+
+    @property
+    def slots_vagos(self):
+        """[(chave, código)] dos slots do esquema sem ninguém."""
+        return [(chave, codigo) for linha in self.escalacao for chave, codigo, membro in linha if membro is None]
+
+    @property
+    def posicoes_vagas(self):
+        """Rótulos curtos das posições em aberto, sem repetir (ex.: ["LE", "ATA"])."""
+        vistos = []
+        for _, codigo in self.slots_vagos:
+            rotulo = POSICOES[codigo][0]
+            if rotulo not in vistos:
+                vistos.append(rotulo)
+        return vistos
 
     capitao_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     capitao = db.relationship("User", foreign_keys=[capitao_id])

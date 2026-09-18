@@ -18,6 +18,36 @@
     {% endif %}
 {% endmacro %}
 
+{% macro campo_escalacao(time, posicoes, destacar_id=None) %}
+    {# Campinho do esquema do time com quem ocupa cada slot. Linhas vêm da
+       defesa pro ataque em time.escalacao; na tela o ataque fica em cima. #}
+    <div class="campo campo-escalacao">
+        <svg class="linhas-campo" viewBox="0 0 300 400" preserveAspectRatio="none">
+            <rect x="8" y="8" width="284" height="384" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <line x1="8" y1="200" x2="292" y2="200" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <circle cx="150" cy="200" r="42" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <circle cx="150" cy="200" r="2.5" fill="rgba(255,255,255,0.45)"/>
+            <rect x="65" y="8" width="170" height="65" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <rect x="110" y="8" width="80" height="26" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <path d="M 112 73 A 38 38 0 0 0 188 73" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <rect x="65" y="327" width="170" height="65" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <rect x="110" y="366" width="80" height="26" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <path d="M 112 327 A 38 38 0 0 1 188 327" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+        </svg>
+        {% for linha in time.escalacao|reverse %}
+            <div class="linha-campo">
+                {% for chave, codigo, membro in linha %}
+                    <div class="slot-escalacao {{ 'slot-ocupado' if membro else 'slot-vago' }} {{ 'slot-goleiro' if codigo == 'GK' }} {{ 'slot-meu' if membro and destacar_id and membro.id == destacar_id }}" title="{{ posicoes[codigo][1] }}{% if membro %} — {{ membro.nickname }}{% else %} — vago{% endif %}">
+                        <span class="slot-ponto">{{ posicoes[codigo][0] }}</span>
+                        <span class="slot-nome">{{ membro.nickname if membro else 'vago' }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+    <p class="esquema-label">{{ time.formacao }}</p>
+{% endmacro %}
+
 {% macro bracket_jogo(confronto, torneio, classe_extra='') %}
     {% if confronto %}
         {% set vencedor_id = confronto.vencedor_id if confronto.status == 'validado' else confronto.vencedor_wo_id %}

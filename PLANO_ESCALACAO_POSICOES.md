@@ -1,6 +1,8 @@
 # Plano — Escalação: cada jogador numa posição do esquema tático
 
-Status: **planejado, nada implementado ainda**. Escrito em 2026-09-17 pra ser executado depois, possivelmente por outra sessão/modelo — por isso está detalhado o suficiente pra não depender da conversa que o gerou. **Recomendação: essa é a última peça do roadmap** — ver justificativa na seção 7.
+Status: **implementado em 2026-09-17**. Como ficou de fato (diferenças do plano abaixo): sem tabela nova — o slot ocupado mora em `User.posicao_escalada` (ex.: "CB2") e a preferência em `User.posicao_preferida`; os esquemas e posições estão em `models.FORMACOES` / `models.POSICOES` (códigos do FC 26: GK, CB, LB, RB, LWB, RWB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST, com rótulos em português GOL, ZAG, LE, LD, ALE, ALD, VOL, MC, MEI, ME, MD, PE, PD, SA, ATA). 15 esquemas (os 9 antigos + 4-2-3-1, 4-1-2-1-2, 5-2-1-2, 4-2-2-2, 4-3-2-1, 4-1-4-1), baseados nas formações base do FC 26 — as 45 variantes do jogo ("(2)", "Wide", "Holding"...) ficaram de fora de propósito. Jogador escolhe o slot num select em "Meu time" (um por vez, slot ocupado é recusado); capitão tira qualquer um; trocar o esquema manda pra reserva quem estava em slot que deixou de existir; sair/entrar no time zera o slot. Página pública mostra o campinho com nomes e "Posições em aberto"; time recrutando mostra "Procurando: LE, ATA" no diretório e na página.
+
+As seções abaixo são o plano original, mantidas como referência.
 
 ## 1. O que existe hoje
 

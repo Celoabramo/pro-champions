@@ -45,41 +45,48 @@
             <h2>Membros ({{ usuario.time.membros|length }})</h2>
             <ul class="lista-membros">
                 {% for membro in usuario.time.membros %}
-                    <li>{{ membro.nickname }}{% if membro.id == usuario.time.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+                    <li style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span>{{ membro.nickname }}{% if membro.id == usuario.time.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</span>
+                        {% if membro.posicao_escalada %}<span class="chip-geracao" style="margin:0;">{{ POSICOES[membro.posicao_escalada.rstrip('0123456789')][0] }}</span>{% else %}<span class="texto-fraco-pequeno">reserva</span>{% endif %}
+                        {% if membro.posicao_preferida %}<span class="texto-fraco-pequeno">prefere {{ membro.rotulo_posicao_preferida }}</span>{% endif %}
+                        {% if usuario.id == usuario.time.capitao_id and membro.posicao_escalada and membro.id != usuario.id %}
+                            <form method="POST" action="{{ url_for('tirar_da_escalacao', membro_id=membro.id) }}" style="margin-left:auto;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="botao-secundario-pequeno">Tirar da escalação</button>
+                            </form>
+                        {% endif %}
+                    </li>
                 {% endfor %}
             </ul>
         </div>
 
         <div class="perfil-bloco">
-            <h2>Esquema tático</h2>
-            {% set linhas = usuario.time.formacao.split('-') %}
-            <div class="campo">
-                <svg class="linhas-campo" viewBox="0 0 300 400" preserveAspectRatio="none">
-                    <rect x="8" y="8" width="284" height="384" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <line x1="8" y1="200" x2="292" y2="200" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <circle cx="150" cy="200" r="42" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <circle cx="150" cy="200" r="2.5" fill="rgba(255,255,255,0.45)"/>
-                    <rect x="65" y="8" width="170" height="65" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <rect x="110" y="8" width="80" height="26" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <path d="M 112 73 A 38 38 0 0 0 188 73" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <rect x="65" y="327" width="170" height="65" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <rect x="110" y="366" width="80" height="26" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                    <path d="M 112 327 A 38 38 0 0 1 188 327" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-                </svg>
-                <div class="linha-campo">
-                    {% for _ in range(linhas[2]|int) %}<span class="jogador-ponto"></span>{% endfor %}
-                </div>
-                <div class="linha-campo">
-                    {% for _ in range(linhas[1]|int) %}<span class="jogador-ponto"></span>{% endfor %}
-                </div>
-                <div class="linha-campo">
-                    {% for _ in range(linhas[0]|int) %}<span class="jogador-ponto"></span>{% endfor %}
-                </div>
-                <div class="linha-campo linha-goleiro">
-                    <span class="jogador-ponto goleiro">G</span>
-                </div>
+            <h2>Esquema tático e escalação</h2>
+            {{ macros.campo_escalacao(usuario.time, POSICOES, usuario.id) }}
+            {% set vagos = usuario.time.slots_vagos %}
+            <div class="escalacao-controles">
+                <form method="POST" action="{{ url_for('escolher_posicao') }}" class="form-escudo">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label for="slot" class="texto-fraco-pequeno">Minha posição:</label>
+                    <select name="slot" id="slot" class="campo-busca-times" style="max-width:260px;">
+                        <option value="">Reserva (fora da escalação)</option>
+                        {% for chave, codigo in vagos %}
+                            <option value="{{ chave }}">{{ POSICOES[codigo][0] }} — {{ POSICOES[codigo][1] }}</option>
+                        {% endfor %}
+                        {% if usuario.posicao_escalada %}
+                            {% set cod_atual = usuario.posicao_escalada.rstrip('0123456789') %}
+                            <option value="{{ usuario.posicao_escalada }}" selected>{{ POSICOES[cod_atual][0] }} — {{ POSICOES[cod_atual][1] }} (atual)</option>
+                        {% endif %}
+                    </select>
+                    <button type="submit" class="botao-secundario-pequeno">Salvar posição</button>
+                </form>
+                {% if vagos %}
+                    <p class="texto-fraco-pequeno" style="margin-top:8px;">Posições em aberto: {{ usuario.time.posicoes_vagas|join(', ') }}. Uma posição só pode ter um jogador; quem não está no campinho é reserva.</p>
+                {% else %}
+                    <p class="texto-fraco-pequeno" style="margin-top:8px;">Escalação completa — quem entrar agora fica como reserva.</p>
+                {% endif %}
             </div>
-            <p class="esquema-label">{{ usuario.time.formacao }}</p>
+            </div>
 
             {% if usuario.id == usuario.time.capitao_id %}
                 <form method="POST" action="{{ url_for('atualizar_formacao') }}" class="form-formacao">
@@ -116,7 +123,7 @@
                     <ul class="lista-membros">
                         {% for pedido in pedidos_recebidos %}
                             <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                                <span><strong>{{ pedido.usuario.nickname }}</strong> <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + pedido.usuario.faixa_nivel if pedido.usuario.faixa_nivel }}">Nv {{ pedido.usuario.nivel }}</span></span>
+                                <span><strong>{{ pedido.usuario.nickname }}</strong> <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + pedido.usuario.faixa_nivel if pedido.usuario.faixa_nivel }}">Nv {{ pedido.usuario.nivel }}</span>{% if pedido.usuario.posicao_preferida %} <span class="chip-geracao" style="margin:0;">{{ pedido.usuario.rotulo_posicao_preferida }}</span>{% endif %}</span>
                                 {% if pedido.mensagem %}<span class="texto-fraco-pequeno">“{{ pedido.mensagem }}”</span>{% endif %}
                                 <span style="margin-left:auto; display:inline-flex; gap:6px;">
                                     <form method="POST" action="{{ url_for('responder_pedido_entrada', pedido_id=pedido.id, resposta='aceitar') }}">

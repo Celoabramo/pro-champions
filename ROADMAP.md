@@ -1,6 +1,6 @@
 # Roadmap Pro Champions — visão geral e ordem recomendada
 
-Status: itens 1 a 5 implementados em 2026-09-17; só o 6 (escalação/posições) ainda está planejado. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
+Status: **os 6 itens implementados em 2026-09-17.** Este arquivo fica como histórico do que foi feito e por quê. Este arquivo é o ponto de entrada — se você (Claude, ou outra sessão) for executar algo desse roadmap, comece por aqui. Escrito em 2026-09-17.
 
 Cada item abaixo tem uma descrição rápida; os três maiores têm plano detalhado em arquivo separado. A ordem é a recomendada e tem uma razão específica: **cada peça deixa a próxima mais valiosa ou mais barata de construir** — não é só "o mais fácil primeiro".
 
@@ -21,7 +21,7 @@ Progressão de carreira (não confundir com o ranking da temporada, que reseta):
 ### 5. Mercado de transferências — ✅ feito (2026-09-17)
 Capitão marca o time como "recrutando" (+ mensagem); jogador manda pedido de entrada (notificação pro capitão, reaproveitando o sistema de `Notificacao` que já existe); capitão aceita ou recusa; entrada usa a mesma trava de hoje (1 time por jogador, mesma lógica de `entrar_time`/`sair_time`). Não inventa regra nova de posse de time. Com o item 4 pronto, quem for recrutar já vê o nível do jogador antes de chamar — não decide às cegas.
 
-### 6. Escalação e posições — ver [PLANO_ESCALACAO_POSICOES.md](PLANO_ESCALACAO_POSICOES.md)
+### 6. Escalação e posições — ✅ feito (2026-09-17) — ver [PLANO_ESCALACAO_POSICOES.md](PLANO_ESCALACAO_POSICOES.md)
 Cada jogador ocupa um slot específico do esquema tático do time (`Team.formacao`), um slot só pode ter 1 jogador por vez. Maior peça de engenharia do roadmap (tabela nova, tela de escalação clicável). **Só compensa depois do item 5 existir**: o valor real é o time conseguir anunciar a vaga exata que falta ("procurando Lateral Esquerdo") em vez de "recrutando" genérico.
 
 ## Fora deste roadmap por enquanto

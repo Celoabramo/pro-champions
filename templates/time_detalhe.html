@@ -24,6 +24,7 @@
         <div class="perfil-bloco" style="border-left-color: var(--acento);">
             <h2>Recrutando <span class="selo-status selo-status-aberto" style="margin-left:8px;">Vaga aberta</span></h2>
             {% if time_obj.mensagem_recrutamento %}<p style="margin:0 0 10px;">“{{ time_obj.mensagem_recrutamento }}”</p>{% endif %}
+            {% if time_obj.posicoes_vagas %}<p class="texto-fraco-pequeno" style="margin:0 0 10px;">Procurando: <strong>{{ time_obj.posicoes_vagas|join(', ') }}</strong></p>{% endif %}
             {% if not current_user.is_authenticated %}
                 <p class="texto-fraco-pequeno"><a href="{{ url_for('login') }}" style="color: var(--acento); font-weight:600;">Entre</a> na sua conta pra pedir uma vaga nesse time.</p>
             {% elif current_user.time_id == time_obj.id %}
@@ -56,10 +57,18 @@
     {% endif %}
 
     <div class="perfil-bloco">
+        <h2>Escalação</h2>
+        {{ macros.campo_escalacao(time_obj, POSICOES) }}
+        {% if time_obj.posicoes_vagas %}
+            <p class="texto-fraco-pequeno" style="margin-top:6px;">Posições em aberto: <strong>{{ time_obj.posicoes_vagas|join(', ') }}</strong></p>
+        {% endif %}
+    </div>
+
+    <div class="perfil-bloco">
         <h2>Elenco ({{ time_obj.membros|length }})</h2>
         <ul class="lista-membros">
             {% for membro in time_obj.membros %}
-                <li>{{ membro.nickname }} <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + membro.faixa_nivel if membro.faixa_nivel }}" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+                <li>{{ membro.nickname }} <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + membro.faixa_nivel if membro.faixa_nivel }}" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.posicao_escalada %} <span class="chip-geracao" style="margin:0;">{{ POSICOES[membro.posicao_escalada.rstrip('0123456789')][0] }}</span>{% endif %}{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
             {% endfor %}
         </ul>
     </div>

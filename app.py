@@ -39,7 +39,7 @@ from werkzeug.utils import secure_filename
 from models import (
     db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
     Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO, XP_DESTAQUE,
-    PedidoEntrada,
+    PedidoEntrada, POSICOES, FORMACOES, chaves_da_formacao,
 )
 import email_util
 import pagamentos
@@ -215,6 +215,11 @@ def notificar_federacao(torneio, tipo, mensagem, confronto=None):
     """Manda a notificação para todos os admins da federação dona do campeonato."""
     for admin in torneio.federacao.admins:
         criar_notificacao(admin, tipo, mensagem, torneio=torneio, confronto=confronto)
+
+
+@app.context_processor
+def injetar_posicoes():
+    return dict(POSICOES=POSICOES)
 
 
 @app.context_processor
@@ -954,6 +959,7 @@ def time():
         formacoes=FORMACOES_VALIDAS,
         pedidos_recebidos=pedidos_recebidos,
         meus_pedidos=meus_pedidos,
+        posicoes=POSICOES,
     )
 
 
@@ -1070,6 +1076,7 @@ def responder_pedido_entrada(pedido_id, resposta):
         return redirect(url_for("time"))
 
     jogador.time_id = time_obj.id
+    jogador.posicao_escalada = None
     pedido.status = "aceito"
     # Os outros pedidos pendentes dele perdem o sentido.
     for outro in PedidoEntrada.query.filter_by(usuario_id=jogador.id, status="pendente").all():
@@ -1133,6 +1140,7 @@ def entrar_time():
         return redirect(url_for("time"))
 
     current_user.time_id = time_encontrado.id
+    current_user.posicao_escalada = None
     db.session.commit()
 
     flash(f"Você entrou no time {time_encontrado.nome}!", "sucesso")
@@ -1170,6 +1178,7 @@ def sair_time():
             return redirect(url_for("time"))
 
     current_user.time_id = None
+    current_user.posicao_escalada = None
     db.session.commit()
 
     # Time vazio é desfeito. As inscrições dele saem junto — e as que já
@@ -1234,7 +1243,7 @@ def confirmar_bracadeira(membro_id):
     return render_template("confirmar_bracadeira.html", jogador=novo_capitao)
 
 
-FORMACOES_VALIDAS = ["3-3-4", "3-4-3", "3-5-2", "4-2-4", "4-3-3", "4-4-2", "4-5-1", "5-3-2", "5-4-1"]
+FORMACOES_VALIDAS = list(FORMACOES)
 
 
 @app.route("/time/formacao", methods=["POST"])
@@ -1252,9 +1261,81 @@ def atualizar_formacao():
         return redirect(url_for("time"))
 
     time_atual.formacao = formacao
+    # Slot que não existe mais no esquema novo (ex.: saiu o segundo
+    # atacante) libera o jogador pra reserva — ele escolhe outro depois.
+    validos = set(chaves_da_formacao(formacao))
+    desescalados = []
+    for membro in time_atual.membros:
+        if membro.posicao_escalada and membro.posicao_escalada not in validos:
+            membro.posicao_escalada = None
+            desescalados.append(membro.nickname)
     db.session.commit()
-    flash(f"Esquema tático atualizado para {formacao}.", "sucesso")
+    aviso = f" {', '.join(desescalados)} saiu/saíram da escalação (a posição não existe nesse esquema)." if desescalados else ""
+    flash(f"Esquema tático atualizado para {formacao}.{aviso}", "sucesso")
     return redirect(url_for("time"))
+
+
+@app.route("/time/escalacao", methods=["POST"])
+@login_required
+@limiter.limit("30 per minute")
+def escolher_posicao():
+    """Jogador ocupa um slot vago do esquema do próprio time (ou sai do
+    que ocupa). Um slot por jogador, um jogador por slot."""
+    time_atual = current_user.time
+    if not time_atual:
+        flash("Você precisa estar num time pra escolher posição.", "erro")
+        return redirect(url_for("time"))
+
+    slot = request.form.get("slot", "").strip()
+    if not slot:
+        current_user.posicao_escalada = None
+        db.session.commit()
+        flash("Você saiu da escalação — ficou como reserva.", "sucesso")
+        return redirect(url_for("time"))
+
+    if slot not in chaves_da_formacao(time_atual.formacao):
+        flash("Essa posição não existe no esquema do time.", "erro")
+        return redirect(url_for("time"))
+    ocupante = next((m for m in time_atual.membros if m.posicao_escalada == slot and m.id != current_user.id), None)
+    if ocupante:
+        flash(f"Essa posição já é do {ocupante.nickname}. Escolha outra ou peça pra ele liberar.", "erro")
+        return redirect(url_for("time"))
+
+    current_user.posicao_escalada = slot
+    db.session.commit()
+    codigo = slot.rstrip("0123456789")
+    flash(f"Você agora joga de {POSICOES[codigo][1].lower()} ({POSICOES[codigo][0]}).", "sucesso")
+    return redirect(url_for("time"))
+
+
+@app.route("/time/escalacao/<int:membro_id>/tirar", methods=["POST"])
+@login_required
+def tirar_da_escalacao(membro_id):
+    """Capitão tira um membro do slot (vira reserva)."""
+    time_atual = current_user.time
+    if not time_atual or time_atual.capitao_id != current_user.id:
+        flash("Só o capitão pode mexer na escalação dos outros.", "erro")
+        return redirect(url_for("time"))
+    membro = User.query.get_or_404(membro_id)
+    if membro.time_id != time_atual.id:
+        abort(404)
+    membro.posicao_escalada = None
+    db.session.commit()
+    flash(f"{membro.nickname} saiu da escalação.", "sucesso")
+    return redirect(url_for("time"))
+
+
+@app.route("/perfil/posicao", methods=["POST"])
+@login_required
+def atualizar_posicao_preferida():
+    codigo = request.form.get("posicao_preferida", "").strip()
+    if codigo and codigo not in POSICOES:
+        flash("Posição inválida.", "erro")
+        return redirect(url_for("perfil"))
+    current_user.posicao_preferida = codigo or None
+    db.session.commit()
+    flash("Posição preferida salva." if codigo else "Posição preferida removida.", "sucesso")
+    return redirect(url_for("perfil"))
 
 
 @app.route("/time/escudo", methods=["POST"])
@@ -3697,6 +3778,9 @@ def _garantir_colunas_novas():
         ("teams", "recrutando", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("teams", "mensagem_recrutamento", "VARCHAR(160)"),
         ("federacoes", "fatia_lucro", "DOUBLE PRECISION NOT NULL DEFAULT 0.8"),
+        # Escalação e posições.
+        ("users", "posicao_preferida", "VARCHAR(4)"),
+        ("users", "posicao_escalada", "VARCHAR(6)"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

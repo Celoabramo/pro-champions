@@ -41,7 +41,7 @@
                         </p>
                         {% if time.recrutando %}
                             <p class="card-federacao-meta" style="margin-top:4px;">
-                                <span class="destaque-aberto">Recrutando</span>{% if time.mensagem_recrutamento %} · {{ time.mensagem_recrutamento }}{% endif %}
+                                <span class="destaque-aberto">Recrutando</span>{% if time.posicoes_vagas %} · procurando {{ time.posicoes_vagas|join(', ') }}{% endif %}{% if time.mensagem_recrutamento %} · {{ time.mensagem_recrutamento }}{% endif %}
                             </p>
                         {% endif %}
                     </div>

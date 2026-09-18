@@ -22,6 +22,21 @@
     {% endif %}
 
     <div class="perfil-bloco">
+        <h2>Posição preferida</h2>
+        <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Aparece pro capitão quando você pede vaga num time e no elenco. Não prende você a nada — a escalação de verdade é feita em "Meu time".</p>
+        <form method="POST" action="{{ url_for('atualizar_posicao_preferida') }}" class="form-escudo">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="posicao_preferida" class="campo-busca-times" style="max-width:260px;">
+                <option value="">Sem preferência</option>
+                {% for codigo, (curto, nome) in POSICOES.items() %}
+                    <option value="{{ codigo }}" {% if usuario.posicao_preferida == codigo %}selected{% endif %}>{{ curto }} — {{ nome }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="botao-secundario-pequeno">Salvar</button>
+        </form>
+    </div>
+
+    <div class="perfil-bloco">
         <h2>Time</h2>
         {% if usuario.time %}
             <p>{{ usuario.time.nome }} [{{ usuario.time.tag }}]</p>

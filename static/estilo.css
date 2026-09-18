@@ -2412,3 +2412,29 @@ dialog.popup-imagem img {
 @media (prefers-reduced-motion: reduce) {
     .selo-nivel-lenda, .escudo-faixa-lenda { animation: none; }
 }
+
+/* Escalação: campinho com slots nomeados */
+.campo-escalacao { height: auto; min-height: 340px; padding: 16px 8px; gap: 10px; }
+.slot-escalacao {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    min-width: 52px; text-align: center;
+}
+.slot-ponto {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Oswald", sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+    background: #eef2f5; color: #123a20; border: 2px solid #123a20;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.slot-vago .slot-ponto { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); border-style: dashed; border-color: rgba(255,255,255,0.55); }
+.slot-goleiro .slot-ponto { background: var(--dourado); color: #1a1200; border-color: #1a1200; }
+.slot-goleiro.slot-vago .slot-ponto { background: rgba(232,185,35,0.25); color: rgba(255,255,255,0.8); border-style: dashed; border-color: rgba(232,185,35,0.7); }
+.slot-meu .slot-ponto { background: var(--acento); color: #06120a; border-color: #06120a; box-shadow: 0 0 10px rgba(46,204,113,0.7); }
+.slot-nome { font-size: 11px; color: #eef2f5; max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+.slot-vago .slot-nome { color: rgba(255,255,255,0.55); font-style: italic; }
+.escalacao-controles { margin-top: 12px; }
+@media (max-width: 520px) {
+    .slot-escalacao { min-width: 44px; }
+    .slot-ponto { width: 26px; height: 26px; font-size: 9px; }
+    .slot-nome { font-size: 10px; max-width: 56px; }
+}
