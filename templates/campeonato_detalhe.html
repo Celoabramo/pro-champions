@@ -25,7 +25,19 @@
         {{ torneio.times_inscritos|length }}/{{ torneio.max_times }} times
     </p>
     {% if torneio.descricao %}
-        <p class="descricao-campeonato">{{ torneio.descricao }}</p>
+        {% set descricao_longa = torneio.descricao|length > 220 or torneio.descricao.count('\n') >= 3 %}
+        {% if descricao_longa %}
+            <div class="descricao-campeonato-bloco">
+                <input type="checkbox" id="descricao-expandir-{{ torneio.id }}" class="descricao-toggle-check">
+                <p class="descricao-campeonato descricao-campeonato-clamp">{{ torneio.descricao }}</p>
+                <label for="descricao-expandir-{{ torneio.id }}" class="descricao-ver-mais">
+                    <span class="rotulo-fechado">Ver mais</span>
+                    <span class="rotulo-aberto">Ver menos</span>
+                </label>
+            </div>
+        {% else %}
+            <p class="descricao-campeonato">{{ torneio.descricao }}</p>
+        {% endif %}
     {% endif %}
     {% if torneio.valor_inscricao > 0 %}
         <span class="chip-valor">Inscrição R$ {{ "%.2f"|format(torneio.valor_inscricao) }} por time</span>

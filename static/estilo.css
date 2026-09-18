@@ -1327,7 +1327,34 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
     line-height: 1.6;
     max-width: 60ch;
     margin: 6px 0 0;
+    white-space: pre-line;
 }
+
+/* Descrição longa: corta em ~4 linhas e mostra um botão "Ver mais" — sem
+   isso, uma federação que escreve um texto grande poluía a tela do
+   campeonato com um bloco enorme de texto. Toggle via checkbox (sem JS). */
+.descricao-campeonato-bloco { max-width: 60ch; }
+.descricao-toggle-check { position: absolute; opacity: 0; pointer-events: none; }
+.descricao-campeonato-clamp {
+    max-width: none;
+    max-height: 6.4em;
+    overflow: hidden;
+}
+.descricao-toggle-check:checked ~ .descricao-campeonato-clamp {
+    max-height: none;
+}
+.descricao-ver-mais {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--acento);
+    cursor: pointer;
+}
+.descricao-ver-mais:hover { color: var(--acento-hover); }
+.descricao-ver-mais .rotulo-aberto { display: none; }
+.descricao-toggle-check:checked ~ .descricao-ver-mais .rotulo-fechado { display: none; }
+.descricao-toggle-check:checked ~ .descricao-ver-mais .rotulo-aberto { display: inline; }
 
 .fase-titulo {
     font-size: 13px;
