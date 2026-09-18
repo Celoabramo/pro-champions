@@ -27,7 +27,7 @@
 
 {% if not current_user.is_authenticated %}
     {% if nomes_marquee %}
-        <section class="faixa-marquee">
+        <section class="faixa-marquee reveal">
             <div class="faixa-listrada"></div>
             <div class="marquee-linha">
                 <div class="marquee-trilho">
@@ -41,14 +41,14 @@
     {% endif %}
 
     <section class="bloco-como-funciona">
-        <div class="eyebrow-secao">
+        <div class="eyebrow-secao reveal">
             <span class="rotulo">Como funciona</span>
             <span class="linha-pontilhada"></span>
         </div>
-        <h2 class="titulo-como-funciona">Duas formas de entrar em campo.</h2>
+        <h2 class="titulo-como-funciona reveal">Duas formas de entrar em campo.</h2>
 
         <div class="grid-como-funciona">
-            <div class="card-explicacao">
+            <div class="card-explicacao reveal">
                 <img src="{{ url_for('static', filename='icone-jogador.png') }}" alt="" class="icone-explicacao" aria-hidden="true">
                 <h3>Se você é jogador</h3>
                 <div class="passos-grandes">
@@ -83,7 +83,7 @@
                 </div>
             </div>
 
-            <div class="card-explicacao card-explicacao-organizador">
+            <div class="card-explicacao card-explicacao-organizador reveal">
                 <img src="{{ url_for('static', filename='icone-organizador.png') }}" alt="" class="icone-explicacao" aria-hidden="true">
                 <h3>Se você é organizador</h3>
                 <div class="passos-grandes">
@@ -120,4 +120,25 @@
         </div>
     </section>
 {% endif %}
+{% endblock %}
+{% block script_extra %}
+<script>
+    (function () {
+        var elementos = document.querySelectorAll(".reveal");
+        if (!elementos.length) return;
+        if (!("IntersectionObserver" in window)) {
+            elementos.forEach(function (el) { el.classList.add("reveal-visivel"); });
+            return;
+        }
+        var observador = new IntersectionObserver(function (entradas) {
+            entradas.forEach(function (entrada) {
+                if (entrada.isIntersecting) {
+                    entrada.target.classList.add("reveal-visivel");
+                    observador.unobserve(entrada.target);
+                }
+            });
+        }, { threshold: 0.15 });
+        elementos.forEach(function (el) { observador.observe(el); });
+    })();
+</script>
 {% endblock %}
