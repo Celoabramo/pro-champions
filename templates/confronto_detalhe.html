@@ -234,43 +234,59 @@
     <span class="mira bl" aria-hidden="true"></span>
     <span class="mira br" aria-hidden="true"></span>
 
-    <div class="eyebrow-print"><span class="ponto-pulsante"></span>Print da partida</div>
-    <h2 class="popup-print-titulo">Antes de tirar a foto</h2>
-    <p class="popup-print-sub">O placar é conferido pelos dois prints — do seu time e do adversário. Sem o placar visível e completo, a validação não passa.</p>
+    <div class="popup-print-conteudo" id="popup-print-conteudo">
+        <div class="eyebrow-print"><span class="ponto-pulsante"></span>Print da partida</div>
+        <h2 class="popup-print-titulo">Antes de tirar a foto</h2>
+        <p class="popup-print-sub">O placar é conferido pelos dois prints — do seu time e do adversário. Sem o placar visível e completo, a validação não passa.</p>
 
-    <div class="passos">
-        <div class="passo">
-            <span class="passo-num">1</span>
-            <div class="passo-corpo">
-                <strong>Espere a tela final da partida</strong>
-                <span>A que mostra o placar cheio — não vale print do meio do jogo.</span>
+        <div class="passos">
+            <div class="passo">
+                <span class="passo-num">1</span>
+                <div class="passo-corpo">
+                    <strong>Espere a tela final da partida</strong>
+                    <span>A que mostra o placar cheio — não vale print do meio do jogo.</span>
+                </div>
+            </div>
+            <div class="passo">
+                <span class="passo-num">2</span>
+                <div class="passo-corpo">
+                    <strong>Enquadre a tela toda</strong>
+                    <span>Sem cortar os escudos ou o placar, sem zoom, sem editar.</span>
+                </div>
+            </div>
+            <div class="passo">
+                <span class="passo-num">3</span>
+                <div class="passo-corpo">
+                    <strong>Print nítido</strong>
+                    <span>Direto da tela — nada de foto tremida ou com reflexo.</span>
+                </div>
             </div>
         </div>
-        <div class="passo">
-            <span class="passo-num">2</span>
-            <div class="passo-corpo">
-                <strong>Enquadre a tela toda</strong>
-                <span>Sem cortar os escudos ou o placar, sem zoom, sem editar.</span>
+
+        <form method="POST" action="{{ url_for('enviar_print', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}" enctype="multipart/form-data" id="form-print">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" id="input-print" name="print" accept="image/*" capture="environment" style="display:none;" onchange="enviarPrint()">
+            <div class="acoes">
+                <button type="button" class="botao-secundario" onclick="document.getElementById('popup-print').close()">Cancelar</button>
+                <button type="button" class="botao-principal" onclick="document.getElementById('input-print').click()">Tirar o print</button>
             </div>
-        </div>
-        <div class="passo">
-            <span class="passo-num">3</span>
-            <div class="passo-corpo">
-                <strong>Print nítido</strong>
-                <span>Direto da tela — nada de foto tremida ou com reflexo.</span>
-            </div>
-        </div>
+        </form>
     </div>
 
-    <form method="POST" action="{{ url_for('enviar_print', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}" enctype="multipart/form-data" id="form-print">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="file" id="input-print" name="print" accept="image/*" capture="environment" style="display:none;" onchange="document.getElementById('form-print').submit()">
-        <div class="acoes">
-            <button type="button" class="botao-secundario" onclick="document.getElementById('popup-print').close()">Cancelar</button>
-            <button type="button" class="botao-principal" onclick="document.getElementById('input-print').click()">Tirar o print</button>
-        </div>
-    </form>
+    <div class="carregando-print" id="carregando-print" hidden>
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="">
+        <p>Enviando o print — a IA está conferindo o placar...</p>
+    </div>
 </dialog>
+<script>
+    function enviarPrint() {
+        var input = document.getElementById("input-print");
+        if (!input.files.length) return;
+        document.getElementById("popup-print-conteudo").hidden = true;
+        document.getElementById("carregando-print").hidden = false;
+        document.getElementById("form-print").requestSubmit();
+    }
+</script>
 
 <dialog id="popup-imagem" class="popup-imagem" onclick="if (event.target === this) this.close()">
     <img id="imagem-print-grande" src="" alt="Print enviado">

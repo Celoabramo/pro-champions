@@ -674,6 +674,33 @@ main { max-width: 640px; margin: 0 auto; padding: 48px 24px 80px; }
 .botao-perigo:hover { background: #c94a44; }
 .botao-perigo:active { transform: scale(0.98); }
 
+button:disabled, input[type="submit"]:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Anel girando dentro do próprio botão enquanto o formulário está sendo
+   enviado (Pix, print, gerar chaveamento etc.) — currentColor deixa ele se
+   adaptar sozinho à cor de texto de cada variante de botão (escuro no
+   verde, claro no transparente/vermelho), sem precisar de uma cor por
+   variante. Ver alternarCarregamentoBotao() em base.html. */
+.spinner-botao {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    margin-right: 8px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    opacity: 0.85;
+    vertical-align: -3px;
+    animation: girar-spinner 0.6s linear infinite;
+}
+@keyframes girar-spinner { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .spinner-botao { animation-duration: 1.6s; }
+}
+
 /* ============ Formulários ============ */
 .formulario h1 { margin-bottom: 26px; font-size: 28px; }
 .formulario form { display: flex; flex-direction: column; gap: 4px; }
@@ -1792,8 +1819,37 @@ dialog.popup-print .acoes button,
 .cartao-popup .acoes { flex-direction: column; }
 .cartao-popup .acoes button { width: 100%; }
 
+/* Tela de espera depois que o jogador escolhe o print — some o formulário
+   e mostra o troféu pulsando enquanto o servidor guarda a foto e a IA lê o
+   placar (leva alguns segundos). Ver enviarPrint() em confronto_detalhe.html. */
+.carregando-print {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 36px 10px 18px;
+    text-align: center;
+}
+.carregando-print img {
+    width: 54px;
+    height: 54px;
+    animation: pulsar-trofeu 1.4s ease-in-out infinite;
+    filter: drop-shadow(0 0 12px rgba(46, 204, 113, 0.45));
+}
+.carregando-print p {
+    color: var(--texto-fraco);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 30ch;
+}
+@keyframes pulsar-trofeu {
+    0%, 100% { transform: scale(1); opacity: 0.88; }
+    50% { transform: scale(1.08); opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ponto-pulsante { animation: none; }
+    .carregando-print img { animation: none; }
 }
 
 .formulario select {

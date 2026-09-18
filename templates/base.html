@@ -157,6 +157,43 @@
         }
     </script>
 
+    <script>
+        // Mostra um aviso de "carregando" (spinner + rótulo) no botão que
+        // enviou um formulário, pra ninguém clicar duas vezes achando que
+        // não funcionou enquanto o servidor processa (Pix, print, gerar
+        // chaveamento, etc.). Um listener só, no documento inteiro — não
+        // precisa mexer em cada formulário separado.
+        document.addEventListener("submit", function (evento) {
+            // Se um onsubmit="return confirm(...)" da própria página negou o
+            // envio, o evento já chega aqui com o padrão cancelado — não
+            // trava o botão de um formulário que na verdade não foi enviado.
+            if (evento.defaultPrevented) return;
+
+            var botao = evento.submitter || evento.target.querySelector('button[type="submit"], input[type="submit"]');
+            if (!botao || botao.tagName !== "BUTTON" || botao.dataset.carregando) return;
+
+            botao.dataset.carregando = "1";
+            botao.dataset.htmlOriginal = botao.innerHTML;
+            botao.style.width = botao.getBoundingClientRect().width + "px";
+            botao.disabled = true;
+            botao.innerHTML = '<span class="spinner-botao" aria-hidden="true"></span>Enviando...';
+        });
+
+        // Se a pessoa voltar pro histórico (botão "voltar" do navegador) e o
+        // navegador reaproveitar a página do cache em vez de recarregar do
+        // zero, os botões ficariam travados em "Enviando..." pra sempre —
+        // isso desfaz o estado de carregando nesse caso.
+        window.addEventListener("pageshow", function (evento) {
+            if (!evento.persisted) return;
+            document.querySelectorAll('[data-carregando="1"]').forEach(function (botao) {
+                botao.disabled = false;
+                botao.style.width = "";
+                botao.innerHTML = botao.dataset.htmlOriginal;
+                delete botao.dataset.carregando;
+            });
+        });
+    </script>
+
     <main>
         {% with mensagens = get_flashed_messages(with_categories=true) %}
             {% if mensagens %}
