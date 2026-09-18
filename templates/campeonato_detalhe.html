@@ -448,7 +448,10 @@
 
     {% if eh_organizador %}
         <p style="margin-top:28px;">
-            <a href="{{ url_for('excluir_campeonato', torneio_id=torneio.id) }}" class="link-excluir">Excluir campeonato</a>
+            {% if torneio.status != 'finalizado' %}
+                <a href="{{ url_for('editar_campeonato', torneio_id=torneio.id) }}" class="botao-secundario">Editar campeonato</a>
+            {% endif %}
+            <a href="{{ url_for('excluir_campeonato', torneio_id=torneio.id) }}" class="link-excluir" style="margin-left:14px;">Excluir campeonato</a>
         </p>
     {% endif %}
 </section>

@@ -3137,6 +3137,108 @@ def remover_time_do_campeonato(torneio_id, inscricao_id):
     return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
 
+@app.route("/campeonatos/<int:torneio_id>/editar", methods=["GET", "POST"])
+@login_required
+@limiter.limit("10 per minute", methods=["POST"])
+def editar_campeonato(torneio_id):
+    """Ajusta os dados informativos do campeonato (principalmente remarcar a
+    data). Valor da inscrição, número de chaves, prêmios e formato ficam de
+    fora de propósito: time já pagou por aquelas condições e a conta do
+    lucro/repasse foi fechada na criação — mexer neles depois desencontraria
+    o que foi cobrado do que está escrito na tela.
+    """
+    torneio = Torneio.query.get_or_404(torneio_id)
+
+    if not _pode_administrar_torneio(torneio):
+        flash("Só um admin da federação pode editar o campeonato.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    if torneio.status == "finalizado":
+        flash("Campeonato finalizado não pode mais ser editado.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        if not nome:
+            flash("O nome do campeonato não pode ficar em branco.", "erro")
+            return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        try:
+            data_campeonato = datetime.strptime(request.form["data_campeonato"], "%Y-%m-%d").date()
+        except (KeyError, ValueError):
+            flash("Data do campeonato inválida.", "erro")
+            return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        # Data no passado só barra se ela mudou — senão dava pra travar a
+        # edição do nome de um campeonato que começou ontem.
+        if data_campeonato != torneio.data_campeonato and data_campeonato < date.today():
+            flash("A data do campeonato não pode ser no passado.", "erro")
+            return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        hora_texto = request.form.get("hora_campeonato", "").strip()
+        hora_campeonato = None
+        if hora_texto:
+            try:
+                hora_campeonato = datetime.strptime(hora_texto, "%H:%M").time()
+            except ValueError:
+                flash("Horário do campeonato inválido.", "erro")
+                return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        geracao = request.form.get("geracao", torneio.geracao)
+        if geracao not in ("antiga", "nova"):
+            flash("Geração do campeonato inválida.", "erro")
+            return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        jogo = request.form.get("jogo", torneio.jogo)
+        if jogo not in JOGOS:
+            flash("Jogo do campeonato inválido.", "erro")
+            return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        senha = request.form.get("senha", "")
+        if not check_password_hash(current_user.senha_hash, senha):
+            flash("Senha incorreta. Nenhuma alteração foi salva.", "erro")
+            return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
+        remarcado = (
+            data_campeonato != torneio.data_campeonato
+            or hora_campeonato != torneio.hora_campeonato
+        )
+
+        torneio.nome = nome
+        torneio.descricao = request.form.get("descricao", "").strip()
+        torneio.data_campeonato = data_campeonato
+        torneio.hora_campeonato = hora_campeonato
+        torneio.geracao = geracao
+        torneio.jogo = jogo
+
+        # Quem já pagou a inscrição precisa ficar sabendo que a data mudou —
+        # é a informação que fez o time se inscrever.
+        if remarcado:
+            quando = data_campeonato.strftime("%d/%m/%Y")
+            if hora_campeonato:
+                quando += f" às {hora_campeonato.strftime('%H:%M')}"
+            for time_inscrito in torneio.times_inscritos:
+                if time_inscrito.capitao:
+                    criar_notificacao(
+                        time_inscrito.capitao,
+                        "campeonato_remarcado",
+                        f"{torneio.nome} foi remarcado para {quando}.",
+                        torneio=torneio,
+                    )
+
+        db.session.commit()
+
+        flash("Campeonato atualizado." + (" Os capitães inscritos foram avisados da nova data." if remarcado else ""), "sucesso")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio.id))
+
+    return render_template(
+        "editar_campeonato.html",
+        torneio=torneio,
+        hoje=date.today().isoformat(),
+        jogos=JOGOS,
+    )
+
+
 @app.route("/campeonatos/<int:torneio_id>/excluir", methods=["GET", "POST"])
 @login_required
 @limiter.limit("10 per minute", methods=["POST"])

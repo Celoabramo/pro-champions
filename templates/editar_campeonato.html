@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block titulo %}Editar campeonato — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="formulario">
+    <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}" class="link-voltar">← Voltar para o campeonato</a>
+    <h1>Editar campeonato</h1>
+
+    {% if torneio.times_inscritos %}
+        <p class="texto-aviso">
+            Esse campeonato já tem {{ torneio.times_inscritos|length }} time(s) inscrito(s). Se você mudar a
+            data ou o horário, os capitães recebem uma notificação avisando da mudança.
+        </p>
+    {% endif %}
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="nome">Nome do campeonato</label>
+        <input type="text" id="nome" name="nome" maxlength="80" value="{{ torneio.nome }}" required>
+
+        <label for="data_campeonato">Data do campeonato</label>
+        <input type="date" id="data_campeonato" name="data_campeonato" min="{{ hoje }}"
+               value="{{ torneio.data_campeonato.isoformat() if torneio.data_campeonato }}" required>
+
+        <label for="hora_campeonato">Horário (opcional)</label>
+        <input type="time" id="hora_campeonato" name="hora_campeonato"
+               value="{{ torneio.hora_campeonato.strftime('%H:%M') if torneio.hora_campeonato }}">
+
+        <label for="descricao">Descrição (regras, formato, o que quiser explicar)</label>
+        <textarea id="descricao" name="descricao" rows="4">{{ torneio.descricao or '' }}</textarea>
+
+        <label>Jogo</label>
+        <div class="opcoes-formato">
+            {% for codigo, nome in jogos.items() %}
+                <label class="opcao-formato">
+                    <input type="radio" name="jogo" value="{{ codigo }}" {% if codigo == torneio.jogo %}checked{% endif %}>
+                    <div>
+                        <strong>{{ nome }}</strong>
+                        <span class="texto-fraco-pequeno">Campeonato disputado no {{ nome }}.</span>
+                    </div>
+                </label>
+            {% endfor %}
+        </div>
+
+        <label>Geração</label>
+        <div class="opcoes-formato">
+            <label class="opcao-formato">
+                <input type="radio" name="geracao" value="nova" {% if torneio.geracao == 'nova' %}checked{% endif %}>
+                <div>
+                    <strong>Nova geração</strong>
+                    <span class="texto-fraco-pequeno">Campeonato jogado na nova geração de consoles.</span>
+                </div>
+            </label>
+            <label class="opcao-formato">
+                <input type="radio" name="geracao" value="antiga" {% if torneio.geracao == 'antiga' %}checked{% endif %}>
+                <div>
+                    <strong>Antiga geração</strong>
+                    <span class="texto-fraco-pequeno">Campeonato jogado na geração antiga de consoles.</span>
+                </div>
+            </label>
+        </div>
+
+        <label for="senha">Sua senha (para confirmar a alteração)</label>
+        <input type="password" id="senha" name="senha" required autocomplete="current-password">
+
+        <button type="submit" class="botao-principal">Salvar alterações</button>
+    </form>
+
+    <p class="texto-fraco-pequeno" style="margin-top:16px;">
+        Valor da inscrição, número de chaves, prêmios e formato não são editáveis: os times se inscreveram
+        (e pagaram) com base nessas condições. Se precisar mudar alguma delas, exclua o campeonato e crie
+        outro — lembrando de reembolsar quem já pagou.
+    </p>
+</section>
+{% endblock %}
