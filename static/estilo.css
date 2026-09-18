@@ -2394,6 +2394,21 @@ dialog.popup-imagem img {
 
 .rodape-link:hover { color: var(--acento); }
 
+.rodape-redes { display: flex; gap: 10px; margin-top: 14px; }
+.rodape-rede {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--fundo);
+    border: 1px solid var(--linha);
+    color: var(--texto-fraco);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.rodape-rede:hover { color: var(--acento); border-color: var(--acento); background: var(--acento-fraco); }
+
 .rodape-copyright {
     max-width: 1080px;
     margin: 28px auto 0;
