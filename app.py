@@ -27,6 +27,7 @@ import click
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, request, flash, abort, jsonify, send_from_directory
 from sqlalchemy import case
+from sqlalchemy.orm import joinedload, selectinload
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
     login_required, current_user
@@ -1543,7 +1544,11 @@ def times():
     """
     busca = request.args.get("q", "").strip()
     so_recrutando = request.args.get("recrutando") == "1"
-    consulta = Team.query
+    # A tela usa time.capitao e time.membros pra cada card — sem isso, cada
+    # um dos times dispara duas consultas extras (capitão + elenco), o que
+    # no banco remoto de produção (Supabase) fazia essa tela ficar lenta
+    # com N times: 2N+1 idas e vindas ao banco em vez de 3.
+    consulta = Team.query.options(joinedload(Team.capitao), selectinload(Team.membros))
     if busca:
         padrao = f"%{busca}%"
         consulta = consulta.filter(db.or_(Team.nome.ilike(padrao), Team.tag.ilike(padrao)))
