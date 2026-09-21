@@ -153,8 +153,8 @@
 
         var cena = new THREE.Scene();
         var camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-        camera.position.set(0, 0.9, 11);
-        camera.lookAt(0, 0.5, 0);
+        camera.position.set(0, 1.0, 11.5);
+        camera.lookAt(0, 0.35, 0);
 
         // "Anodizado verde": o metal preto reflete um ambiente escuro com
         // faixas verdes. Sem arquivo externo — o cubemap é desenhado em
@@ -186,38 +186,109 @@
             side: THREE.DoubleSide,
         });
 
+        // Detalhes em verde escuro fosco (anéis, botões das alças, gravação).
+        var materialDetalhe = new THREE.MeshStandardMaterial({
+            color: 0x123d27, metalness: 0.35, roughness: 0.55,
+            emissive: 0x0e3a20, emissiveIntensity: 0.35,
+        });
+        var materialPedestal = new THREE.MeshStandardMaterial({ color: 0x050706, metalness: 0.2, roughness: 0.85 });
+
         var trofeu = new THREE.Group();
 
-        // Corpo: silhueta da taça "orelhuda" (base, pé, bojo redondo, boca larga)
-        // revolucionada em torno do eixo Y. Pontos (raio, altura).
+        // Corpo: silhueta da taça "orelhuda" revolucionada em torno de Y.
+        // O perfil vai pela parede externa até a boca, volta pela parede
+        // interna e fecha no fundo da taça — sólido fechado, sem borda solta.
         var perfil = [
-            [0.00, -2.60], [1.45, -2.60], [1.45, -2.45], [1.15, -2.30], [0.80, -2.15],
-            [0.55, -2.00], [0.42, -1.75], [0.36, -1.40], [0.36, -1.05], [0.48, -0.85],
-            [0.80, -0.60], [1.10, -0.25], [1.30,  0.20], [1.38,  0.70], [1.42,  1.20],
-            [1.55,  1.70], [1.80,  2.20], [2.10,  2.65], [2.35,  2.95], [2.45,  3.10],
-            [2.30,  3.12], [2.05,  2.90], [1.80,  2.55], [1.60,  2.10], [1.50,  1.60],
+            [0.00, -1.20], [0.42, -1.20], [0.42, -1.05], [0.36, -0.85], [0.36, -0.60],
+            [0.48, -0.42], [0.80, -0.20], [1.10,  0.15], [1.30,  0.60], [1.38,  1.10],
+            [1.42,  1.60], [1.55,  2.10], [1.80,  2.60], [2.10,  3.05], [2.35,  3.35],
+            [2.45,  3.50], [2.30,  3.52], [2.05,  3.30], [1.80,  2.95], [1.60,  2.50],
+            [1.48,  2.00], [1.38,  1.50], [1.25,  1.00], [1.00,  0.55], [0.65,  0.25],
+            [0.30,  0.12], [0.00,  0.10],
         ].map(function (p) { return new THREE.Vector2(p[0], p[1]); });
-        trofeu.add(new THREE.Mesh(new THREE.LatheGeometry(perfil, 96), material));
+        var corpoGeo = new THREE.LatheGeometry(perfil, 128);
 
-        // Alças grandes ("orelhas"): tubo seguindo uma curva que sai do bojo,
-        // abre pro lado e volta pra boca. Espelhada pro outro lado.
+        // Canelado vertical no bojo (as ranhuras da taça de verdade): empurra
+        // cada vértice pra dentro/fora seguindo cos(n·ângulo), só na faixa do
+        // bojo, suavizando nas pontas da faixa.
+        (function canelar(geo) {
+            var pos = geo.attributes.position, v = new THREE.Vector3();
+            for (var i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i);
+                var r = Math.hypot(v.x, v.z);
+                if (r < 0.6 || v.y < 0.2 || v.y > 3.1) continue;
+                var peso = Math.min(1, (v.y - 0.2) / 0.5) * Math.min(1, (3.1 - v.y) / 0.5);
+                var ang = Math.atan2(v.z, v.x);
+                var desloc = 0.045 * Math.cos(ang * 28) * peso;
+                var nr = r + desloc;
+                pos.setXYZ(i, Math.cos(ang) * nr, v.y, Math.sin(ang) * nr);
+            }
+            pos.needsUpdate = true;
+            geo.computeVertexNormals();
+        })(corpoGeo);
+        trofeu.add(new THREE.Mesh(corpoGeo, material));
+
+        // Anéis: um na boca, um no gargalo.
+        var anelBoca = new THREE.Mesh(new THREE.TorusGeometry(2.40, 0.09, 12, 96), materialDetalhe);
+        anelBoca.rotation.x = Math.PI / 2; anelBoca.position.y = 3.5; trofeu.add(anelBoca);
+        var anelGargalo = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.07, 12, 64), materialDetalhe);
+        anelGargalo.rotation.x = Math.PI / 2; anelGargalo.position.y = -0.5; trofeu.add(anelGargalo);
+
+        // Alças grandes ("orelhas") + botões onde encostam no corpo e na boca.
         function alca(lado) {
             var pontos = [
-                new THREE.Vector3(1.20 * lado, 0.10, 0),
-                new THREE.Vector3(2.60 * lado, 0.35, 0),
-                new THREE.Vector3(3.55 * lado, 1.30, 0),
-                new THREE.Vector3(3.60 * lado, 2.40, 0),
-                new THREE.Vector3(3.05 * lado, 3.15, 0),
-                new THREE.Vector3(2.40 * lado, 3.10, 0),
+                new THREE.Vector3(1.20 * lado, 0.65, 0),
+                new THREE.Vector3(2.60 * lado, 0.85, 0),
+                new THREE.Vector3(3.55 * lado, 1.75, 0),
+                new THREE.Vector3(3.60 * lado, 2.80, 0),
+                new THREE.Vector3(3.05 * lado, 3.50, 0),
+                new THREE.Vector3(2.40 * lado, 3.50, 0),
             ];
             var curva = new THREE.CatmullRomCurve3(pontos);
-            return new THREE.Mesh(new THREE.TubeGeometry(curva, 64, 0.26, 24, false), material);
+            var g = new THREE.Group();
+            g.add(new THREE.Mesh(new THREE.TubeGeometry(curva, 64, 0.24, 24, false), material));
+            var b1 = new THREE.Mesh(new THREE.SphereGeometry(0.30, 20, 16), materialDetalhe); b1.position.set(1.30 * lado, 0.65, 0); g.add(b1);
+            var b2 = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16), materialDetalhe); b2.position.set(2.45 * lado, 3.50, 0); g.add(b2);
+            return g;
         }
         trofeu.add(alca(1));
         trofeu.add(alca(-1));
 
-        trofeu.position.y = -0.15;
-        trofeu.scale.setScalar(0.72);
+        // Pedestal preto escalonado (como na foto), separado do corpo.
+        var ped1 = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.05, 0.35, 64), materialPedestal); ped1.position.y = -1.40; trofeu.add(ped1);
+        var ped2 = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.35, 0.40, 64), materialPedestal); ped2.position.y = -1.78; trofeu.add(ped2);
+        var pedAnel = new THREE.Mesh(new THREE.TorusGeometry(1.10, 0.05, 10, 96), materialDetalhe);
+        pedAnel.rotation.x = Math.PI / 2; pedAnel.position.y = -1.58; trofeu.add(pedAnel);
+
+        // "PRO CHAMPIONS" gravado: texto desenhado num canvas e aplicado numa
+        // faixa fina em volta do bojo (transparente fora das letras). Sem
+        // fonte externa — usa a fonte do site já carregada na página.
+        (function gravacao() {
+            var c = document.createElement("canvas"); c.width = 1024; c.height = 128;
+            var g = c.getContext("2d");
+            g.clearRect(0, 0, c.width, c.height);
+            g.font = "700 84px Oswald, Anton, Impact, sans-serif";
+            g.textAlign = "center"; g.textBaseline = "middle";
+            g.fillStyle = "#2ecc71";
+            g.fillText("PRO CHAMPIONS", c.width * 0.5, c.height * 0.5);
+            var tex = new THREE.CanvasTexture(c);
+            tex.anisotropy = 4;
+            // A faixa dá a volta toda; o texto ocupa ~30% dela, o resto fica
+            // transparente — assim aparece uma vez, na frente.
+            // Raio um pouco maior que o do corpo nessa altura (≈1.5 + canelado),
+            // senão a faixa fica escondida dentro da taça.
+            var faixa = new THREE.CylinderGeometry(1.70, 1.58, 0.5, 96, 1, true, Math.PI * 1.15, Math.PI * 0.7);
+            var mat = new THREE.MeshStandardMaterial({
+                map: tex, transparent: true, alphaTest: 0.05, side: THREE.DoubleSide,
+                emissive: 0x2ecc71, emissiveMap: tex, emissiveIntensity: 1.4, roughness: 0.6,
+            });
+            var m = new THREE.Mesh(faixa, mat);
+            m.position.y = 1.85;
+            trofeu.add(m);
+        })();
+
+        trofeu.position.y = -0.75;
+        trofeu.scale.setScalar(0.74);
         cena.add(trofeu);
 
         // Luz: fria e fraca no geral, um foco branco no alto e dois contornos
@@ -238,7 +309,7 @@
         ajustarTamanho();
         window.addEventListener("resize", ajustarTamanho);
 
-        trofeu.rotation.y = 0.4;
+        trofeu.rotation.y = Math.PI / 2 + 0.15;  // gravação de frente ao abrir
         renderer.render(cena, camera);
         if (reduzirMovimento) return;  // troféu parado, sem animação
 
