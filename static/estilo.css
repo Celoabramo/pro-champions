@@ -2535,12 +2535,32 @@ dialog.popup-imagem img {
 .podio-lista li:nth-child(3) .podio-pos { color: #cd7f32; }
 
 /* Ranking por temporada (/ranking) */
+.cabecalho-secao .titulo-temporada {
+    font-family: "Anton", "Oswald", sans-serif;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 44px;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(46, 204, 113, 0.35);
+}
 .temporada-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.temporada-cabecalho h2 { margin: 0; }
+.temporada-cabecalho .temporada-status { margin: 0; }
 .temporada-cabecalho .chip-premio { margin: 0; }
-.meta-progresso { height: 10px; background: var(--linha); border-radius: 999px; overflow: hidden; margin: 14px 0 6px; }
+.meta-contagem { margin: 16px 0 6px; font-family: "Oswald", sans-serif; }
+.meta-contagem strong { font-size: 28px; color: var(--texto); }
+.meta-contagem span { font-size: 15px; color: var(--texto-fraco); }
+.meta-progresso { height: 12px; background: var(--linha); border-radius: 999px; overflow: hidden; margin: 0 0 4px; }
 .meta-progresso-barra { height: 100%; background: linear-gradient(90deg, var(--acento), var(--dourado)); border-radius: 999px; transition: width 0.4s; }
+.meta-extremos { display: flex; justify-content: space-between; font-size: 12px; color: var(--texto-fraco); font-variant-numeric: tabular-nums; }
 .meta-texto { margin: 0; }
+.temporada-detalhes-botao { margin-top: 12px; }
+.temporada-detalhes { display: none; margin-top: 8px; }
+.descricao-toggle-check:checked ~ .temporada-detalhes { display: block; }
+@media (max-width: 640px) {
+    .cabecalho-secao .titulo-temporada { font-size: 34px; }
+}
 .tabela-ranking-wrap { overflow-x: auto; }
 .tabela-ranking { font-size: 14px; min-width: 520px; }
 .tabela-ranking th, .tabela-ranking td { padding: 8px 8px 8px 0; white-space: nowrap; }

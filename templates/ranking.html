@@ -4,12 +4,16 @@
 {% block conteudo %}
 <section class="lista-campeonatos ranking-pagina">
     <div class="eyebrow-secao">
-        <span class="rotulo">Ranking geral</span>
+        <span class="rotulo">Ranking</span>
         <span class="linha-pontilhada"></span>
-        <span class="meta">{% if temporada %}{{ temporada.nome }}{% else %}Sem temporada{% endif %}</span>
+        <span class="meta">
+            {% if temporada %}
+                {{ temporada.data_inicio.strftime('%d/%m/%Y') }} – {{ temporada.data_fim.strftime('%d/%m/%Y') }}
+            {% else %}Sem temporada{% endif %}
+        </span>
     </div>
     <div class="cabecalho-secao">
-        <h1>Ranking</h1>
+        <h1 class="titulo-temporada">{% if temporada %}{{ temporada.nome }}{% else %}Ranking{% endif %}</h1>
         <a href="{{ url_for('ranking_historico') }}" class="botao-secundario-pequeno botao-cinza">Temporadas anteriores</a>
     </div>
 
@@ -18,17 +22,13 @@
     {% else %}
         <div class="perfil-bloco temporada-bloco">
             <div class="temporada-cabecalho">
-                <div>
-                    <h2>{{ temporada.nome }}</h2>
-                    <p class="texto-fraco-pequeno" style="margin:2px 0 0;">
-                        {{ temporada.data_inicio.strftime('%d/%m/%Y') }} até {{ temporada.data_fim.strftime('%d/%m/%Y') }}
-                        {% if temporada.status == 'aberta' %}
-                            · {% if dias_restantes > 0 %}faltam {{ dias_restantes }} dia(s){% else %}último dia{% endif %}
-                        {% else %}
-                            · <strong>encerrada</strong>
-                        {% endif %}
-                    </p>
-                </div>
+                <p class="texto-fraco-pequeno temporada-status">
+                    {% if temporada.status == 'aberta' %}
+                        {% if dias_restantes > 0 %}Faltam {{ dias_restantes }} dia(s){% else %}Último dia{% endif %}
+                    {% else %}
+                        <strong>Temporada encerrada</strong>
+                    {% endif %}
+                </p>
                 {% if temporada.valor_premio > 0 %}
                     <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> R$ {{ "%.2f"|format(temporada.valor_premio) }} pro 1º lugar</span>
                 {% endif %}
@@ -36,29 +36,43 @@
 
             {% if temporada.valor_premio > 0 %}
                 {% set meta_batida = participantes >= temporada.meta_times %}
+                <p class="meta-contagem"><strong>{{ participantes }}</strong> <span>/ {{ temporada.meta_times }} times</span></p>
                 <div class="meta-progresso" role="progressbar" aria-valuemin="0" aria-valuemax="{{ temporada.meta_times }}" aria-valuenow="{{ participantes }}">
                     <div class="meta-progresso-barra" style="width: {{ [100, (participantes * 100 / temporada.meta_times)]|min|round(1) }}%;"></div>
                 </div>
-                <p class="texto-fraco-pequeno meta-texto">
-                    <strong>{{ participantes }} / {{ temporada.meta_times }} times</strong> já jogaram campeonato valendo ponto nesta temporada.
-                    {% if temporada.status == 'aberta' %}
-                        {% if meta_batida %}
-                            <span class="destaque-aberto">Meta batida — o prêmio está garantido.</span>
-                        {% else %}
-                            O prêmio de R$ {{ "%.2f"|format(temporada.valor_premio) }} só sai se a temporada chegar a {{ temporada.meta_times }} times — chame outros times pra jogar!
-                        {% endif %}
-                    {% elif temporada.premio_pago_status == 'sem_meta' %}
-                        A meta não foi batida — o prêmio desta temporada não foi pago.
-                    {% elif temporada.premio_pago_status in ('concluido', 'pendente') %}
-                        <span class="destaque-aberto">Prêmio pago para {{ temporada.time_campeao.nome if temporada.time_campeao else 'o campeão' }}.</span>
-                    {% endif %}
-                </p>
+                <div class="meta-extremos"><span>0</span><span>{{ temporada.meta_times }}</span></div>
             {% endif %}
 
-            <p class="texto-fraco-pequeno" style="margin-top:10px;">
-                Pontos por campeonato: <strong>campeão 3 · vice 2 · 3º lugar 1</strong>. Só vale campeonato <strong>pago</strong> e com <strong>todas as vagas preenchidas</strong>.
-                Desempate: mais títulos, depois mais vices, depois menos partidas jogadas.
-            </p>
+            {# Explicação do prêmio e das regras fica escondida atrás de
+               "Detalhes" — no dia a dia o que importa é o nome da temporada,
+               a barra e a tabela; o texto longo poluía o topo. Toggle via
+               checkbox, sem JS. #}
+            <input type="checkbox" id="temporada-detalhes" class="descricao-toggle-check">
+            <label for="temporada-detalhes" class="descricao-ver-mais temporada-detalhes-botao">
+                <span class="rotulo-fechado">Detalhes</span>
+                <span class="rotulo-aberto">Ocultar detalhes</span>
+            </label>
+            <div class="temporada-detalhes">
+                {% if temporada.valor_premio > 0 %}
+                    <p class="texto-fraco-pequeno meta-texto">
+                        {% if temporada.status == 'aberta' %}
+                            {% if meta_batida %}
+                                <span class="destaque-aberto">Meta batida — o prêmio está garantido.</span>
+                            {% else %}
+                                O prêmio de R$ {{ "%.2f"|format(temporada.valor_premio) }} só sai se a temporada chegar a {{ temporada.meta_times }} times que jogaram campeonato valendo ponto — chame outros times pra jogar!
+                            {% endif %}
+                        {% elif temporada.premio_pago_status == 'sem_meta' %}
+                            A meta não foi batida — o prêmio desta temporada não foi pago.
+                        {% elif temporada.premio_pago_status in ('concluido', 'pendente') %}
+                            <span class="destaque-aberto">Prêmio pago para {{ temporada.time_campeao.nome if temporada.time_campeao else 'o campeão' }}.</span>
+                        {% endif %}
+                    </p>
+                {% endif %}
+                <p class="texto-fraco-pequeno" style="margin:10px 0 0;">
+                    Pontos por campeonato: <strong>campeão 3 · vice 2 · 3º lugar 1</strong>. Só vale campeonato <strong>pago</strong> e com <strong>todas as vagas preenchidas</strong>.
+                    Desempate: mais títulos, depois mais vices, depois menos partidas jogadas.
+                </p>
+            </div>
         </div>
 
         {% if linhas %}
