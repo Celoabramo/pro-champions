@@ -124,12 +124,31 @@
     (function () {
         var bloco = document.getElementById("bloco-push");
         if (!bloco) return;
-        var suporta = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-        if (!suporta || Notification.permission === "denied") return;  // some, sem erro
-        bloco.hidden = false;
-
         var botao = document.getElementById("botao-push");
         var texto = document.getElementById("push-texto");
+        var suporta = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+        var ehIphone = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+        var instalado = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+        if (!suporta) {
+            if (ehIphone && !instalado) {
+                // iPhone só entrega push pra site instalado na tela de início.
+                // Em vez de esconder e a pessoa achar que "não aparece", ensina
+                // o caminho.
+                bloco.hidden = false;
+                botao.hidden = true;
+                texto.innerHTML = "No iPhone, as notificações só funcionam com o site instalado na tela de início: "
+                    + "toque em <strong>Compartilhar</strong> (o quadrado com a seta pra cima) e depois em "
+                    + "<strong>Adicionar à Tela de Início</strong>. Abra o Pro Champions por esse ícone e ative por aqui.";
+            }
+            return;  // outros navegadores sem suporte: some, sem erro
+        }
+        bloco.hidden = false;
+        if (Notification.permission === "denied") {
+            botao.hidden = true;
+            texto.textContent = "As notificações estão bloqueadas pra este site nas configurações do navegador. Libere lá e volte aqui pra ativar.";
+            return;
+        }
 
         function ativado() {
             texto.textContent = "Notificações ativadas neste navegador. Seus avisos e os campeonatos novos vão chegar aqui.";
