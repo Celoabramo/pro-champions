@@ -2545,6 +2545,24 @@ dialog.popup-imagem img {
     color: #fff;
     text-shadow: 0 0 24px rgba(46, 204, 113, 0.35);
 }
+/* Troféu 3D girando atrás do nome da temporada: ocupa o cabeçalho inteiro,
+   fica embaixo do texto e não pega clique. Opacidade baixa de propósito —
+   é fundo, não pode disputar atenção com o título. */
+.temporada-hero { position: relative; min-height: 120px; }
+.temporada-hero > * { position: relative; z-index: 1; }
+.trofeu-3d {
+    position: absolute;
+    inset: -20px 0 -20px 0;
+    width: 100%;
+    height: calc(100% + 40px);
+    z-index: 0;
+    opacity: 0.35;
+    pointer-events: none;
+}
+@media (max-width: 640px) {
+    .temporada-hero { min-height: 100px; }
+    .trofeu-3d { opacity: 0.3; }
+}
 .temporada-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .temporada-cabecalho .temporada-status { margin: 0; }
 .temporada-cabecalho .chip-premio { margin: 0; }

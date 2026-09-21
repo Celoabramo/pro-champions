@@ -12,7 +12,13 @@
             {% else %}Sem temporada{% endif %}
         </span>
     </div>
-    <div class="cabecalho-secao">
+    <div class="cabecalho-secao temporada-hero">
+        {% if temporada %}
+            {# Troféu 3D girando devagar atrás do título — só decoração. O canvas
+               fica embaixo do texto e não recebe clique. Se o Three.js não
+               carregar, o script abaixo simplesmente não faz nada. #}
+            <canvas id="trofeu-3d" class="trofeu-3d" aria-hidden="true"></canvas>
+        {% endif %}
         <h1 class="titulo-temporada">{% if temporada %}{{ temporada.nome }}{% else %}Ranking{% endif %}</h1>
         <a href="{{ url_for('ranking_historico') }}" class="botao-secundario-pequeno botao-cinza">Temporadas anteriores</a>
     </div>
@@ -119,4 +125,101 @@
         {% endif %}
     {% endif %}
 </section>
+{% endblock %}
+{% block script_extra %}
+{% if temporada %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer
+        onerror="this.dataset.falhou = '1'"></script>
+<script>
+    // Troféu 3D girando atrás do nome da temporada. Tudo aqui é opcional:
+    // sem Three.js (CDN fora do ar), sem WebGL ou com "reduzir movimento"
+    // ligado no sistema, a página fica exatamente igual, só sem o fundo.
+    window.addEventListener("load", function () {
+        var canvas = document.getElementById("trofeu-3d");
+        if (!canvas || typeof THREE === "undefined") return;
+
+        var reduzirMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var celular = window.innerWidth < 640;
+
+        var renderer;
+        try {
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: !celular });
+        } catch (e) {
+            return;  // sem WebGL: fica sem o troféu, sem erro
+        }
+        // No celular, metade da resolução — é fundo desfocado pela opacidade,
+        // ninguém nota, e poupa bateria/GPU.
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, celular ? 1 : 1.5));
+
+        var cena = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+        camera.position.set(0, 1.2, 9);
+        camera.lookAt(0, 0.6, 0);
+
+        // Verde de destaque do site (--acento) com um leve brilho próprio.
+        var material = new THREE.MeshStandardMaterial({
+            color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.35,
+            metalness: 0.4, roughness: 0.35,
+        });
+        var trofeu = new THREE.Group();
+        function peca(geometria, x, y, z, rx, rz) {
+            var m = new THREE.Mesh(geometria, material);
+            m.position.set(x || 0, y || 0, z || 0);
+            if (rx) m.rotation.x = rx;
+            if (rz) m.rotation.z = rz;
+            trofeu.add(m);
+        }
+        peca(new THREE.CylinderGeometry(1.35, 0.55, 2.4, 40, 1, true), 0, 1.9);   // taça (aberta em cima)
+        peca(new THREE.CylinderGeometry(0.55, 0.45, 0.25, 40), 0, 0.6);           // gargalo
+        peca(new THREE.CylinderGeometry(0.16, 0.16, 1.3, 24), 0, -0.1);           // pé
+        peca(new THREE.CylinderGeometry(1.0, 1.15, 0.28, 48), 0, -0.9);           // base
+        peca(new THREE.TorusGeometry(0.62, 0.11, 14, 40), -1.5, 2.1, 0, 0, 0.35); // alça esquerda
+        peca(new THREE.TorusGeometry(0.62, 0.11, 14, 40), 1.5, 2.1, 0, 0, -0.35); // alça direita
+        trofeu.position.y = -0.7;
+        cena.add(trofeu);
+
+        cena.add(new THREE.AmbientLight(0xffffff, 0.35));
+        var luz = new THREE.DirectionalLight(0xffffff, 0.9);
+        luz.position.set(3, 5, 6);
+        cena.add(luz);
+
+        function ajustarTamanho() {
+            var caixa = canvas.parentElement.getBoundingClientRect();
+            var w = Math.max(1, Math.round(caixa.width)), h = Math.max(1, Math.round(caixa.height));
+            renderer.setSize(w, h, false);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            // Ancora o troféu atrás do título (que fica à esquerda), e não no
+            // meio do cabeçalho: metade da largura visível na profundidade do
+            // troféu, vezes uma fração pra esquerda.
+            var distancia = camera.position.z - trofeu.position.z;
+            var meiaLargura = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * distancia * camera.aspect;
+            trofeu.position.x = -meiaLargura * (celular ? 0.5 : 0.62);
+        }
+        ajustarTamanho();
+        window.addEventListener("resize", ajustarTamanho);
+
+        trofeu.rotation.y = 0.6;
+        renderer.render(cena, camera);
+        if (reduzirMovimento) return;  // troféu parado, sem animação
+
+        // Roda só com a aba visível — animação de fundo não precisa gastar
+        // bateria com o site minimizado.
+        var rodando = true, agendado = false;
+        function animar() {
+            agendado = false;
+            if (!rodando) return;
+            trofeu.rotation.y += 0.006;
+            renderer.render(cena, camera);
+            agendado = true;
+            requestAnimationFrame(animar);
+        }
+        document.addEventListener("visibilitychange", function () {
+            rodando = !document.hidden;
+            if (rodando && !agendado) animar();  // não empilha dois loops
+        });
+        animar();
+    });
+</script>
+{% endif %}
 {% endblock %}
