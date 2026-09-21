@@ -766,3 +766,35 @@ class PedidoEntrada(db.Model):
 
     def __repr__(self):
         return f"<PedidoEntrada usuario={self.usuario_id} time={self.time_id} {self.status}>"
+
+
+class InscricaoPush(db.Model):
+    """Um navegador que aceitou receber notificação push de campeonato.
+
+    Cada linha é uma "subscription" do Web Push — o mesmo usuário pode ter
+    várias (celular, PC). endpoint/chave_p256dh/chave_auth vêm prontos do
+    navegador; a gente só guarda e devolve na hora de enviar. Quando o
+    serviço de push responde que a subscription não existe mais (navegador
+    desinstalado, permissão revogada), a linha é apagada.
+    """
+
+    __tablename__ = "inscricoes_push"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    endpoint = db.Column(db.Text, nullable=False, unique=True)
+    chave_p256dh = db.Column(db.String(255), nullable=False)
+    chave_auth = db.Column(db.String(255), nullable=False)
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+
+    usuario = db.relationship("User", foreign_keys=[user_id])
+
+    def como_subscription(self):
+        """No formato que o pywebpush espera (igual ao PushSubscription.toJSON())."""
+        return {
+            "endpoint": self.endpoint,
+            "keys": {"p256dh": self.chave_p256dh, "auth": self.chave_auth},
+        }
+
+    def __repr__(self):
+        return f"<InscricaoPush usuario={self.user_id}>"

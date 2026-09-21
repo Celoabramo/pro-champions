@@ -11,6 +11,7 @@ Como rodar:
 
 import base64
 import hashlib
+import threading
 import hmac
 import json
 import os
@@ -40,9 +41,10 @@ from werkzeug.utils import secure_filename
 from models import (
     db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
     Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO, XP_DESTAQUE,
-    PedidoEntrada, POSICOES, FORMACOES, chaves_da_formacao,
+    PedidoEntrada, POSICOES, FORMACOES, chaves_da_formacao, InscricaoPush,
 )
 import email_util
+import notificacoes_push
 import pagamentos
 import validacao_ia
 
@@ -221,6 +223,16 @@ def notificar_federacao(torneio, tipo, mensagem, confronto=None):
 @app.context_processor
 def injetar_posicoes():
     return dict(POSICOES=POSICOES)
+
+
+@app.context_processor
+def injetar_push():
+    """Chave pública VAPID pro botão de ativar notificação (é pública mesmo,
+    pode ir no HTML). push_configurado=False esconde o botão."""
+    return dict(
+        push_configurado=notificacoes_push.configurado(),
+        vapid_public_key=notificacoes_push.chave_publica(),
+    )
 
 
 @app.context_processor
@@ -1640,6 +1652,62 @@ CUSTO_IA_POR_LEITURA_ESTIMADO = 0.02  # custo da API da Anthropic (Claude Haiku)
 LUCRO_MINIMO_PLATAFORMA = 5.00  # lucro real mínimo (já descontando taxas e IA) que um campeonato pago precisa garantir
 
 
+def _avisar_novo_campeonato_por_push(torneio):
+    """Manda o push "Novo campeonato" pra todo navegador cadastrado, numa
+    thread separada: cada envio é uma chamada HTTP pro serviço de push, e
+    com muitos inscritos isso travaria o organizador esperando a tela."""
+    if not notificacoes_push.configurado():
+        return
+    titulo = f"Novo campeonato: {torneio.nome}"
+    corpo = "Inscrições abertas — dá uma olhada!"
+    url = url_for("detalhe_campeonato", torneio_id=torneio.id, _external=True, _scheme="https")
+
+    def enviar():
+        with app.app_context():
+            try:
+                enviados, removidos = notificacoes_push.enviar_para_todos(titulo, corpo, url)
+                app.logger.info(f"Push de novo campeonato: {enviados} enviado(s), {removidos} subscription(s) removida(s).")
+            except Exception as erro:
+                app.logger.error(f"Push de novo campeonato falhou: {erro}")
+
+    threading.Thread(target=enviar, daemon=True).start()
+
+
+@app.route("/sw.js")
+def service_worker():
+    """O service worker precisa ser servido na raiz pra ter escopo do site
+    inteiro (servido de /static/ ele só controlaria /static/)."""
+    resposta = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+    resposta.headers["Service-Worker-Allowed"] = "/"
+    resposta.headers["Cache-Control"] = "no-cache"
+    return resposta
+
+
+@app.route("/perfil/push", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute")
+def salvar_inscricao_push():
+    """Recebe a subscription que o navegador criou e guarda vinculada ao
+    usuário logado. Mesmo endpoint mandado de novo só atualiza as chaves."""
+    dados = request.get_json(silent=True) or {}
+    endpoint = (dados.get("endpoint") or "").strip()
+    chaves = dados.get("keys") or {}
+    p256dh = (chaves.get("p256dh") or "").strip()
+    auth = (chaves.get("auth") or "").strip()
+    if not (endpoint.startswith("https://") and p256dh and auth):
+        return jsonify({"erro": "subscription inválida"}), 400
+
+    inscricao = InscricaoPush.query.filter_by(endpoint=endpoint).first()
+    if inscricao is None:
+        inscricao = InscricaoPush(endpoint=endpoint)
+        db.session.add(inscricao)
+    inscricao.user_id = current_user.id
+    inscricao.chave_p256dh = p256dh
+    inscricao.chave_auth = auth
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @app.route("/campeonatos/criar", methods=["GET", "POST"])
 @login_required
 def criar_campeonato():
@@ -1787,6 +1855,8 @@ def criar_campeonato():
         )
         db.session.add(novo_campeonato)
         db.session.commit()
+
+        _avisar_novo_campeonato_por_push(novo_campeonato)
 
         flash("Campeonato criado!", "sucesso")
         return redirect(url_for("detalhe_campeonato", torneio_id=novo_campeonato.id))

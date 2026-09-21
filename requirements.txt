@@ -9,3 +9,4 @@ python-dotenv==1.0.1
 anthropic==1.4.0
 psycopg2-binary==2.9.13
 gunicorn==23.0.0
+pywebpush==2.5.0
