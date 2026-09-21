@@ -152,36 +152,80 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, celular ? 1 : 1.5));
 
         var cena = new THREE.Scene();
-        var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-        camera.position.set(0, 1.2, 9);
-        camera.lookAt(0, 0.6, 0);
+        var camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+        camera.position.set(0, 0.9, 11);
+        camera.lookAt(0, 0.5, 0);
 
-        // Verde de destaque do site (--acento) com um leve brilho próprio.
-        var material = new THREE.MeshStandardMaterial({
-            color: 0x2ecc71, emissive: 0x2ecc71, emissiveIntensity: 0.35,
-            metalness: 0.4, roughness: 0.35,
-        });
-        var trofeu = new THREE.Group();
-        function peca(geometria, x, y, z, rx, rz) {
-            var m = new THREE.Mesh(geometria, material);
-            m.position.set(x || 0, y || 0, z || 0);
-            if (rx) m.rotation.x = rx;
-            if (rz) m.rotation.z = rz;
-            trofeu.add(m);
+        // "Anodizado verde": o metal preto reflete um ambiente escuro com
+        // faixas verdes. Sem arquivo externo — o cubemap é desenhado em
+        // canvas (gradientes), 6 faces pequenas.
+        function faceAmbiente(angulo) {
+            var c = document.createElement("canvas"); c.width = c.height = 64;
+            var g = c.getContext("2d");
+            var grad = g.createLinearGradient(0, 0, 64 * Math.cos(angulo), 64 * Math.sin(angulo));
+            grad.addColorStop(0.0, "#05080a");
+            grad.addColorStop(0.35, "#0b1f14");
+            grad.addColorStop(0.5, "#2ecc71");
+            grad.addColorStop(0.65, "#0b1f14");
+            grad.addColorStop(1.0, "#05080a");
+            g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+            return c;
         }
-        peca(new THREE.CylinderGeometry(1.35, 0.55, 2.4, 40, 1, true), 0, 1.9);   // taça (aberta em cima)
-        peca(new THREE.CylinderGeometry(0.55, 0.45, 0.25, 40), 0, 0.6);           // gargalo
-        peca(new THREE.CylinderGeometry(0.16, 0.16, 1.3, 24), 0, -0.1);           // pé
-        peca(new THREE.CylinderGeometry(1.0, 1.15, 0.28, 48), 0, -0.9);           // base
-        peca(new THREE.TorusGeometry(0.62, 0.11, 14, 40), -1.5, 2.1, 0, 0, 0.35); // alça esquerda
-        peca(new THREE.TorusGeometry(0.62, 0.11, 14, 40), 1.5, 2.1, 0, 0, -0.35); // alça direita
-        trofeu.position.y = -0.7;
+        var ambiente = new THREE.CubeTexture([0.3, 2.8, 1.2, 4.4, 0.9, 3.6].map(faceAmbiente));
+        ambiente.needsUpdate = true;
+
+        var material = new THREE.MeshStandardMaterial({
+            color: 0x161c19,          // preto com fundo esverdeado
+            metalness: 0.85,
+            roughness: 0.28,
+            envMap: ambiente,
+            envMapIntensity: 1.8,
+            emissive: 0x0f3d22,       // leve brilho verde nas sombras (anodizado)
+            emissiveIntensity: 0.55,
+            side: THREE.DoubleSide,
+        });
+
+        var trofeu = new THREE.Group();
+
+        // Corpo: silhueta da taça "orelhuda" (base, pé, bojo redondo, boca larga)
+        // revolucionada em torno do eixo Y. Pontos (raio, altura).
+        var perfil = [
+            [0.00, -2.60], [1.45, -2.60], [1.45, -2.45], [1.15, -2.30], [0.80, -2.15],
+            [0.55, -2.00], [0.42, -1.75], [0.36, -1.40], [0.36, -1.05], [0.48, -0.85],
+            [0.80, -0.60], [1.10, -0.25], [1.30,  0.20], [1.38,  0.70], [1.42,  1.20],
+            [1.55,  1.70], [1.80,  2.20], [2.10,  2.65], [2.35,  2.95], [2.45,  3.10],
+            [2.30,  3.12], [2.05,  2.90], [1.80,  2.55], [1.60,  2.10], [1.50,  1.60],
+        ].map(function (p) { return new THREE.Vector2(p[0], p[1]); });
+        trofeu.add(new THREE.Mesh(new THREE.LatheGeometry(perfil, 96), material));
+
+        // Alças grandes ("orelhas"): tubo seguindo uma curva que sai do bojo,
+        // abre pro lado e volta pra boca. Espelhada pro outro lado.
+        function alca(lado) {
+            var pontos = [
+                new THREE.Vector3(1.20 * lado, 0.10, 0),
+                new THREE.Vector3(2.60 * lado, 0.35, 0),
+                new THREE.Vector3(3.55 * lado, 1.30, 0),
+                new THREE.Vector3(3.60 * lado, 2.40, 0),
+                new THREE.Vector3(3.05 * lado, 3.15, 0),
+                new THREE.Vector3(2.40 * lado, 3.10, 0),
+            ];
+            var curva = new THREE.CatmullRomCurve3(pontos);
+            return new THREE.Mesh(new THREE.TubeGeometry(curva, 64, 0.26, 24, false), material);
+        }
+        trofeu.add(alca(1));
+        trofeu.add(alca(-1));
+
+        trofeu.position.y = -0.15;
+        trofeu.scale.setScalar(0.72);
         cena.add(trofeu);
 
-        cena.add(new THREE.AmbientLight(0xffffff, 0.35));
-        var luz = new THREE.DirectionalLight(0xffffff, 0.9);
-        luz.position.set(3, 5, 6);
-        cena.add(luz);
+        // Luz: fria e fraca no geral, um foco branco no alto e dois contornos
+        // verdes dos lados — é isso que dá o realce anodizado nas bordas.
+        cena.add(new THREE.HemisphereLight(0x2ecc71, 0x0a0f0c, 0.45));
+        var foco = new THREE.DirectionalLight(0xffffff, 1.0); foco.position.set(2, 7, 6); cena.add(foco);
+        var contornoE = new THREE.PointLight(0x2ecc71, 2.2, 40); contornoE.position.set(-8, 2.5, 3); cena.add(contornoE);
+        var contornoD = new THREE.PointLight(0x2ecc71, 2.2, 40); contornoD.position.set(8, 2.5, 3); cena.add(contornoD);
+        var costas = new THREE.PointLight(0x2ecc71, 1.2, 40); costas.position.set(0, 4, -8); cena.add(costas);
 
         function ajustarTamanho() {
             var caixa = canvas.parentElement.getBoundingClientRect();
@@ -189,17 +233,11 @@
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
-            // Ancora o troféu atrás do título (que fica à esquerda), e não no
-            // meio do cabeçalho: metade da largura visível na profundidade do
-            // troféu, vezes uma fração pra esquerda.
-            var distancia = camera.position.z - trofeu.position.z;
-            var meiaLargura = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * distancia * camera.aspect;
-            trofeu.position.x = -meiaLargura * (celular ? 0.5 : 0.62);
         }
         ajustarTamanho();
         window.addEventListener("resize", ajustarTamanho);
 
-        trofeu.rotation.y = 0.6;
+        trofeu.rotation.y = 0.4;
         renderer.render(cena, camera);
         if (reduzirMovimento) return;  // troféu parado, sem animação
 
@@ -209,7 +247,7 @@
         function animar() {
             agendado = false;
             if (!rodando) return;
-            trofeu.rotation.y += 0.006;
+            trofeu.rotation.y += 0.005;
             renderer.render(cena, camera);
             agendado = true;
             requestAnimationFrame(animar);
