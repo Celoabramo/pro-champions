@@ -23,6 +23,21 @@
     </div>
     <p class="perfil-email">Avisos dos seus campeonatos e partidas.</p>
 
+    {% if push_configurado %}
+        {# O bloco começa escondido: o JS só mostra se o navegador suportar
+           push (Safari no iPhone sem instalar como app, por exemplo, não
+           suporta — aí não aparece nada em vez de dar erro). #}
+        <div class="perfil-bloco" id="bloco-push" hidden
+             data-chave-publica="{{ vapid_public_key }}"
+             data-url-salvar="{{ url_for('salvar_inscricao_push') }}"
+             data-csrf="{{ csrf_token() }}">
+            <h2>Avisos no navegador</h2>
+            <p class="texto-fraco-pequeno" id="push-texto">Receba estes mesmos avisos como notificação no navegador (celular ou PC), mesmo com o site fechado — e também quando um campeonato novo for criado.</p>
+            <button type="button" class="botao-secundario-pequeno" id="botao-push">Ativar notificações no navegador</button>
+        </div>
+    {% endif %}
+
+
     {% set rotulos_tipo = {
         'campeonato_iniciado': ('Campeonato', 'selo-status-em_andamento'),
         'campeonato_finalizado': ('Finalizado', 'selo-status-finalizado'),
@@ -102,4 +117,77 @@
         </div>
     {% endif %}
 </section>
+{% endblock %}
+{% block script_extra %}
+{% if push_configurado %}
+<script>
+    (function () {
+        var bloco = document.getElementById("bloco-push");
+        if (!bloco) return;
+        var suporta = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+        if (!suporta || Notification.permission === "denied") return;  // some, sem erro
+        bloco.hidden = false;
+
+        var botao = document.getElementById("botao-push");
+        var texto = document.getElementById("push-texto");
+
+        function ativado() {
+            texto.textContent = "Notificações ativadas neste navegador. Seus avisos e os campeonatos novos vão chegar aqui.";
+            texto.classList.add("destaque-aberto");
+            botao.hidden = true;
+        }
+
+        function base64UrlParaBytes(texto) {
+            var base64 = (texto + "=".repeat((4 - texto.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+            var bin = atob(base64), bytes = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return bytes;
+        }
+
+        // Já ativou antes neste navegador? Então mostra como ativado.
+        navigator.serviceWorker.getRegistration("/").then(function (reg) {
+            if (!reg) return;
+            return reg.pushManager.getSubscription();
+        }).then(function (sub) {
+            if (sub && Notification.permission === "granted") ativado();
+        }).catch(function () {});
+
+        botao.addEventListener("click", function () {
+            botao.disabled = true;
+            botao.textContent = "Ativando...";
+            Notification.requestPermission().then(function (permissao) {
+                if (permissao !== "granted") throw new Error("permissao_negada");
+                return navigator.serviceWorker.register("/sw.js", { scope: "/" });
+            }).then(function (reg) {
+                return navigator.serviceWorker.ready.then(function () {
+                    return reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: base64UrlParaBytes(bloco.dataset.chavePublica),
+                    });
+                });
+            }).then(function (sub) {
+                return fetch(bloco.dataset.urlSalvar, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-CSRFToken": bloco.dataset.csrf },
+                    credentials: "same-origin",
+                    body: JSON.stringify(sub.toJSON()),
+                });
+            }).then(function (resposta) {
+                // Sessão expirada/CSRF vira redirect pra uma página HTML com
+                // status 200 — por isso exige o JSON {"ok": true}, não só o status.
+                return resposta.json();
+            }).then(function (corpo) {
+                if (!corpo || corpo.ok !== true) throw new Error("servidor");
+                ativado();
+            }).catch(function (erro) {
+                botao.disabled = false;
+                botao.textContent = "Ativar notificações no navegador";
+                texto.textContent = erro.message === "permissao_negada"
+                    ? "Você não permitiu as notificações. Se mudar de ideia, libere nas configurações do navegador e tente de novo."
+                    : "Não deu para ativar agora. Tenta de novo daqui a pouco.";
+            });
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}

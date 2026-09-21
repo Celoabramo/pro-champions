@@ -34,19 +34,27 @@ def configurado():
 
 
 def enviar_para_todos(titulo, corpo, url):
-    """Manda o mesmo push pra cada navegador cadastrado.
+    """Manda o mesmo push pra cada navegador cadastrado (ex.: campeonato novo)."""
+    return _enviar(InscricaoPush.query.all(), titulo, corpo, url)
 
-    Falha em um não derruba os outros: subscription morta é apagada, erro de
-    rede/serviço só vai pro log. Devolve (enviados, removidos).
-    """
-    if not configurado():
+
+def enviar_para_usuario(user_id, titulo, corpo, url):
+    """Manda o push só pros navegadores de um usuário (espelho de uma
+    notificação interna dele)."""
+    return _enviar(InscricaoPush.query.filter_by(user_id=user_id).all(), titulo, corpo, url)
+
+
+def _enviar(inscricoes, titulo, corpo, url):
+    """Falha em um não derruba os outros: subscription morta é apagada, erro
+    de rede/serviço só vai pro log. Devolve (enviados, removidos)."""
+    if not configurado() or not inscricoes:
         return 0, 0
 
     payload = json.dumps({"titulo": titulo, "corpo": corpo, "url": url})
     privada = os.environ["VAPID_PRIVATE_KEY"].strip()
     enviados = removidos = 0
 
-    for inscricao in InscricaoPush.query.all():
+    for inscricao in inscricoes:
         try:
             webpush(
                 subscription_info=inscricao.como_subscription(),

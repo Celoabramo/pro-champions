@@ -212,6 +212,49 @@ def criar_notificacao(usuario, tipo, mensagem, torneio=None, confronto=None):
         torneio_id=torneio.id if torneio else None,
         confronto_id=confronto.id if confronto else None,
     ))
+    _espelhar_notificacao_em_push(usuario.id, tipo, mensagem, torneio, confronto)
+
+
+# Rótulo curto de cada tipo, usado como título do push (mesmos nomes que a
+# aba de notificações mostra no selo).
+ROTULO_PUSH_POR_TIPO = {
+    "campeonato_iniciado": "Campeonato",
+    "campeonato_finalizado": "Campeonato finalizado",
+    "campeonato_remarcado": "Campeonato remarcado",
+    "partida_iniciada": "Partida",
+    "partida_finalizada": "Partida",
+    "repasse_pagamento": "Pagamento",
+    "placar_contestado": "Contestação",
+    "pedido_entrada": "Recrutamento",
+    "pedido_respondido": "Recrutamento",
+}
+
+
+def _espelhar_notificacao_em_push(usuario_id, tipo, mensagem, torneio=None, confronto=None):
+    """Toda notificação interna sai também como push pros navegadores do
+    usuário que ativou (aba Notificações). O link do push é o mesmo que a
+    aba usa. Roda numa thread: são chamadas HTTP e o chamador está no meio
+    de uma requisição."""
+    if not notificacoes_push.configurado():
+        return
+    if confronto is not None and torneio is not None:
+        url = url_for("detalhe_confronto", torneio_id=torneio.id, confronto_id=confronto.id, _external=True, _scheme="https")
+    elif torneio is not None:
+        url = url_for("detalhe_campeonato", torneio_id=torneio.id, _external=True, _scheme="https")
+    elif tipo in ("pedido_entrada", "pedido_respondido"):
+        url = url_for("time", _external=True, _scheme="https")
+    else:
+        url = url_for("notificacoes", _external=True, _scheme="https")
+    titulo = ROTULO_PUSH_POR_TIPO.get(tipo, "Pro Champions")
+
+    def enviar():
+        with app.app_context():
+            try:
+                notificacoes_push.enviar_para_usuario(usuario_id, titulo, mensagem, url)
+            except Exception as erro:
+                app.logger.error(f"Push da notificação ({tipo}) falhou: {erro}")
+
+    threading.Thread(target=enviar, daemon=True).start()
 
 
 def notificar_federacao(torneio, tipo, mensagem, confronto=None):
