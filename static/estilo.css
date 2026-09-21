@@ -2699,3 +2699,89 @@ dialog.popup-imagem img {
 @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; transition: none; }
 }
+
+/* ============ Barra de navegação inferior (celular) ============ */
+/* Escondida no desktop; abaixo de 860px vira a navegação principal, fixa
+   embaixo como num app. O conteúdo ganha respiro no fim pra nada ficar
+   escondido atrás dela (env(safe-area-inset-bottom) cobre a barra do iPhone). */
+.tab-bar { display: none; }
+.rodape-empresa-botao { display: none; }
+
+@media (max-width: 860px) {
+    .tab-bar {
+        display: flex;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 30;
+        padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+        background: rgba(11, 15, 20, 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-top: 1px solid var(--linha);
+    }
+    .tab-bar-item {
+        position: relative;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 6px 2px;
+        border-radius: 10px;
+        color: var(--texto-fraco);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        text-decoration: none;
+        transition: color 0.15s, background 0.15s;
+    }
+    .tab-bar-item svg { transition: transform 0.15s; }
+    .tab-bar-item.ativo { color: var(--acento); }
+    .tab-bar-item.ativo svg { transform: translateY(-1px); }
+    .tab-bar-item.ativo::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 50%;
+        width: 22px; height: 3px;
+        transform: translateX(-50%);
+        border-radius: 0 0 3px 3px;
+        background: var(--acento);
+    }
+    .badge-tab-bar { width: 8px; height: 8px; padding: 0; top: 4px; right: calc(50% - 16px); }
+
+    /* respiro pro conteúdo e pro rodapé não ficarem embaixo da barra */
+    body { padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+    /* o menu lateral já ocupa a tela toda; a barra não precisa ficar por cima dele */
+    body.menu-mobile-travado .tab-bar { display: none; }
+}
+
+/* ============ Rodapé compacto (celular) ============ */
+@media (max-width: 640px) {
+    .rodape-miolo { grid-template-columns: 1fr; gap: 14px; }
+    .rodape-coluna:first-child { grid-column: auto; }
+    .rodape-coluna h3 { display: none; }
+    .rodape-empresa-botao {
+        display: inline-block;
+        margin-top: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--texto-fraco);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        cursor: pointer;
+    }
+    .rodape-empresa-botao .rotulo-aberto { display: none; }
+    .rodape-empresa { display: none; }
+    .descricao-toggle-check:checked ~ .rodape-empresa-botao .rotulo-fechado { display: none; }
+    .descricao-toggle-check:checked ~ .rodape-empresa-botao .rotulo-aberto { display: inline; }
+    .descricao-toggle-check:checked ~ .rodape-empresa { display: block; }
+    /* contato + redes numa linha só */
+    .rodape-coluna:nth-child(2) { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+    .rodape-coluna:nth-child(2) .rodape-link { margin: 0; }
+    .rodape-redes { margin-top: 0; }
+    /* legal numa linha */
+    .rodape-coluna:nth-child(3) { display: flex; gap: 14px; flex-wrap: wrap; }
+    .rodape-coluna:nth-child(3) .rodape-link { margin: 0; }
+    .rodape-coluna:nth-child(3) .rodape-link + .rodape-link::before { content: "·"; margin-right: 14px; color: var(--linha); }
+    .rodape-copyright { margin-top: 12px; padding-top: 10px; }
+}

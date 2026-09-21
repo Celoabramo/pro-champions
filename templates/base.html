@@ -257,6 +257,13 @@
                     <img src="{{ url_for('static', filename='logo.png') }}" alt="Pro Champions" class="logo-nav">
                     Pro <span>Champions</span>
                 </a>
+                {# No celular os dados da empresa ficam atrás de "Dados da empresa"
+                   (toggle por checkbox, sem JS); no desktop aparecem direto. #}
+                <input type="checkbox" id="rodape-empresa-toggle" class="descricao-toggle-check">
+                <label for="rodape-empresa-toggle" class="rodape-empresa-botao">
+                    <span class="rotulo-fechado">Dados da empresa</span>
+                    <span class="rotulo-aberto">Ocultar dados da empresa</span>
+                </label>
                 <p class="rodape-empresa">
                     67.278.439 Marcelo Najjar Abramo Filho (MEI)<br>
                     CNPJ 67.278.439/0001-51<br>
@@ -289,6 +296,39 @@
         </div>
         <p class="rodape-copyright">© {{ ano_atual }} Pro Champions. Todos os direitos reservados.</p>
     </footer>
+    {# Barra fixa de navegação no celular (padrão de app): as 5 telas
+       principais sempre à mão, sem abrir o menu. Só existe abaixo de 860px
+       (mesmo ponto em que a pílula de links some e vira hambúrguer). #}
+    <nav class="tab-bar" aria-label="Navegação principal">
+        <a href="{{ url_for('home') }}" class="tab-bar-item {{ 'ativo' if request.endpoint == 'home' }}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 3l9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+            <span>Início</span>
+        </a>
+        <a href="{{ url_for('campeonatos') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('campeonatos', 'detalhe_campeonato', 'detalhe_confronto') }}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a1 1 0 0 0-1 1 4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1 4 4 0 0 1-4 4"/></svg>
+            <span>Campeonatos</span>
+        </a>
+        <a href="{{ url_for('times') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('times', 'detalhe_time', 'time') }}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 3 17M6 3l15 15M3 9l6-6M15 21l6-6"/></svg>
+            <span>Times</span>
+        </a>
+        <a href="{{ url_for('ranking') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('ranking', 'ranking_historico') }}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2Z"/></svg>
+            <span>Ranking</span>
+        </a>
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('perfil') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('perfil', 'notificacoes') }}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Perfil</span>
+                {% if notificacoes_nao_lidas %}<span class="badge-notificacoes badge-tab-bar"></span>{% endif %}
+            </a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('login', 'cadastro') }}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                <span>Entrar</span>
+            </a>
+        {% endif %}
+    </nav>
     {% block script_extra %}{% endblock %}
 </body>
 </html>
