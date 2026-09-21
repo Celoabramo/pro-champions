@@ -9,6 +9,7 @@ PagamentoIndisponivel (o chamador decide como avisar o usuário).
 
 import os
 import re
+import unicodedata
 
 import requests
 
@@ -48,6 +49,23 @@ def _chamar(metodo, caminho, **kwargs):
     return corpo["data"]
 
 
+def _limpar_descricao(texto, limite=120):
+    """Deixa a descrição num formato que a AbacatePay aceita.
+
+    Achado em produção: um campeonato chamado "11°EDIÇÃO - ..." fez TODO
+    reembolso dele falhar com 'Caractere não permitido na descrição: "°"'.
+    A descrição é montada com nome de campeonato/time (texto livre), então
+    qualquer símbolo que alguém digite ia parar na API. Aqui tira acento
+    (ç->c, ã->a), descarta o que não é letra/número/pontuação básica e
+    corta o tamanho — o texto é só um rótulo no extrato, não precisa ser
+    fiel ao original.
+    """
+    sem_acento = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode("ascii")
+    permitido = re.sub(r"[^A-Za-z0-9 .,:/()\-]", " ", sem_acento)
+    compacto = re.sub(r"\s+", " ", permitido).strip()
+    return compacto[:limite] or "Pro Champions"
+
+
 def criar_pix(valor_reais, descricao, external_id=None, expira_em_segundos=1800):
     """Cria um PIX via Checkout Transparente e devolve os dados do QR Code.
 
@@ -56,7 +74,7 @@ def criar_pix(valor_reais, descricao, external_id=None, expira_em_segundos=1800)
     """
     dados = {
         "amount": round(valor_reais * 100),
-        "description": descricao,
+        "description": _limpar_descricao(descricao),
         "expiresIn": expira_em_segundos,
     }
     if external_id:
@@ -120,7 +138,7 @@ def enviar_pix(valor_reais, chave_pix, tipo_chave, descricao, external_id):
     corpo = {
         "amount": round(valor_reais * 100),
         "externalId": external_id,
-        "description": descricao,
+        "description": _limpar_descricao(descricao),
         "pix": {"key": _formatar_chave_pix(chave_pix, tipo_chave), "type": tipo_chave},
     }
     return _chamar("POST", "/pix/send", json=corpo)
