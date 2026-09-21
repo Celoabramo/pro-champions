@@ -174,14 +174,15 @@
         var ambiente = new THREE.CubeTexture([0.3, 2.8, 1.2, 4.4, 0.9, 3.6].map(faceAmbiente));
         ambiente.needsUpdate = true;
 
+        // Fosco e bem preto: pouco metal, rugosidade alta, reflexo do
+        // ambiente só de leve. O verde vem das luzes de contorno (borda
+        // esverdeada, tipo gradiente) e da "nuvem" atrás, no CSS.
         var material = new THREE.MeshStandardMaterial({
-            color: 0x161c19,          // preto com fundo esverdeado
-            metalness: 0.85,
-            roughness: 0.28,
+            color: 0x0a0d0c,
+            metalness: 0.25,
+            roughness: 0.72,
             envMap: ambiente,
-            envMapIntensity: 1.8,
-            emissive: 0x0f3d22,       // leve brilho verde nas sombras (anodizado)
-            emissiveIntensity: 0.55,
+            envMapIntensity: 0.35,
             side: THREE.DoubleSide,
         });
 
@@ -221,11 +222,11 @@
 
         // Luz: fria e fraca no geral, um foco branco no alto e dois contornos
         // verdes dos lados — é isso que dá o realce anodizado nas bordas.
-        cena.add(new THREE.HemisphereLight(0x2ecc71, 0x0a0f0c, 0.45));
-        var foco = new THREE.DirectionalLight(0xffffff, 1.0); foco.position.set(2, 7, 6); cena.add(foco);
-        var contornoE = new THREE.PointLight(0x2ecc71, 2.2, 40); contornoE.position.set(-8, 2.5, 3); cena.add(contornoE);
-        var contornoD = new THREE.PointLight(0x2ecc71, 2.2, 40); contornoD.position.set(8, 2.5, 3); cena.add(contornoD);
-        var costas = new THREE.PointLight(0x2ecc71, 1.2, 40); costas.position.set(0, 4, -8); cena.add(costas);
+        cena.add(new THREE.HemisphereLight(0x1f5c3a, 0x050807, 0.6));
+        var foco = new THREE.DirectionalLight(0xdfe8e2, 0.55); foco.position.set(2, 7, 6); cena.add(foco);
+        var contornoE = new THREE.PointLight(0x2ecc71, 1.6, 40); contornoE.position.set(-8, 2.5, -1); cena.add(contornoE);
+        var contornoD = new THREE.PointLight(0x2ecc71, 1.6, 40); contornoD.position.set(8, 2.5, -1); cena.add(contornoD);
+        var costas = new THREE.PointLight(0x2ecc71, 1.4, 40); costas.position.set(0, 3, -9); cena.add(costas);
 
         function ajustarTamanho() {
             var caixa = canvas.parentElement.getBoundingClientRect();

@@ -2550,19 +2550,32 @@ dialog.popup-imagem img {
    é fundo, não pode disputar atenção com o título. */
 .temporada-hero { position: relative; min-height: 260px; align-items: flex-end; padding-bottom: 8px; }
 .temporada-hero > * { position: relative; z-index: 1; }
+/* "Nuvem" verde: um gradiente radial suave atrás do troféu, no CSS mesmo
+   (mais barato que fazer na cena 3D e não depende do Three.js carregar). */
+.temporada-hero::before {
+    content: "";
+    position: absolute;
+    left: 50%; top: 42%;
+    width: 520px; height: 300px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(ellipse at center, rgba(46, 204, 113, 0.32) 0%, rgba(46, 204, 113, 0.14) 30%, rgba(46, 204, 113, 0.04) 55%, transparent 72%);
+    filter: blur(6px);
+    z-index: 0;
+    pointer-events: none;
+}
 .trofeu-3d {
     position: absolute;
     inset: -30px 0 0 0;
     width: 100%;
     height: calc(100% + 30px);
     z-index: 0;
-    opacity: 0.7;
+    opacity: 0.85;
     pointer-events: none;
-    filter: drop-shadow(0 0 28px rgba(46, 204, 113, 0.25));
 }
 @media (max-width: 640px) {
     .temporada-hero { min-height: 220px; }
-    .trofeu-3d { opacity: 0.6; }
+    .temporada-hero::before { width: 360px; height: 240px; }
+    .trofeu-3d { opacity: 0.8; }
 }
 .temporada-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .temporada-cabecalho .temporada-status { margin: 0; }
