@@ -189,6 +189,9 @@ class User(UserMixin, ComXP, db.Model):
     chave_pix = db.Column(db.String(140), nullable=True)
     tipo_chave_pix = db.Column(db.String(10), nullable=True)  # CPF | CNPJ | PHONE | EMAIL | RANDOM
 
+    # Foto de perfil (arquivo em uploads/fotos, servido por arquivo_upload).
+    foto = db.Column(db.String(255), nullable=True)
+
     # Token de redefinição de senha ("esqueci minha senha"). Guardamos só o
     # hash (sha256) do token, nunca o valor em si — igual senha, não dá pra
     # reconstruir o token original a partir do que tá no banco. Expira em
@@ -508,6 +511,10 @@ class Team(ComXP, db.Model):
     recrutando = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     mensagem_recrutamento = db.Column(db.String(160), nullable=True)
 
+    # Link de convite do grupo de WhatsApp do time (só o capitão configura;
+    # aparece na página pública e no "Meu time" pros membros).
+    link_grupo_whatsapp = db.Column(db.String(255), nullable=True)
+
     @property
     def escalacao(self):
         """Linhas do esquema com quem ocupa cada slot: [[(chave, código,
@@ -798,3 +805,33 @@ class InscricaoPush(db.Model):
 
     def __repr__(self):
         return f"<InscricaoPush usuario={self.user_id}>"
+
+
+class Conquista(db.Model):
+    """Medalha ("pin") de um jogador: estava no elenco de um time no momento
+    em que ele foi campeão de um campeonato ou de uma temporada do ranking.
+
+    Registrada na hora da conquista, porque o elenco muda depois — quem sai
+    do time leva a medalha, quem entra depois não ganha. tipo:
+    campeonato (torneio_id preenchido) | temporada (temporada_id preenchido).
+    """
+
+    __tablename__ = "conquistas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    time_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
+    tipo = db.Column(db.String(12), nullable=False)
+    torneio_id = db.Column(db.Integer, db.ForeignKey("torneios.id"), nullable=True)
+    temporada_id = db.Column(db.Integer, db.ForeignKey("temporadas.id"), nullable=True)
+    federacao_id = db.Column(db.Integer, db.ForeignKey("federacoes.id"), nullable=True)
+    criado_em = db.Column(db.DateTime, server_default=db.func.now())
+
+    usuario = db.relationship("User", foreign_keys=[usuario_id])
+    time = db.relationship("Team", foreign_keys=[time_id])
+    torneio = db.relationship("Torneio", foreign_keys=[torneio_id])
+    temporada = db.relationship("Temporada", foreign_keys=[temporada_id])
+    federacao = db.relationship("Federacao", foreign_keys=[federacao_id])
+
+    def __repr__(self):
+        return f"<Conquista {self.tipo} usuario={self.usuario_id}>"

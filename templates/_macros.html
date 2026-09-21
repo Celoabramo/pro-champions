@@ -130,3 +130,40 @@
         </div>
     </div>
 {% endmacro %}
+
+{% macro avatar_jogador(jogador, classe='avatar-jogador') %}
+    {# Foto do jogador ou a inicial do nick num círculo. #}
+    {% if jogador.foto %}
+        <img src="{{ url_for('arquivo_upload', categoria='fotos', nome_arquivo=jogador.foto) }}" alt="{{ jogador.nickname }}" class="{{ classe }} avatar-jogador-img">
+    {% else %}
+        <span class="{{ classe }} avatar-jogador-inicial" aria-hidden="true">{{ jogador.nickname[0]|upper }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro pins_jogador(pins) %}
+    {# Medalhas: hexágono com o logo da federação e "×N"; temporada em dourado. #}
+    <div class="pins">
+        {% for pin in pins %}
+            {% if pin.tipo == 'temporada' %}
+                <div class="pin pin-temporada" title="Campeão da {{ pin.temporada.nome }}">
+                    <span class="pin-hex"><span class="pin-trofeu" aria-hidden="true">🏆</span></span>
+                    <span class="pin-rotulo">{{ pin.temporada.nome }}</span>
+                </div>
+            {% else %}
+                <div class="pin" title="{{ pin.vezes }} título(s) na {{ pin.federacao.nome }}">
+                    <span class="pin-hex">
+                        {% if pin.federacao.logo %}
+                            <img src="{{ url_for('arquivo_upload', categoria='federacoes', nome_arquivo=pin.federacao.logo) }}" alt="">
+                        {% else %}
+                            <span class="pin-inicial">{{ pin.federacao.nome[0]|upper }}</span>
+                        {% endif %}
+                    </span>
+                    {% if pin.vezes > 1 %}<span class="pin-vezes">×{{ pin.vezes }}</span>{% endif %}
+                    <span class="pin-rotulo">{{ pin.federacao.nome }}</span>
+                </div>
+            {% endif %}
+        {% else %}
+            <p class="texto-fraco-pequeno" style="margin:0;">Nenhuma medalha ainda — ganhe um campeonato pra colecionar a primeira.</p>
+        {% endfor %}
+    </div>
+{% endmacro %}

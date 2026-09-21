@@ -1,14 +1,55 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 {% block titulo %}Meu perfil — Pro Champions{% endblock %}
 {% block conteudo %}
 <section class="perfil">
-    <h1>{{ usuario.nickname }} <span class="selo-nivel {{ 'selo-nivel-' + usuario.faixa_nivel if usuario.faixa_nivel }}" title="{{ usuario.xp_total }} XP">Nível {{ usuario.nivel }}</span></h1>
-    <p class="perfil-email">{{ usuario.email }}</p>
-    <div class="xp-bloco">
-        <div class="xp-linha">
-            <span><strong>{{ usuario.xp_total }} XP</strong> · próximo nível em {{ usuario.xp_proximo_nivel }} XP</span>
+    {# Cartão do jogador: foto, nick, nível, XP, time e posição num lugar só. #}
+    <div class="cartao-jogador">
+        <div class="cartao-jogador-foto {{ 'escudo-faixa-' + usuario.faixa_nivel if usuario.faixa_nivel }}">
+            {{ macros.avatar_jogador(usuario, 'avatar-jogador avatar-jogador-grande') }}
         </div>
-        <div class="meta-progresso" style="margin:6px 0 0;"><div class="meta-progresso-barra" style="width: {{ usuario.progresso_nivel }}%;"></div></div>
+        <div class="cartao-jogador-info">
+            <h1>{{ usuario.nickname }} <span class="selo-nivel {{ 'selo-nivel-' + usuario.faixa_nivel if usuario.faixa_nivel }}" title="{{ usuario.xp_total }} XP">Nível {{ usuario.nivel }}</span></h1>
+            <p class="perfil-email">{{ usuario.email }}</p>
+            <div class="cartao-jogador-chips">
+                {% if usuario.time %}
+                    <a href="{{ url_for('detalhe_time', time_id=usuario.time.id) }}" class="chip-geracao chip-link">{{ usuario.time.nome }} [{{ usuario.time.tag }}]{% if usuario.time.capitao_id == usuario.id %} · capitão{% endif %}</a>
+                {% else %}
+                    <span class="chip-geracao">Sem time</span>
+                {% endif %}
+                {% if usuario.posicao_preferida %}<span class="chip-geracao">{{ usuario.rotulo_posicao_preferida }}</span>{% endif %}
+                {% if pins %}<span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> {{ pins|sum(attribute='vezes') }} medalha(s)</span>{% endif %}
+            </div>
+            <div class="xp-bloco">
+                <div class="xp-linha"><span><strong>{{ usuario.xp_total }} XP</strong> · próximo nível em {{ usuario.xp_proximo_nivel }} XP</span></div>
+                <div class="meta-progresso" style="margin:6px 0 0;"><div class="meta-progresso-barra" style="width: {{ usuario.progresso_nivel }}%;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Medalhas</h2>
+        {{ macros.pins_jogador(pins) }}
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Foto de perfil</h2>
+        <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Aparece no seu perfil, no elenco do time e no ranking.</p>
+        <form method="POST" action="{{ url_for('enviar_foto_perfil') }}" enctype="multipart/form-data" class="form-escudo">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="foto" class="botao-arquivo">
+                <span id="nome-arquivo-foto">Escolher imagem</span>
+            </label>
+            <input type="file" id="foto" name="foto" accept="image/*" required
+                   onchange="document.getElementById('nome-arquivo-foto').textContent = this.files[0] ? this.files[0].name : 'Escolher imagem'">
+            <button type="submit" class="botao-principal-pequeno">Enviar foto</button>
+        </form>
+        {% if usuario.foto %}
+            <form method="POST" action="{{ url_for('remover_foto_perfil') }}" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="botao-secundario-pequeno">Remover foto</button>
+            </form>
+        {% endif %}
     </div>
 
     {% if eh_admin_site %}

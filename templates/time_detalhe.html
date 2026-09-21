@@ -19,6 +19,9 @@
     {% endif %}
     <span class="chip-geracao">{{ historico|length }} campeonato(s) jogado(s)</span>
     <span class="chip-geracao">{{ time_obj.xp_total }} XP</span>
+    {% if time_obj.link_grupo_whatsapp and current_user.is_authenticated and current_user.time_id == time_obj.id %}
+        <p style="margin-top:14px;"><a href="{{ time_obj.link_grupo_whatsapp }}" target="_blank" rel="noopener" class="botao-secundario">Grupo de WhatsApp do time</a></p>
+    {% endif %}
 
     {% if time_obj.recrutando %}
         <div class="perfil-bloco" style="border-left-color: var(--acento);">
@@ -68,7 +71,7 @@
         <h2>Elenco ({{ time_obj.membros|length }})</h2>
         <ul class="lista-membros">
             {% for membro in time_obj.membros %}
-                <li>{{ membro.nickname }} <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + membro.faixa_nivel if membro.faixa_nivel }}" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.posicao_escalada %} <span class="chip-geracao" style="margin:0;">{{ POSICOES[membro.posicao_escalada.rstrip('0123456789')][0] }}</span>{% endif %}{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
+                <li><a href="{{ url_for('perfil_publico', usuario_id=membro.id) }}" class="membro-link">{{ macros.avatar_jogador(membro, 'avatar-jogador avatar-jogador-mini') }}{{ membro.nickname }}</a> <span class="selo-nivel selo-nivel-pequeno {{ 'selo-nivel-' + membro.faixa_nivel if membro.faixa_nivel }}" title="{{ membro.xp_total }} XP">Nv {{ membro.nivel }}</span>{% if membro.posicao_escalada %} <span class="chip-geracao" style="margin:0;">{{ POSICOES[membro.posicao_escalada.rstrip('0123456789')][0] }}</span>{% endif %}{% if membro.id == time_obj.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</li>
             {% endfor %}
         </ul>
     </div>

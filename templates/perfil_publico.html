@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "_macros.html" as macros %}
+{% block titulo %}{{ jogador.nickname }} — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="perfil">
+    {% if jogador.time %}
+        <a href="{{ url_for('detalhe_time', time_id=jogador.time.id) }}" class="link-voltar">← {{ jogador.time.nome }}</a>
+    {% else %}
+        <a href="{{ url_for('times') }}" class="link-voltar">← Times</a>
+    {% endif %}
+
+    <div class="cartao-jogador">
+        <div class="cartao-jogador-foto {{ 'escudo-faixa-' + jogador.faixa_nivel if jogador.faixa_nivel }}">
+            {{ macros.avatar_jogador(jogador, 'avatar-jogador avatar-jogador-grande') }}
+        </div>
+        <div class="cartao-jogador-info">
+            <h1>{{ jogador.nickname }} <span class="selo-nivel {{ 'selo-nivel-' + jogador.faixa_nivel if jogador.faixa_nivel }}" title="{{ jogador.xp_total }} XP">Nível {{ jogador.nivel }}</span></h1>
+            <div class="cartao-jogador-chips">
+                {% if jogador.time %}
+                    <a href="{{ url_for('detalhe_time', time_id=jogador.time.id) }}" class="chip-geracao chip-link">{{ jogador.time.nome }} [{{ jogador.time.tag }}]{% if jogador.time.capitao_id == jogador.id %} · capitão{% endif %}</a>
+                {% else %}
+                    <span class="chip-geracao">Sem time</span>
+                {% endif %}
+                {% if jogador.posicao_preferida %}<span class="chip-geracao">{{ jogador.rotulo_posicao_preferida }}</span>{% endif %}
+                {% if titulos %}<span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> {{ titulos }} título(s)</span>{% endif %}
+                <span class="chip-geracao">{{ jogador.xp_total }} XP</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="perfil-bloco">
+        <h2>Medalhas</h2>
+        {{ macros.pins_jogador(pins) }}
+    </div>
+</section>
+{% endblock %}

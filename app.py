@@ -41,7 +41,7 @@ from werkzeug.utils import secure_filename
 from models import (
     db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
     Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO, XP_DESTAQUE,
-    PedidoEntrada, POSICOES, FORMACOES, chaves_da_formacao, InscricaoPush,
+    PedidoEntrada, POSICOES, FORMACOES, chaves_da_formacao, InscricaoPush, Conquista,
 )
 import email_util
 import notificacoes_push
@@ -96,14 +96,16 @@ app.config["PASTA_UPLOADS"] = os.environ.get("PASTA_UPLOADS", os.path.join(app.r
 app.config["PASTA_PRINTS"] = os.path.join(app.config["PASTA_UPLOADS"], "prints")
 app.config["PASTA_ESCUDOS"] = os.path.join(app.config["PASTA_UPLOADS"], "escudos")
 app.config["PASTA_FEDERACOES"] = os.path.join(app.config["PASTA_UPLOADS"], "federacoes")
+app.config["PASTA_FOTOS"] = os.path.join(app.config["PASTA_UPLOADS"], "fotos")
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB por upload
 EXTENSOES_PRINT_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
 EXTENSOES_IMAGEM_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
-CATEGORIAS_UPLOAD_VALIDAS = {"prints", "escudos", "federacoes"}
+CATEGORIAS_UPLOAD_VALIDAS = {"prints", "escudos", "federacoes", "fotos"}
 
 os.makedirs(app.config["PASTA_PRINTS"], exist_ok=True)
 os.makedirs(app.config["PASTA_ESCUDOS"], exist_ok=True)
 os.makedirs(app.config["PASTA_FEDERACOES"], exist_ok=True)
+os.makedirs(app.config["PASTA_FOTOS"], exist_ok=True)
 
 
 @app.route("/uploads/<categoria>/<path:nome_arquivo>")
@@ -500,7 +502,68 @@ def perfil():
         campeonatos_inscrito=campeonatos_inscrito,
         campeonatos_pendentes=campeonatos_pendentes,
         tipos_chave_pix=pagamentos.TIPOS_CHAVE_PIX,
+        pins=_pins_do_jogador(current_user),
     )
+
+
+@app.route("/jogadores/<int:usuario_id>")
+def perfil_publico(usuario_id):
+    """Página pública de um jogador: foto, nível, time, posição e medalhas.
+    Sem e-mail, sem chave Pix, sem nada de conta."""
+    jogador = User.query.get_or_404(usuario_id)
+    if current_user.is_authenticated and current_user.id == jogador.id:
+        return redirect(url_for("perfil"))
+    titulos = Conquista.query.filter_by(usuario_id=jogador.id, tipo="campeonato").count()
+    return render_template("perfil_publico.html", jogador=jogador, pins=_pins_do_jogador(jogador), titulos=titulos)
+
+
+@app.route("/perfil/foto", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute")
+def enviar_foto_perfil():
+    arquivo = request.files.get("foto")
+    if not arquivo or not arquivo.filename:
+        flash("Selecione uma imagem antes de enviar.", "erro")
+        return redirect(url_for("perfil"))
+    extensao = arquivo.filename.rsplit(".", 1)[-1].lower() if "." in arquivo.filename else ""
+    if extensao not in EXTENSOES_IMAGEM_PERMITIDAS:
+        flash("Formato inválido. Envie uma imagem (png, jpg ou webp).", "erro")
+        return redirect(url_for("perfil"))
+
+    nome_arquivo = secure_filename(f"jogador{current_user.id}-{uuid.uuid4().hex}.{extensao}")
+    arquivo.save(os.path.join(app.config["PASTA_FOTOS"], nome_arquivo))
+    _apagar_upload("fotos", current_user.foto)
+    current_user.foto = nome_arquivo
+    db.session.commit()
+    flash("Foto de perfil atualizada!", "sucesso")
+    return redirect(url_for("perfil"))
+
+
+@app.route("/perfil/foto/remover", methods=["POST"])
+@login_required
+def remover_foto_perfil():
+    _apagar_upload("fotos", current_user.foto)
+    current_user.foto = None
+    db.session.commit()
+    flash("Foto de perfil removida.", "sucesso")
+    return redirect(url_for("perfil"))
+
+
+@app.route("/time/whatsapp", methods=["POST"])
+@login_required
+def salvar_link_whatsapp_time():
+    time_atual = current_user.time
+    if not time_atual or time_atual.capitao_id != current_user.id:
+        flash("Só o capitão pode configurar o grupo de WhatsApp do time.", "erro")
+        return redirect(url_for("time"))
+    link = request.form.get("link_grupo_whatsapp", "").strip()
+    if link and not (link.startswith("https://chat.whatsapp.com/") or link.startswith("http://chat.whatsapp.com/")):
+        flash("Link inválido — use o link de convite do grupo (começa com chat.whatsapp.com).", "erro")
+        return redirect(url_for("time"))
+    time_atual.link_grupo_whatsapp = link or None
+    db.session.commit()
+    flash("Link do grupo de WhatsApp salvo!" if link else "Link do grupo de WhatsApp removido.", "sucesso")
+    return redirect(url_for("time"))
 
 
 @app.route("/perfil/pix", methods=["GET", "POST"])
@@ -791,6 +854,8 @@ def encerrar_temporada(temporada_id):
         linhas, participantes = _tabela_ranking(temporada)
         temporada.status = "encerrada"
         temporada.time_campeao_id = linhas[0]["time"].id if linhas else None
+        if temporada.time_campeao_id is not None:
+            _registrar_conquistas_temporada(temporada, linhas[0]["time"])
         if temporada.time_campeao_id is None:
             temporada.premio_pago_status = "sem_meta"
             flash(f"{temporada.nome} encerrada sem nenhum time pontuando — sem campeão e sem prêmio.", "sucesso")
@@ -2407,6 +2472,7 @@ def _tentar_finalizar_torneio(torneio):
     )
     _registrar_pontos_ranking(torneio)
     _creditar_xp(torneio)
+    _registrar_conquistas_campeonato(torneio)
     # Campeonato sem dinheiro envolvido não tem tela de "confirmar
     # pagamentos" — então é aqui mesmo que os prints saem, senão eles
     # ficariam acumulando no volume pra sempre.
@@ -2442,6 +2508,42 @@ def _destaques_do_torneio(torneio):
         "ataque": sorted(((t, gols_pro[t.id]) for t in jogaram if gols_pro[t.id] == maior), key=lambda x: x[0].nome),
         "defesa": sorted(((t, gols_contra[t.id]) for t in jogaram if gols_contra[t.id] == menor), key=lambda x: x[0].nome),
     }
+
+
+def _registrar_conquistas_campeonato(torneio):
+    """Uma medalha pra cada jogador do elenco do campeão, agora — depois o
+    elenco muda e não dá mais pra saber quem estava. Idempotente."""
+    if not torneio.time_campeao or Conquista.query.filter_by(torneio_id=torneio.id).first():
+        return
+    for membro in torneio.time_campeao.membros:
+        db.session.add(Conquista(
+            usuario_id=membro.id, time_id=torneio.time_campeao_id, tipo="campeonato",
+            torneio_id=torneio.id, federacao_id=torneio.federacao_id,
+        ))
+
+
+def _registrar_conquistas_temporada(temporada, time_campeao):
+    if Conquista.query.filter_by(temporada_id=temporada.id).first():
+        return
+    for membro in time_campeao.membros:
+        db.session.add(Conquista(
+            usuario_id=membro.id, time_id=time_campeao.id, tipo="temporada", temporada_id=temporada.id,
+        ))
+
+
+def _pins_do_jogador(usuario):
+    """Medalhas agrupadas pra tela: uma por federação (com quantas vezes) e
+    uma por temporada vencida. [{tipo, federacao|temporada, vezes}]"""
+    conquistas = Conquista.query.filter_by(usuario_id=usuario.id).order_by(Conquista.criado_em).all()
+    por_federacao, temporadas = {}, []
+    for c in conquistas:
+        if c.tipo == "campeonato" and c.federacao:
+            item = por_federacao.setdefault(c.federacao_id, {"tipo": "campeonato", "federacao": c.federacao, "vezes": 0, "torneios": []})
+            item["vezes"] += 1
+            item["torneios"].append(c.torneio)
+        elif c.tipo == "temporada" and c.temporada:
+            temporadas.append({"tipo": "temporada", "temporada": c.temporada, "vezes": 1})
+    return temporadas + sorted(por_federacao.values(), key=lambda i: -i["vezes"])
 
 
 def _creditar_xp(torneio):
@@ -4010,23 +4112,51 @@ def _garantir_colunas_novas():
         ("federacoes", "fatia_lucro", "DOUBLE PRECISION NOT NULL DEFAULT 0.8"),
         # Escalação e posições.
         ("users", "posicao_preferida", "VARCHAR(4)"),
+        # Perfil do jogador e grupo do time.
+        ("users", "foto", "VARCHAR(255)"),
+        ("teams", "link_grupo_whatsapp", "VARCHAR(255)"),
         ("users", "posicao_escalada", "VARCHAR(6)"),
     ]
     for tabela, coluna, tipo in colunas:
         try:
             db.session.execute(db.text(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}"))
             db.session.commit()
-        except Exception as erro:  # SQLite não tem "IF NOT EXISTS" em ADD COLUMN
+            continue
+        except Exception:
             db.session.rollback()
-            app.logger.info(f"Migração de coluna {tabela}.{coluna} ignorada: {erro}")
+        # SQLite (banco local) não tem "IF NOT EXISTS" em ADD COLUMN: tenta a
+        # forma simples; "duplicate column" só quer dizer que já existe.
+        try:
+            db.session.execute(db.text(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}"))
+            db.session.commit()
+        except Exception as erro:
+            db.session.rollback()
+            if "duplicate column" not in str(erro).lower():
+                app.logger.info(f"Migração de coluna {tabela}.{coluna} ignorada: {erro}")
 
 
 # gunicorn importa esse arquivo em produção (ele nunca executa como
 # "__main__"). db.create_all() só cria as tabelas que ainda não existem,
 # então rodar de novo a cada início não faz nada se elas já estiverem lá.
+def _preencher_conquistas_antigas():
+    """Medalhas pra campeonatos/temporadas que terminaram antes das
+    conquistas existirem. Usa o elenco atual do campeão — é a melhor
+    aproximação disponível, e roda uma vez só (idempotente por torneio)."""
+    try:
+        for torneio in Torneio.query.filter_by(status="finalizado").filter(Torneio.time_campeao_id.isnot(None)).all():
+            _registrar_conquistas_campeonato(torneio)
+        for temporada in Temporada.query.filter_by(status="encerrada").filter(Temporada.time_campeao_id.isnot(None)).all():
+            _registrar_conquistas_temporada(temporada, temporada.time_campeao)
+        db.session.commit()
+    except Exception as erro:
+        db.session.rollback()
+        app.logger.warning(f"Preenchimento de conquistas antigas ignorado: {erro}")
+
+
 with app.app_context():
     db.create_all()
     _garantir_colunas_novas()
+    _preencher_conquistas_antigas()
 
 if __name__ == "__main__":
     # Debug SÓ fica ligado se você setar FLASK_DEBUG=1 no ambiente. Com

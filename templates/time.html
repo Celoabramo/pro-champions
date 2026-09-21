@@ -36,6 +36,22 @@
         {% endif %}
 
         <div class="perfil-bloco">
+            <h2>Grupo de WhatsApp</h2>
+            {% if usuario.time.link_grupo_whatsapp %}
+                <a href="{{ usuario.time.link_grupo_whatsapp }}" target="_blank" rel="noopener" class="botao-secundario" style="margin-bottom:10px;">Entrar no grupo do time</a>
+            {% else %}
+                <p class="texto-fraco-pequeno">{% if usuario.id == usuario.time.capitao_id %}Cole o link de convite do grupo pra ele aparecer aqui e na página pública do time.{% else %}O capitão ainda não cadastrou o grupo.{% endif %}</p>
+            {% endif %}
+            {% if usuario.id == usuario.time.capitao_id %}
+                <form method="POST" action="{{ url_for('salvar_link_whatsapp_time') }}" class="form-escudo">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="url" name="link_grupo_whatsapp" value="{{ usuario.time.link_grupo_whatsapp or '' }}" placeholder="https://chat.whatsapp.com/..." class="campo-busca-times" style="max-width:320px;">
+                    <button type="submit" class="botao-secundario-pequeno">Salvar</button>
+                </form>
+            {% endif %}
+        </div>
+
+        <div class="perfil-bloco">
             <h2>Código de convite</h2>
             <p class="codigo-convite">{{ usuario.time.codigo_convite }}</p>
             <p class="texto-fraco-pequeno">Passe esse código para quem você quiser chamar para o time.</p>
@@ -46,7 +62,7 @@
             <ul class="lista-membros">
                 {% for membro in usuario.time.membros %}
                     <li style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <span>{{ membro.nickname }}{% if membro.id == usuario.time.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}</span>
+                        <a href="{{ url_for('perfil_publico', usuario_id=membro.id) }}" class="membro-link">{{ macros.avatar_jogador(membro, 'avatar-jogador avatar-jogador-mini') }}{{ membro.nickname }}</a>{% if membro.id == usuario.time.capitao_id %} <span class="selo-capitao">Capitão</span>{% endif %}
                         {% if membro.posicao_escalada %}<span class="chip-geracao" style="margin:0;">{{ POSICOES[membro.posicao_escalada.rstrip('0123456789')][0] }}</span>{% else %}<span class="texto-fraco-pequeno">reserva</span>{% endif %}
                         {% if membro.posicao_preferida %}<span class="texto-fraco-pequeno">prefere {{ membro.rotulo_posicao_preferida }}</span>{% endif %}
                         {% if usuario.id == usuario.time.capitao_id and membro.posicao_escalada and membro.id != usuario.id %}
