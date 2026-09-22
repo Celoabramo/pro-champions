@@ -329,6 +329,34 @@
             </a>
         {% endif %}
     </nav>
+    {# Barra de rolagem discreta: a nativa fica escondida (estilo.css) e esta
+       aqui aparece só enquanto a página rola, sumindo ~0,8s depois de parar.
+       Não recebe clique — é só indicador de posição. #}
+    <div class="rolagem-indicador" id="rolagem-indicador" aria-hidden="true"><div class="rolagem-polegar" id="rolagem-polegar"></div></div>
+    <script>
+        (function () {
+            var trilho = document.getElementById("rolagem-indicador");
+            var polegar = document.getElementById("rolagem-polegar");
+            var doc = document.documentElement;
+            var temporizador = null;
+
+            function atualizar() {
+                var alturaPagina = doc.scrollHeight, alturaTela = window.innerHeight;
+                if (alturaPagina <= alturaTela + 2) { trilho.classList.remove("visivel"); return; }
+                var trilhoAltura = trilho.clientHeight;
+                var polegarAltura = Math.max(28, Math.round(trilhoAltura * alturaTela / alturaPagina));
+                var maxRolagem = alturaPagina - alturaTela;
+                var topo = Math.round((trilhoAltura - polegarAltura) * (window.scrollY / maxRolagem));
+                polegar.style.height = polegarAltura + "px";
+                polegar.style.transform = "translateY(" + topo + "px)";
+                trilho.classList.add("visivel");
+                clearTimeout(temporizador);
+                temporizador = setTimeout(function () { trilho.classList.remove("visivel"); }, 800);
+            }
+            window.addEventListener("scroll", atualizar, { passive: true });
+            window.addEventListener("resize", atualizar, { passive: true });
+        })();
+    </script>
     {% block script_extra %}{% endblock %}
 </body>
 </html>

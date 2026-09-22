@@ -2862,3 +2862,32 @@ dialog.popup-imagem img {
     .avatar-jogador-grande { width: 72px; height: 72px; font-size: 28px; }
     .cartao-jogador-info h1 { font-size: 22px; }
 }
+
+/* ============ Barra de rolagem discreta ============ */
+/* A nativa está escondida (topo do arquivo). Este trilho fino fica na
+   direita, aparece durante a rolagem e some quando ela para (classe
+   "visivel" controlada em base.html). Não recebe clique. */
+.rolagem-indicador {
+    position: fixed;
+    top: 10px; right: 4px; bottom: 10px;
+    width: 4px;
+    z-index: 60;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+}
+.rolagem-indicador.visivel { opacity: 1; transition-duration: 0.12s; }
+.rolagem-polegar {
+    width: 100%;
+    border-radius: 999px;
+    background: rgba(46, 204, 113, 0.55);
+    box-shadow: 0 0 6px rgba(46, 204, 113, 0.35);
+    will-change: transform;
+}
+@media (max-width: 860px) {
+    /* no celular a barra de navegação fixa ocupa o rodapé */
+    .rolagem-indicador { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rolagem-indicador { transition: none; }
+}
