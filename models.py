@@ -6,6 +6,7 @@ User (jogador). Nas próximas partes vamos adicionar Team, Tournament
 e Match aqui também.
 """
 
+import hashlib
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -171,6 +172,20 @@ class User(UserMixin, ComXP, db.Model):
     nickname = db.Column(db.String(40), unique=True, nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False)
     criado_em = db.Column(db.DateTime, server_default=db.func.now())
+
+    def get_id(self):
+        """Identidade que vai dentro do cookie de login.
+
+        Além do id, leva uma marca da senha atual. É isso que faz trocar a
+        senha (ou redefinir por "esqueci minha senha") derrubar os logins
+        salvos em outros aparelhos: a marca muda e o cookie antigo para de
+        valer. Sem isso, o cookie de "manter conectado" continuaria abrindo
+        a conta por 30 dias mesmo depois da troca de senha.
+        """
+        return f"{self.id}:{self.marca_da_senha()}"
+
+    def marca_da_senha(self):
+        return hashlib.sha256(self.senha_hash.encode()).hexdigest()[:16]
 
     # Só quem tem essa flag marcada pode criar campeonato. Por enquanto não
     # tem painel de admin — a promoção é feita direto no banco (ver comando

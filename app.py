@@ -75,6 +75,16 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
 
+# O cookie de sessão morre quando o navegador fecha. Pra não obrigar todo
+# mundo a digitar a senha de novo a cada visita, o login também grava um
+# cookie de "manter conectado" que dura 30 dias — com as mesmas travas do
+# cookie de sessão. Ele deixa de valer se a pessoa clicar em "Sair" ou
+# trocar a senha (ver User.get_id em models.py).
+app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+app.config["REMEMBER_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
+
 # Localmente usa SQLite em arquivo (simples, sem precisar instalar nada).
 # Em produção, defina DATABASE_URL no ambiente apontando pra um Postgres —
 # o Railway não mantém arquivos entre deploys, um banco em arquivo local
@@ -192,8 +202,24 @@ login_manager.init_app(app)
 
 @login_manager.user_loader
 def load_user(user_id):
-    """O Flask-Login usa essa função para saber quem é o usuário logado."""
-    return User.query.get(int(user_id))
+    """O Flask-Login usa essa função para saber quem é o usuário logado.
+
+    O id guardado no cookie vem como "123:marca" (ver User.get_id): a marca
+    é derivada da senha atual, então um cookie gravado antes de uma troca de
+    senha não abre mais a conta. Cookie no formato antigo (só o número)
+    continua valendo — senão todo mundo que estava logado cairia no deploy
+    que estreou esse formato.
+    """
+    partes = str(user_id).split(":")
+    try:
+        usuario = User.query.get(int(partes[0]))
+    except ValueError:
+        return None
+    if usuario is None:
+        return None
+    if len(partes) > 1 and not hmac.compare_digest(partes[1], usuario.marca_da_senha()):
+        return None
+    return usuario
 
 
 def criar_notificacao(usuario, tipo, mensagem, torneio=None, confronto=None):
@@ -392,7 +418,7 @@ def cadastro():
         db.session.add(novo_usuario)
         db.session.commit()
 
-        login_user(novo_usuario)
+        login_user(novo_usuario, remember=True)
         flash("Cadastro feito com sucesso!", "sucesso")
         return redirect(url_for("perfil"))
 
@@ -409,7 +435,7 @@ def login():
         usuario = User.query.filter_by(email=email).first()
 
         if usuario and check_password_hash(usuario.senha_hash, senha):
-            login_user(usuario)
+            login_user(usuario, remember=True)
             return redirect(url_for("perfil"))
 
         flash("E-mail ou senha incorretos.", "erro")
