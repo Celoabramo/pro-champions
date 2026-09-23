@@ -299,6 +299,12 @@ def injetar_posicoes():
 
 
 @app.context_processor
+def injetar_plataformas_ea():
+    """Lista de plataformas do EA FC pro formulário do clube em "Meu time"."""
+    return dict(plataformas_ea=PLATAFORMAS_EA, plataforma_ea_padrao=PLATAFORMA_EA_PADRAO)
+
+
+@app.context_processor
 def injetar_push():
     """Chave pública VAPID pro botão de ativar notificação (é pública mesmo,
     pode ir no HTML). push_configurado=False esconde o botão."""
@@ -1508,6 +1514,67 @@ def atualizar_posicao_preferida():
     return redirect(url_for("perfil"))
 
 
+@app.route("/perfil/nick-ea", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute", methods=["POST"])
+def atualizar_nick_ea():
+    """Nick do jogador dentro do EA FC — o que liga a estatística da API da
+    EA à conta dele aqui. Campo livre de propósito: gamertag aceita espaço,
+    ponto, hífen e acento, e a comparação com a API é feita normalizada
+    (ver fase de estatísticas), não caractere a caractere."""
+    nick = " ".join(request.form.get("nick_ea", "").split())[:40]
+    current_user.nick_ea = nick or None
+    db.session.commit()
+    flash("Nick do EA FC salvo." if nick else "Nick do EA FC removido.", "sucesso")
+    return redirect(url_for("perfil"))
+
+
+@app.route("/time/ea-club", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute", methods=["POST"])
+def salvar_ea_club_do_time():
+    """Capitão cadastra o clube do time no EA FC Pro Clubs."""
+    time_atual = current_user.time
+    if not time_atual or time_atual.capitao_id != current_user.id:
+        flash("Só o capitão pode cadastrar o clube do time no EA FC.", "erro")
+        return redirect(url_for("time"))
+
+    plataforma = request.form.get("ea_platform", PLATAFORMA_EA_PADRAO)
+    if plataforma not in PLATAFORMAS_EA:
+        flash("Plataforma inválida.", "erro")
+        return redirect(url_for("time"))
+
+    bruto = request.form.get("ea_club_id", "").strip()
+    if not bruto:
+        time_atual.ea_club_id = None
+        time_atual.ea_platform = plataforma
+        db.session.commit()
+        flash("Clube do EA FC removido — esse time volta a validar placar só por print.", "sucesso")
+        return redirect(url_for("time"))
+
+    # Aceita o número colado de qualquer jeito (com espaço, com "clubId=" na
+    # frente): fica só com os dígitos.
+    digitos = "".join(c for c in bruto if c.isdigit())
+    if not digitos or len(digitos) > 12:
+        flash("O ID do clube é só o número que aparece no site da EA. Confira e tente de novo.", "erro")
+        return redirect(url_for("time"))
+
+    club_id = int(digitos)
+    # Dois times do site apontando pro mesmo clube da EA validariam o placar
+    # um do outro. Não dá pra ser constraint no banco (o ALTER não roda no
+    # SQLite local), então a checagem é aqui.
+    dono = Team.query.filter(Team.ea_club_id == club_id, Team.id != time_atual.id).first()
+    if dono:
+        flash(f"Esse clube do EA FC já está cadastrado no time {dono.nome}.", "erro")
+        return redirect(url_for("time"))
+
+    time_atual.ea_club_id = club_id
+    time_atual.ea_platform = plataforma
+    db.session.commit()
+    flash("Clube do EA FC salvo.", "sucesso")
+    return redirect(url_for("time"))
+
+
 @app.route("/time/escudo", methods=["POST"])
 @login_required
 def enviar_escudo_time():
@@ -1782,6 +1849,17 @@ def detalhe_time(time_id):
         extrato=extrato,
         pedido_pendente=pedido_pendente,
     )
+
+
+# Códigos de plataforma que a API da EA aceita no parâmetro "platform".
+# O valor é o rótulo que aparece na tela pro capitão escolher.
+PLATAFORMAS_EA = {
+    "common-gen5": "PS5 / Xbox Series",
+    "common-gen4": "PS4 / Xbox One",
+    "pc": "PC",
+    "nx": "Nintendo Switch",
+}
+PLATAFORMA_EA_PADRAO = "common-gen5"
 
 
 TAMANHOS_VALIDOS = [4, 8, 16, 32]
@@ -4340,6 +4418,14 @@ def _garantir_colunas_novas():
         ("users", "posicao_escalada", "VARCHAR(6)"),
         # Reserva de vaga: campeonatos antigos ficam como inscrição direta.
         ("torneios", "modo_inscricao", "VARCHAR(20) NOT NULL DEFAULT 'direta'"),
+        # Placar automático pela API da EA (fase 1).
+        ("users", "nick_ea", "VARCHAR(40)"),
+        ("teams", "ea_club_id", "INTEGER"),
+        ("teams", "ea_platform", "VARCHAR(20)"),
+        # Sem UNIQUE inline: o SQLite recusa "ADD COLUMN ... UNIQUE". A
+        # unicidade entra logo abaixo, como índice — isso os dois bancos
+        # aceitam.
+        ("confrontos", "ea_match_id", "VARCHAR(40)"),
     ]
     for tabela, coluna, tipo in colunas:
         try:
@@ -4357,6 +4443,23 @@ def _garantir_colunas_novas():
             db.session.rollback()
             if "duplicate column" not in str(erro).lower():
                 app.logger.info(f"Migração de coluna {tabela}.{coluna} ignorada: {erro}")
+
+    # Índices que precisam existir em tabela que já existia. "CREATE UNIQUE
+    # INDEX IF NOT EXISTS" funciona no Postgres e no SQLite, e nos dois o
+    # NULL não conflita com NULL — então vários confrontos sem partida da EA
+    # convivem numa coluna única.
+    indices = [
+        ("ix_confrontos_ea_match_id", "confrontos", "ea_match_id"),
+    ]
+    for nome, tabela, coluna in indices:
+        try:
+            db.session.execute(
+                db.text(f"CREATE UNIQUE INDEX IF NOT EXISTS {nome} ON {tabela} ({coluna})")
+            )
+            db.session.commit()
+        except Exception as erro:
+            db.session.rollback()
+            app.logger.info(f"Índice {nome} ignorado: {erro}")
 
 
 # gunicorn importa esse arquivo em produção (ele nunca executa como

@@ -207,6 +207,13 @@ class User(UserMixin, ComXP, db.Model):
     # Foto de perfil (arquivo em uploads/fotos, servido por arquivo_upload).
     foto = db.Column(db.String(255), nullable=True)
 
+    # Nome do jogador DENTRO do EA FC, exatamente como aparece no jogo. É a
+    # chave que liga a estatística que vem da API da EA (gols, assistências,
+    # rating) à conta aqui do site. Cadastrado uma vez pelo próprio jogador
+    # no perfil. Não confundir com Confronto.nick_fc_timeN, que é o nick do
+    # capitão naquela partida específica, só pros times se acharem no jogo.
+    nick_ea = db.Column(db.String(40), nullable=True)
+
     # Token de redefinição de senha ("esqueci minha senha"). Guardamos só o
     # hash (sha256) do token, nunca o valor em si — igual senha, não dá pra
     # reconstruir o token original a partir do que tá no banco. Expira em
@@ -571,6 +578,13 @@ class Team(ComXP, db.Model):
     # aparece na página pública e no "Meu time" pros membros).
     link_grupo_whatsapp = db.Column(db.String(255), nullable=True)
 
+    # Clube do time dentro do EA FC Pro Clubs. Com os dois times de um
+    # confronto cadastrados, o site consegue buscar o placar direto na API
+    # da EA em vez de depender do print. ea_platform é o código que a API
+    # usa pra separar as plataformas (ver PLATAFORMAS_EA em app.py).
+    ea_club_id = db.Column(db.Integer, nullable=True)
+    ea_platform = db.Column(db.String(20), nullable=True, default="common-gen5")
+
     @property
     def escalacao(self):
         """Linhas do esquema com quem ocupa cada slot: [[(chave, código,
@@ -670,6 +684,11 @@ class Confronto(db.Model):
     # Horário em que o organizador marcou a partida como iniciada. É a
     # partir daqui que conta o prazo de 1h pro W.O. automático.
     hora_inicio = db.Column(db.DateTime, nullable=True)
+
+    # Id da partida na API da EA que validou esse placar. Único: a mesma
+    # partida do jogo não pode ser usada pra fechar dois confrontos
+    # diferentes (seria a forma óbvia de fraudar o placar automático).
+    ea_match_id = db.Column(db.String(40), nullable=True, unique=True)
 
     # Time que venceu por W.O. Fica nulo se o organizador declarou W.O.
     # duplo (nenhum dos dois compareceu) — nesse caso não tem vencedor.

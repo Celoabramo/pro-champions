@@ -260,6 +260,27 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .linha-codigo-convite .codigo-convite { margin: 4px 0; }
 
+/* Explicação de onde achar o ID do clube na EA — fechada por padrão pra não
+   encher a tela de quem já sabe. */
+.ajuda-ea { margin-bottom: 12px; }
+.ajuda-ea summary {
+    cursor: pointer;
+    color: var(--acento);
+    font-size: 13px;
+    font-weight: 600;
+    list-style: none;
+}
+.ajuda-ea summary::-webkit-details-marker { display: none; }
+.ajuda-ea summary::before { content: "▸ "; }
+.ajuda-ea[open] summary::before { content: "▾ "; }
+.ajuda-ea p { color: var(--texto-fraco); font-size: 13px; line-height: 1.6; margin: 8px 0 0; }
+.ajuda-ea code {
+    background: var(--linha);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
 .link-sair { color: var(--texto-fraco); font-size: 14px; transition: color 0.15s; }
 .link-sair:hover { color: var(--texto); }
 

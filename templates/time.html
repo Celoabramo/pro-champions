@@ -52,6 +52,50 @@
         </div>
 
         <div class="perfil-bloco">
+            <h2>Clube no EA FC</h2>
+            {% if usuario.time.ea_club_id %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:10px;">
+                    Clube <strong>{{ usuario.time.ea_club_id }}</strong>
+                    ({{ plataformas_ea.get(usuario.time.ea_platform, usuario.time.ea_platform or '—') }}) cadastrado.
+                </p>
+            {% else %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:10px;">
+                    Sem clube cadastrado — os placares desse time continuam sendo confirmados por print.
+                </p>
+            {% endif %}
+            {% if usuario.id == usuario.time.capitao_id %}
+                <details class="ajuda-ea">
+                    <summary>Onde acho o ID do meu clube?</summary>
+                    <p>
+                        Abra o site de Pro Clubs da EA, procure o seu clube pelo nome e olhe o endereço da
+                        página: o ID é o número que aparece nele (depois de <code>clubId=</code>). Pode colar
+                        aqui o número sozinho ou o pedaço inteiro do endereço — o site fica só com os dígitos.
+                    </p>
+                    <p>
+                        A plataforma precisa ser a mesma em que o clube joga. Se o placar automático não achar
+                        as partidas depois, quase sempre é a plataforma errada.
+                    </p>
+                </details>
+                <form method="POST" action="{{ url_for('salvar_ea_club_do_time') }}" class="form-escudo">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="ea_club_id" inputmode="numeric" maxlength="60"
+                           value="{{ usuario.time.ea_club_id or '' }}" placeholder="ID do clube (ex: 1234567)"
+                           aria-label="ID do clube no EA FC" class="campo-busca-times" style="max-width:220px;">
+                    <select name="ea_platform" class="campo-busca-times" style="max-width:200px;"
+                            aria-label="Plataforma do clube">
+                        {% for codigo, rotulo in plataformas_ea.items() %}
+                            <option value="{{ codigo }}" {% if (usuario.time.ea_platform or plataforma_ea_padrao) == codigo %}selected{% endif %}>{{ rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="botao-secundario-pequeno">Salvar</button>
+                </form>
+                <p class="texto-fraco-pequeno" style="margin-top:8px;">
+                    Deixe o campo em branco e salve para desvincular o clube.
+                </p>
+            {% endif %}
+        </div>
+
+        <div class="perfil-bloco">
             <h2>Código de convite</h2>
             <div class="linha-codigo-convite">
                 <p class="codigo-convite" id="codigo-convite">{{ usuario.time.codigo_convite }}</p>

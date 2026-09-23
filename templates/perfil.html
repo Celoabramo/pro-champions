@@ -63,6 +63,23 @@
     {% endif %}
 
     <div class="perfil-bloco">
+        <h2>Seu nick no EA FC</h2>
+        <p class="texto-fraco-pequeno" style="margin-bottom:10px;">
+            Escreva <strong>exatamente</strong> como aparece dentro do jogo, com maiúsculas, espaços e
+            símbolos iguais. É por esse nome que o site vai reconhecer os seus gols, assistências e
+            defesas quando o placar for buscado direto na EA. Errado, a estatística da partida não
+            encontra você.
+        </p>
+        <form method="POST" action="{{ url_for('atualizar_nick_ea') }}" class="form-escudo">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="nick_ea" maxlength="40" value="{{ usuario.nick_ea or '' }}"
+                   placeholder="Seu nome no EA FC" aria-label="Seu nick no EA FC"
+                   class="campo-busca-times" style="max-width:260px;">
+            <button type="submit" class="botao-secundario-pequeno">Salvar</button>
+        </form>
+    </div>
+
+    <div class="perfil-bloco">
         <h2>Posição preferida</h2>
         <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Aparece pro capitão quando você pede vaga num time e no elenco. Não prende você a nada — a escalação de verdade é feita em "Meu time".</p>
         <form method="POST" action="{{ url_for('atualizar_posicao_preferida') }}" class="form-escudo">
