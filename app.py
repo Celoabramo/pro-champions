@@ -45,6 +45,7 @@ from models import (
 )
 import email_util
 import notificacoes_push
+import ea_client
 import pagamentos
 import validacao_ia
 
@@ -1851,15 +1852,11 @@ def detalhe_time(time_id):
     )
 
 
-# Códigos de plataforma que a API da EA aceita no parâmetro "platform".
-# O valor é o rótulo que aparece na tela pro capitão escolher.
-PLATAFORMAS_EA = {
-    "common-gen5": "PS5 / Xbox Series",
-    "common-gen4": "PS4 / Xbox One",
-    "pc": "PC",
-    "nx": "Nintendo Switch",
-}
-PLATAFORMA_EA_PADRAO = "common-gen5"
+# Plataformas vêm do cliente da EA pra não existirem duas listas: testando
+# contra a API de verdade, "common-gen4" (PS4/Xbox One) é recusado com HTTP
+# 400, então a geração antiga simplesmente não dá pra consultar.
+PLATAFORMAS_EA = ea_client.PLATAFORMAS
+PLATAFORMA_EA_PADRAO = ea_client.PLATAFORMA_PADRAO
 
 
 TAMANHOS_VALIDOS = [4, 8, 16, 32]
