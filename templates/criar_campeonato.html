@@ -20,6 +20,25 @@
         <label for="valor_inscricao">Valor da inscrição por time (R$, use 0 para gratuito)</label>
         <input type="text" id="valor_inscricao" name="valor_inscricao" placeholder="100.00" required>
 
+        <label>Como os times entram</label>
+        <div class="opcoes-formato">
+            <label class="opcao-formato">
+                <input type="radio" name="modo_inscricao" value="direta" checked>
+                <div>
+                    <strong>Inscrição direta</strong>
+                    <span class="texto-fraco-pequeno">O time paga o Pix na hora de se inscrever — a vaga só é dele depois que o pagamento cai.</span>
+                </div>
+            </label>
+            <label class="opcao-formato">
+                <input type="radio" name="modo_inscricao" value="reserva">
+                <div>
+                    <strong>Reserva de vaga</strong>
+                    <span class="texto-fraco-pequeno">O time reserva a vaga na hora, sem pagar nada, e quita a taxa antes de começar. O chaveamento fica travado enquanto alguém não pagar.</span>
+                </div>
+            </label>
+        </div>
+        <p class="texto-fraco-pequeno" style="margin:-8px 0 18px;">Só vale para campeonato com inscrição paga — no gratuito a vaga é confirmada na hora.</p>
+
         <label for="max_times">Número de chaves (máximo de times)</label>
         <select id="max_times" name="max_times" required>
             {% for tamanho in tamanhos %}

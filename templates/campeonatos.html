@@ -108,7 +108,7 @@
                     </div>
                     <p class="card-campeonato-info">
                         {% if torneio.data_campeonato %}{{ torneio.data_campeonato.strftime('%d/%m/%Y') }}{% if torneio.hora_campeonato %} às {{ torneio.hora_campeonato.strftime('%H:%M') }}{% endif %} · {% endif %}
-                        {{ torneio.times_inscritos|length }} time(s) inscrito(s) · {{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}
+                        {{ torneio.times_com_vaga|length }} time(s) inscrito(s) · {{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}
                     </p>
                     <span class="chip-geracao chip-jogo">{{ torneio.nome_jogo }}</span>
                     <span class="chip-geracao">{{ 'Antiga geração' if torneio.geracao == 'antiga' else 'Nova geração' }}</span>

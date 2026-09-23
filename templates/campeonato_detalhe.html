@@ -22,7 +22,7 @@
     </div>
     <p class="perfil-email">
         {% if torneio.data_campeonato %}{{ torneio.data_campeonato.strftime('%d/%m/%Y') }}{% if torneio.hora_campeonato %} às {{ torneio.hora_campeonato.strftime('%H:%M') }}{% endif %} · {% endif %}
-        {{ torneio.times_inscritos|length }}/{{ torneio.max_times }} times
+        {{ torneio.times_com_vaga|length }}/{{ torneio.max_times }} times
     </p>
     {% if torneio.descricao %}
         {% set descricao_longa = torneio.descricao|length > 220 or torneio.descricao.count('\n') >= 3 %}
@@ -43,6 +43,9 @@
         <span class="chip-valor">Inscrição R$ {{ "%.2f"|format(torneio.valor_inscricao) }} por time</span>
     {% else %}
         <span class="chip-valor chip-valor-gratis">Inscrição gratuita</span>
+    {% endif %}
+    {% if torneio.eh_por_reserva %}
+        <span class="chip-reserva">Vaga reservada — paga antes de começar</span>
     {% endif %}
     {% if torneio.valor_premio > 0 %}
         <span class="chip-premio"><span class="trofeu-chip" aria-hidden="true">🏆</span> Prêmio R$ {{ "%.2f"|format(torneio.valor_premio) }}</span>
@@ -200,6 +203,16 @@
                 window.addEventListener("resize", ajustarEscala);
             })();
         </script>
+    {% elif eh_organizador and torneio.status == 'aberto' and reservas_pendentes %}
+        <div class="bloco-chaveamento" style="text-align:center;">
+            <p class="texto-aviso" style="color: var(--erro); margin-bottom:6px;">
+                {{ reservas_pendentes|length }} time(s) com a vaga reservada ainda não pagaram a inscrição.
+            </p>
+            <p class="texto-fraco-pequeno">
+                O chaveamento só libera quando todo mundo pagar. Se algum time não for pagar,
+                cancele a reserva dele na lista abaixo para liberar a vaga.
+            </p>
+        </div>
     {% elif eh_organizador and pode_gerar_chaveamento %}
         {% set faltando = torneio.max_times - times_pagos %}
         {% set premio_cai = torneio.total_premios > 0 and total_premios_se_comecar_agora != torneio.total_premios %}
@@ -230,22 +243,38 @@
     {% endif %}
 
     <div class="perfil-bloco">
-        <h2>Times inscritos ({{ torneio.times_inscritos|length }} / {{ torneio.max_times }})</h2>
-        {% if torneio.times_inscritos %}
+        <h2>Times inscritos ({{ torneio.inscricoes_ativas|length }} / {{ torneio.max_times }})</h2>
+        {% if eh_organizador and torneio.eh_por_reserva and torneio.inscricoes_ativas %}
+            <p class="texto-fraco-pequeno" style="margin:-6px 0 12px;">
+                {{ torneio.times_inscritos|length }} pago(s) · {{ reservas_pendentes|length }} reservado(s) sem pagar.
+                Esse controle aparece só para a organização.
+            </p>
+        {% endif %}
+        {% if torneio.inscricoes_ativas %}
             <ul class="lista-membros lista-times-escudo">
-                {% for inscricao in torneio.inscricoes if inscricao.status == 'pago' and inscricao.time and not inscricao.foi_reembolsada %}
+                {% for inscricao in torneio.inscricoes_ativas %}
+                    {# O selo de pago/reservado é informação da organização — o
+                       capitão do próprio time também vê, porque é a cobrança dele. #}
+                    {% set meu_time = current_user.is_authenticated and current_user.time_id == inscricao.time_id %}
                     <li>
                         {{ macros.escudo_time(inscricao.time, 'escudo-time-pequeno') }}
                         <span>{{ inscricao.time.nome }} <span class="tag">[{{ inscricao.time.tag }}]</span></span>
+                        {% if eh_organizador or meu_time %}
+                            {% if inscricao.status == 'reservado' %}
+                                <span class="selo-inscricao selo-inscricao-reservado" title="Vaga reservada, taxa ainda não paga">Reservado</span>
+                            {% else %}
+                                <span class="selo-inscricao selo-inscricao-pago" title="Inscrição paga">Pago</span>
+                            {% endif %}
+                        {% endif %}
                         {% if eh_organizador and inscricao.reembolso_status == 'falhou' %}
                             <span class="texto-fraco-pequeno" style="color: var(--erro);">reembolso falhou — o capitão precisa cadastrar uma chave Pix no perfil</span>
                         {% endif %}
                         {% if eh_organizador and torneio.status == 'aberto' %}
                             <form method="POST" style="margin-left:auto;"
                                   action="{{ url_for('remover_time_do_campeonato', torneio_id=torneio.id, inscricao_id=inscricao.id) }}"
-                                  onsubmit="return confirm('Remover {{ inscricao.time.nome }} do campeonato? A inscrição vai ser devolvida por Pix, descontando R$ 1,60 de taxa.');">
+                                  onsubmit="return confirm({% if inscricao.status == 'reservado' %}'Cancelar a reserva do {{ inscricao.time.nome }}? A vaga fica livre para outro time. Nada foi pago, então não tem reembolso.'{% else %}'Remover {{ inscricao.time.nome }} do campeonato? A inscrição vai ser devolvida por Pix, descontando R$ 1,60 de taxa.'{% endif %});">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="botao-secundario-pequeno">Remover e reembolsar</button>
+                                <button type="submit" class="botao-secundario-pequeno">{{ 'Cancelar reserva' if inscricao.status == 'reservado' else 'Remover e reembolsar' }}</button>
                             </form>
                         {% endif %}
                     </li>
@@ -454,12 +483,42 @@
 
         {% if time_ja_inscrito %}
             <p class="texto-fraco-pequeno" style="margin-top:16px;">Seu time já está inscrito nesse campeonato.</p>
+        {% elif minha_reserva %}
+            {% if current_user.time.capitao_id == current_user.id and torneio.status == 'aberto' %}
+                <div class="aviso-reserva">
+                    <strong>Vaga reservada para o {{ current_user.time.nome }}</strong>
+                    <span>
+                        Falta pagar a taxa de R$ {{ "%.2f"|format(torneio.valor_inscricao) }}. O campeonato
+                        não começa enquanto algum time reservado não pagar — e a organização pode cancelar
+                        a reserva de quem deixar para depois.
+                    </span>
+                    <form method="POST" action="{{ url_for('pagar_reserva', torneio_id=torneio.id, inscricao_id=minha_reserva.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="botao-principal">Pagar taxa de inscrição</button>
+                    </form>
+                </div>
+            {% else %}
+                <p class="texto-fraco-pequeno" style="margin-top:16px;">
+                    A vaga do seu time está reservada. O capitão precisa pagar a taxa de
+                    R$ {{ "%.2f"|format(torneio.valor_inscricao) }} antes do campeonato começar.
+                </p>
+            {% endif %}
         {% elif inscricao_pendente %}
             <a href="{{ url_for('pagamento_pix', torneio_id=torneio.id, inscricao_id=inscricao_pendente.id) }}" class="botao-principal" style="margin-top:20px; display:inline-flex;">
                 Finalizar pagamento do Pix
             </a>
         {% elif torneio.status == 'aberto' %}
-            {% if torneio.valor_inscricao > 0 %}
+            {% if torneio.eh_por_reserva %}
+                <form method="POST" action="{{ url_for('inscrever_time', torneio_id=torneio.id) }}" style="margin-top:20px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Reservar vaga</button>
+                </form>
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">
+                    A reserva é de graça e garante a vaga na hora. A taxa de
+                    R$ {{ "%.2f"|format(torneio.valor_inscricao) }} é paga depois, pelo botão que aparece aqui —
+                    antes do campeonato começar.
+                </p>
+            {% elif torneio.valor_inscricao > 0 %}
                 <button type="button" class="botao-principal" style="margin-top:20px;" onclick="document.getElementById('popup-taxa').showModal()">
                     Inscrever meu time
                 </button>
@@ -486,7 +545,7 @@
     {% endif %}
 </section>
 
-{% if torneio.valor_inscricao > 0 and current_user.is_authenticated and not time_ja_inscrito %}
+{% if torneio.valor_inscricao > 0 and not torneio.eh_por_reserva and current_user.is_authenticated and not time_ja_inscrito %}
     <dialog id="popup-taxa" class="popup-print">
         <span class="mira tl" aria-hidden="true"></span>
         <span class="mira tr" aria-hidden="true"></span>

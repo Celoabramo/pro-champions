@@ -309,7 +309,10 @@ class Inscricao(db.Model):
     torneio = db.relationship("Torneio", back_populates="inscricoes")
     time = db.relationship("Team")
 
-    status = db.Column(db.String(20), nullable=False, default="pendente")  # pendente | pago
+    # pendente (Pix gerado, segura a vaga só enquanto ele vale) | reservado
+    # (campeonato no modo reserva: o time garantiu a vaga sem pagar e paga
+    # antes do campeonato começar) | pago
+    status = db.Column(db.String(20), nullable=False, default="pendente")
 
     # Só preenchido em campeonatos de formato "fase_grupos" — em qual grupo
     # esse time caiu no sorteio.
@@ -379,6 +382,19 @@ class Torneio(db.Model):
     # (grupos de 4 jogando todos contra todos, os 2 primeiros de cada grupo
     # avançam pro mata-mata).
     formato = db.Column(db.String(20), nullable=False, default="mata_mata")
+
+    # modo_inscricao: direta (o time só entra na lista depois de pagar o Pix)
+    # | reserva (o time reserva a vaga na hora, de graça, aparece na lista
+    # como "reservado" e paga a taxa antes do campeonato começar — o
+    # chaveamento fica travado enquanto sobrar alguma reserva sem pagar).
+    # Em campeonato gratuito não muda nada: sempre "direta".
+    modo_inscricao = db.Column(
+        db.String(20), nullable=False, default="direta", server_default="direta"
+    )
+
+    @property
+    def eh_por_reserva(self):
+        return self.modo_inscricao == "reserva" and self.valor_inscricao > 0
 
     # geracao: antiga (last gen) | nova (next gen) — só informativo, não
     # afeta nenhuma regra do campeonato, é pra jogador saber em qual
@@ -483,6 +499,31 @@ class Torneio(db.Model):
             i.time for i in self.inscricoes
             if i.status == "pago" and i.time is not None and not i.foi_reembolsada
         ]
+
+    @property
+    def inscricoes_ativas(self):
+        """Inscrições que ocupam uma vaga: as pagas e as reservadas.
+
+        É o que as telas mostram em "times inscritos" — no modo reserva o
+        time aparece assim que reserva, antes de pagar. A disputa em si
+        continua usando `times_inscritos` (só quem pagou), que é o que o
+        chaveamento e a conta do prêmio precisam.
+        """
+        return [
+            i for i in self.inscricoes
+            if i.time is not None
+            and (i.status == "reservado" or (i.status == "pago" and not i.foi_reembolsada))
+        ]
+
+    @property
+    def times_com_vaga(self):
+        return [i.time for i in self.inscricoes_ativas]
+
+    @property
+    def reservas_pendentes(self):
+        """Reservas que ainda não foram pagas — enquanto existir alguma, o
+        campeonato não pode começar."""
+        return [i for i in self.inscricoes if i.status == "reservado" and i.time is not None]
 
     def __repr__(self):
         return f"<Torneio {self.nome}>"

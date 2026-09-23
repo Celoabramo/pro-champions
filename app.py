@@ -229,6 +229,8 @@ ROTULO_PUSH_POR_TIPO = {
     "placar_contestado": "Contestação",
     "pedido_entrada": "Recrutamento",
     "pedido_respondido": "Recrutamento",
+    "vaga_reservada": "Reserva",
+    "inscricao_paga": "Inscrição",
 }
 
 
@@ -1945,6 +1947,14 @@ def criar_campeonato():
             flash("Jogo do campeonato inválido.", "erro")
             return redirect(url_for("criar_campeonato"))
 
+        modo_inscricao = request.form.get("modo_inscricao", "direta")
+        if modo_inscricao not in ("direta", "reserva"):
+            flash("Modo de inscrição inválido.", "erro")
+            return redirect(url_for("criar_campeonato"))
+        # Campeonato de graça não tem taxa pra reservar: sempre inscrição direta.
+        if valor <= 0:
+            modo_inscricao = "direta"
+
         novo_campeonato = Torneio(
             nome=nome,
             descricao=descricao,
@@ -1958,6 +1968,7 @@ def criar_campeonato():
             formato=formato,
             geracao=geracao,
             jogo=jogo,
+            modo_inscricao=modo_inscricao,
             federacao_id=current_user.federacao_id,
             criado_por_id=current_user.id,
         )
@@ -1984,19 +1995,26 @@ def detalhe_campeonato(torneio_id):
 
     time_ja_inscrito = False
     inscricao_pendente = None
+    minha_reserva = None
     if current_user.is_authenticated and current_user.time:
         time_ja_inscrito = current_user.time in torneio.times_inscritos
         if not time_ja_inscrito:
-            inscricao_pendente = Inscricao.query.filter_by(
-                torneio_id=torneio.id, time_id=current_user.time.id, status="pendente"
+            minha_inscricao = Inscricao.query.filter_by(
+                torneio_id=torneio.id, time_id=current_user.time.id
             ).first()
+            if minha_inscricao and minha_inscricao.status == "reservado":
+                minha_reserva = minha_inscricao
+            elif minha_inscricao and minha_inscricao.status == "pendente":
+                inscricao_pendente = minha_inscricao
 
     eh_organizador = _pode_administrar_torneio(torneio)
     times_pagos = len(torneio.times_inscritos)
+    reservas_pendentes = torneio.reservas_pendentes
     pode_gerar_chaveamento = (
         eh_organizador
         and torneio.status == "aberto"
         and times_pagos >= 2
+        and not reservas_pendentes
         and (torneio.formato != "fase_grupos" or times_pagos % 4 == 0)
     )
     # Quanto o prêmio ficaria se o organizador começasse agora, com menos
@@ -2039,6 +2057,8 @@ def detalhe_campeonato(torneio_id):
         torneio=torneio,
         time_ja_inscrito=time_ja_inscrito,
         inscricao_pendente=inscricao_pendente,
+        minha_reserva=minha_reserva,
+        reservas_pendentes=reservas_pendentes,
         eh_organizador=eh_organizador,
         pode_gerar_chaveamento=pode_gerar_chaveamento,
         times_pagos=times_pagos,
@@ -2072,8 +2092,8 @@ def _pode_administrar_torneio(torneio):
 
 
 def _vagas_ocupadas(torneio, ignorar_inscricao_id=None):
-    """Vagas que já não estão disponíveis: as pagas MAIS as com Pix gerado e
-    ainda dentro do prazo de pagamento.
+    """Vagas que já não estão disponíveis: as pagas, as reservadas e as com
+    Pix gerado ainda dentro do prazo de pagamento.
 
     Contar só as pagas (como era antes) deixava qualquer quantidade de times
     gerar Pix ao mesmo tempo num campeonato de 4 vagas — se 6 pagassem, o
@@ -2092,7 +2112,7 @@ def _vagas_ocupadas(torneio, ignorar_inscricao_id=None):
         for i in torneio.inscricoes
         if i.id != ignorar_inscricao_id
         and (
-            i.status == "pago"
+            i.status in ("pago", "reservado")
             or (i.status == "pendente" and i.pix_expira_em and i.pix_expira_em > agora)
         )
     )
@@ -2123,6 +2143,13 @@ def inscrever_time(torneio_id):
     inscricao_existente = Inscricao.query.filter_by(
         torneio_id=torneio.id, time_id=current_user.time.id
     ).first()
+
+    # Vaga já reservada: o caminho daqui pra frente é o botão de pagar a
+    # taxa, não inscrever de novo.
+    if inscricao_existente and inscricao_existente.status == "reservado":
+        flash("Seu time já tem a vaga reservada — agora é só pagar a taxa.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
     # Só manda de volta pra cobrança existente se ela ainda dá pra pagar.
     # Antes, com o Pix vencido (30 min), o time era devolvido pro mesmo QR
     # Code morto pra sempre — sem nunca gerar um novo e sem conseguir
@@ -2153,29 +2180,134 @@ def inscrever_time(torneio_id):
         flash(f"{current_user.time.nome} inscrito no {torneio.nome}!", "sucesso")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
+    # Campeonato por reserva: garante a vaga na hora, sem dinheiro nenhum. A
+    # cobrança vem depois, no botão "Pagar taxa" — e o campeonato não começa
+    # enquanto sobrar alguma reserva sem pagar (ver gerar_chaveamento).
+    if torneio.eh_por_reserva:
+        inscricao = inscricao_existente or Inscricao(torneio_id=torneio.id, time_id=current_user.time.id)
+        _limpar_tentativa_anterior(inscricao)
+        inscricao.status = "reservado"
+        db.session.add(inscricao)
+        db.session.commit()
+        notificar_federacao(
+            torneio,
+            "vaga_reservada",
+            f"{current_user.time.nome} reservou vaga no {torneio.nome} — a taxa ainda não foi paga.",
+        )
+        db.session.commit()
+        flash(
+            f"Vaga reservada para o {current_user.time.nome}! Pague a taxa de "
+            f"R$ {torneio.valor_inscricao:.2f} antes do campeonato começar.",
+            "sucesso",
+        )
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
     # Campeonato pago: cria a inscrição pendente e gera o Pix na AbacatePay.
     inscricao = inscricao_existente or Inscricao(torneio_id=torneio.id, time_id=current_user.time.id)
+    _limpar_tentativa_anterior(inscricao)
     inscricao.status = "pendente"
     db.session.add(inscricao)
     db.session.commit()
 
-    try:
-        pix = pagamentos.criar_pix(
-            valor_reais=torneio.valor_inscricao,
-            descricao=f"Inscrição {current_user.time.nome} - {torneio.nome}",
-            external_id=f"inscricao-{inscricao.id}",
-        )
-    except pagamentos.PagamentoIndisponivel as erro:
+    erro = _gerar_pix_da_inscricao(inscricao)
+    if erro:
         db.session.delete(inscricao)
         db.session.commit()
         flash(f"Não deu para gerar o Pix agora: {erro}", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    return redirect(url_for("pagamento_pix", torneio_id=torneio_id, inscricao_id=inscricao.id))
+
+
+def _limpar_tentativa_anterior(inscricao):
+    """Zera o rastro de uma tentativa anterior antes de reinscrever o time.
+
+    A inscrição é única por (campeonato, time), então quem pagou atrasado,
+    foi reembolsado e tenta de novo reusa a MESMA linha. Sem limpar o
+    reembolso, `foi_reembolsada` continuava verdadeiro: o time pagava a
+    segunda vez e mesmo assim não aparecia em `times_inscritos`.
+    """
+    inscricao.pago_em = None
+    inscricao.reembolso_valor = None
+    inscricao.reembolso_transferencia_id = None
+    inscricao.reembolso_status = None
+
+
+def _gerar_pix_da_inscricao(inscricao):
+    """Cria a cobrança Pix dessa inscrição na AbacatePay e guarda o QR Code.
+
+    Devolve None quando deu certo ou a mensagem de erro. Não mexe no status:
+    quem chama decide o que fazer — na inscrição direta a inscrição é
+    apagada, na reserva ela continua reservada e o time tenta de novo.
+    """
+    torneio = inscricao.torneio
+    try:
+        pix = pagamentos.criar_pix(
+            valor_reais=torneio.valor_inscricao,
+            descricao=f"Inscrição {inscricao.time.nome} - {torneio.nome}",
+            external_id=f"inscricao-{inscricao.id}",
+        )
+    except pagamentos.PagamentoIndisponivel as erro:
+        return str(erro)
 
     inscricao.pix_id = pix.get("id")
     inscricao.pix_br_code = pix.get("brCode")
     inscricao.pix_br_code_base64 = pix.get("brCodeBase64")
     inscricao.pix_expira_em = datetime.utcnow() + timedelta(seconds=1800)
     db.session.commit()
+    return None
+
+
+def _avisar_pagamento_de_reserva(inscricao):
+    """Avisa os admins da federação que uma vaga reservada finalmente foi paga
+    — é o que destrava o chaveamento pra eles."""
+    notificar_federacao(
+        inscricao.torneio,
+        "inscricao_paga",
+        f"{inscricao.time.nome} pagou a inscrição do {inscricao.torneio.nome}.",
+    )
+
+
+@app.route("/campeonatos/<int:torneio_id>/inscricao/<int:inscricao_id>/pagar", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute", methods=["POST"])
+def pagar_reserva(torneio_id, inscricao_id):
+    """Gera o Pix da taxa de uma vaga reservada.
+
+    A inscrição continua "reservado" enquanto o pagamento não cai: se o
+    código vencer, o time NÃO perde a vaga (diferente da inscrição direta,
+    onde o Pix vencido devolve a vaga pro campeonato) — é só gerar outro.
+    """
+    inscricao = Inscricao.query.get_or_404(inscricao_id)
+    if inscricao.torneio_id != torneio_id:
+        abort(404)
+
+    torneio = inscricao.torneio
+    if not inscricao.time or current_user.id != inscricao.time.capitao_id:
+        flash("Só o capitão do time pode pagar essa inscrição.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    if inscricao.status == "pago":
+        flash("Essa inscrição já está paga.", "sucesso")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    if inscricao.status != "reservado":
+        abort(404)
+
+    if torneio.status != "aberto":
+        flash("As inscrições desse campeonato já estão fechadas.", "erro")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    pix_ainda_vale = (
+        inscricao.pix_br_code
+        and inscricao.pix_expira_em
+        and inscricao.pix_expira_em > datetime.utcnow()
+    )
+    if not pix_ainda_vale:
+        erro = _gerar_pix_da_inscricao(inscricao)
+        if erro:
+            flash(f"Não deu para gerar o Pix agora: {erro}", "erro")
+            return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
     return redirect(url_for("pagamento_pix", torneio_id=torneio_id, inscricao_id=inscricao.id))
 
@@ -2198,6 +2330,7 @@ def pagamento_pix(torneio_id, inscricao_id):
         "pagamento_pix.html",
         inscricao=inscricao,
         torneio=inscricao.torneio,
+        eh_reserva=inscricao.status == "reservado",
         modo_teste=_modo_teste_pagamento(),
         pix_vencido=bool(inscricao.pix_expira_em and inscricao.pix_expira_em <= datetime.utcnow()),
     )
@@ -2212,6 +2345,8 @@ def verificar_pagamento(torneio_id, inscricao_id):
     if current_user.id != inscricao.time.capitao_id:
         flash("Só o capitão do time pode verificar essa cobrança.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
+    era_reserva = inscricao.status == "reservado"
 
     if inscricao.status != "pago":
         try:
@@ -2235,6 +2370,8 @@ def verificar_pagamento(torneio_id, inscricao_id):
 
             inscricao.status = "pago"
             inscricao.pago_em = datetime.utcnow()
+            if era_reserva:
+                _avisar_pagamento_de_reserva(inscricao)
             db.session.commit()
         else:
             flash("Ainda não identificamos o pagamento. Assim que cair, clica em verificar de novo.", "erro")
@@ -2314,8 +2451,11 @@ def webhook_abacatepay():
         inscricao = Inscricao.query.filter_by(pix_id=pix_id).first()
         if inscricao and inscricao.status != "pago":
             recusa = _motivo_para_recusar_vaga(inscricao)
+            era_reserva = inscricao.status == "reservado"
             inscricao.status = "pago"
             inscricao.pago_em = datetime.utcnow()
+            if era_reserva and not recusa:
+                _avisar_pagamento_de_reserva(inscricao)
             db.session.commit()
 
             if recusa:
@@ -2885,6 +3025,16 @@ def gerar_chaveamento(torneio_id):
         flash("O chaveamento desse campeonato já foi gerado.", "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
+    reservas = torneio.reservas_pendentes
+    if reservas:
+        nomes = ", ".join(i.time.nome for i in reservas)
+        flash(
+            f"{len(reservas)} time(s) reservaram a vaga e ainda não pagaram a inscrição: {nomes}. "
+            "O campeonato só começa quando todos pagarem — ou depois de remover quem não vai pagar.",
+            "erro",
+        )
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
+
     times = list(torneio.times_inscritos)
     if len(times) < 2:
         flash(
@@ -3351,6 +3501,8 @@ def remover_time_do_campeonato(torneio_id, inscricao_id):
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
     nome_time = inscricao.time.nome if inscricao.time else "time removido"
+    # Reserva não pagou nada, então não há reembolso: _reembolsar_inscricao
+    # devolve (None, None) e a inscrição só é apagada.
     mensagem, erro = _reembolsar_inscricao(inscricao)
     db.session.commit()
 
@@ -3360,8 +3512,13 @@ def remover_time_do_campeonato(torneio_id, inscricao_id):
         flash(erro, "erro")
         return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
+    era_reserva = inscricao.status == "reservado"
     db.session.delete(inscricao)
     db.session.commit()
+
+    if era_reserva:
+        flash(f"Reserva do {nome_time} cancelada — a vaga voltou a ficar livre.", "sucesso")
+        return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
 
     flash(f"{nome_time} removido do campeonato. {mensagem or ''}".strip(), "sucesso")
     return redirect(url_for("detalhe_campeonato", torneio_id=torneio_id))
@@ -3424,6 +3581,23 @@ def editar_campeonato(torneio_id):
             flash("Jogo do campeonato inválido.", "erro")
             return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
 
+        # O modo de inscrição só muda com as inscrições abertas — e nunca
+        # com reserva em aberto, senão o time ficaria com uma vaga que o
+        # campeonato não reconhece mais.
+        modo_inscricao = torneio.modo_inscricao
+        if torneio.status == "aberto" and torneio.valor_inscricao > 0:
+            modo_inscricao = request.form.get("modo_inscricao", torneio.modo_inscricao)
+            if modo_inscricao not in ("direta", "reserva"):
+                flash("Modo de inscrição inválido.", "erro")
+                return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+            if modo_inscricao != torneio.modo_inscricao and torneio.reservas_pendentes:
+                flash(
+                    "Tem vaga reservada sem pagar nesse campeonato. Espere o pagamento ou "
+                    "cancele a reserva antes de mudar o modo de inscrição.",
+                    "erro",
+                )
+                return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+
         senha = request.form.get("senha", "")
         if not check_password_hash(current_user.senha_hash, senha):
             flash("Senha incorreta. Nenhuma alteração foi salva.", "erro")
@@ -3440,6 +3614,7 @@ def editar_campeonato(torneio_id):
         torneio.hora_campeonato = hora_campeonato
         torneio.geracao = geracao
         torneio.jogo = jogo
+        torneio.modo_inscricao = modo_inscricao
 
         # Quem já pagou a inscrição precisa ficar sabendo que a data mudou —
         # é a informação que fez o time se inscrever.
@@ -3447,7 +3622,7 @@ def editar_campeonato(torneio_id):
             quando = data_campeonato.strftime("%d/%m/%Y")
             if hora_campeonato:
                 quando += f" às {hora_campeonato.strftime('%H:%M')}"
-            for time_inscrito in torneio.times_inscritos:
+            for time_inscrito in torneio.times_com_vaga:
                 if time_inscrito.capitao:
                     criar_notificacao(
                         time_inscrito.capitao,
@@ -4116,6 +4291,8 @@ def _garantir_colunas_novas():
         ("users", "foto", "VARCHAR(255)"),
         ("teams", "link_grupo_whatsapp", "VARCHAR(255)"),
         ("users", "posicao_escalada", "VARCHAR(6)"),
+        # Reserva de vaga: campeonatos antigos ficam como inscrição direta.
+        ("torneios", "modo_inscricao", "VARCHAR(20) NOT NULL DEFAULT 'direta'"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

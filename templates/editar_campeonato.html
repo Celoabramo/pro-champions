@@ -5,9 +5,9 @@
     <a href="{{ url_for('detalhe_campeonato', torneio_id=torneio.id) }}" class="link-voltar">← Voltar para o campeonato</a>
     <h1>Editar campeonato</h1>
 
-    {% if torneio.times_inscritos %}
+    {% if torneio.times_com_vaga %}
         <p class="texto-aviso">
-            Esse campeonato já tem {{ torneio.times_inscritos|length }} time(s) inscrito(s). Se você mudar a
+            Esse campeonato já tem {{ torneio.times_com_vaga|length }} time(s) na lista. Se você mudar a
             data ou o horário, os capitães recebem uma notificação avisando da mudança.
         </p>
     {% endif %}
@@ -58,6 +58,32 @@
                 </div>
             </label>
         </div>
+
+        {% if torneio.status == 'aberto' and torneio.valor_inscricao > 0 %}
+            <label>Como os times entram</label>
+            <div class="opcoes-formato">
+                <label class="opcao-formato">
+                    <input type="radio" name="modo_inscricao" value="direta" {% if torneio.modo_inscricao != 'reserva' %}checked{% endif %}>
+                    <div>
+                        <strong>Inscrição direta</strong>
+                        <span class="texto-fraco-pequeno">O time paga o Pix na hora de se inscrever — a vaga só é dele depois que o pagamento cai.</span>
+                    </div>
+                </label>
+                <label class="opcao-formato">
+                    <input type="radio" name="modo_inscricao" value="reserva" {% if torneio.modo_inscricao == 'reserva' %}checked{% endif %}>
+                    <div>
+                        <strong>Reserva de vaga</strong>
+                        <span class="texto-fraco-pequeno">O time reserva a vaga na hora, sem pagar nada, e quita a taxa antes de começar.</span>
+                    </div>
+                </label>
+            </div>
+            {% if torneio.reservas_pendentes %}
+                <p class="texto-fraco-pequeno" style="margin:-8px 0 18px;">
+                    Tem {{ torneio.reservas_pendentes|length }} vaga(s) reservada(s) sem pagar — para mudar isso aqui,
+                    espere o pagamento ou cancele a reserva na tela do campeonato.
+                </p>
+            {% endif %}
+        {% endif %}
 
         <label for="senha">Sua senha (para confirmar a alteração)</label>
         <input type="password" id="senha" name="senha" required autocomplete="current-password">
