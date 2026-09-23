@@ -211,7 +211,10 @@
 
             botao.dataset.carregando = "1";
             botao.dataset.htmlOriginal = botao.innerHTML;
-            botao.style.width = botao.getBoundingClientRect().width + "px";
+            // min-width (e não width) trava o encolhimento sem impedir o
+            // botão de crescer se "Enviando..." for mais largo que o rótulo —
+            // com width fixo, o conteúdo era espremido pra caber.
+            botao.style.minWidth = botao.getBoundingClientRect().width + "px";
             botao.innerHTML = '<span class="spinner-botao" aria-hidden="true"></span>Enviando...';
 
             // O "disabled" fica pro próximo ciclo de propósito: o navegador
@@ -229,7 +232,7 @@
             if (!evento.persisted) return;
             document.querySelectorAll('[data-carregando="1"]').forEach(function (botao) {
                 botao.disabled = false;
-                botao.style.width = "";
+                botao.style.minWidth = "";
                 botao.innerHTML = botao.dataset.htmlOriginal;
                 delete botao.dataset.carregando;
             });

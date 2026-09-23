@@ -38,7 +38,17 @@
             <div class="linha-campo">
                 {% for chave, codigo, membro in linha %}
                     <div class="slot-escalacao {{ 'slot-ocupado' if membro else 'slot-vago' }} {{ 'slot-goleiro' if codigo == 'GK' }} {{ 'slot-meu' if membro and destacar_id and membro.id == destacar_id }}" title="{{ posicoes[codigo][1] }}{% if membro %} — {{ membro.nickname }}{% else %} — vago{% endif %}">
-                        <span class="slot-ponto">{{ posicoes[codigo][0] }}</span>
+                        {# Com foto, o slot vira a foto do jogador com a sigla
+                           da posição num selo; sem foto, continua o círculo
+                           com a sigla, como era. #}
+                        {% if membro and membro.foto %}
+                            <span class="slot-ponto slot-ponto-foto">
+                                <img src="{{ url_for('arquivo_upload', categoria='fotos', nome_arquivo=membro.foto) }}" alt="">
+                                <span class="slot-sigla">{{ posicoes[codigo][0] }}</span>
+                            </span>
+                        {% else %}
+                            <span class="slot-ponto">{{ posicoes[codigo][0] }}</span>
+                        {% endif %}
                         <span class="slot-nome">{{ membro.nickname if membro else 'vago' }}</span>
                     </div>
                 {% endfor %}
