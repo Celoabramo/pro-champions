@@ -319,6 +319,27 @@ def injetar_notificacoes_nao_lidas():
 
 
 @app.context_processor
+def injetar_pedidos_pendentes():
+    """Quantos pedidos pra entrar no time estão esperando resposta do capitão.
+
+    A notificação de "fulano pediu pra entrar" já existia, mas ela mora numa
+    aba que o capitão não abre sozinho — em produção um pedido ficou dias
+    sem resposta com a notificação lá, não lida. Por isso a contagem também
+    vira um selo em "Times" no menu, onde ele esbarra sem procurar.
+    """
+    total = 0
+    if (
+        current_user.is_authenticated
+        and current_user.time
+        and current_user.time.capitao_id == current_user.id
+    ):
+        total = PedidoEntrada.query.filter_by(
+            time_id=current_user.time_id, status="pendente"
+        ).count()
+    return dict(pedidos_entrada_pendentes=total)
+
+
+@app.context_processor
 def injetar_static_versionado():
     """static_v(arquivo) gera a URL do arquivo estático com a data de
     modificação dele colada no final (?v=169...). Assim, toda vez que a

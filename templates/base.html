@@ -69,7 +69,7 @@
             <div class="pilula-links">
                 <a href="{{ url_for('campeonatos') }}" class="{{ 'ativo' if request.endpoint == 'campeonatos' }}">Campeonatos</a>
                 <a href="{{ url_for('federacoes') }}" class="{{ 'ativo' if request.endpoint in ('federacoes', 'detalhe_federacao') }}">Federações</a>
-                <a href="{{ url_for('times') }}" class="{{ 'ativo' if request.endpoint in ('times', 'detalhe_time') }}">Times</a>
+                <a href="{{ url_for('times') }}" class="{{ 'ativo' if request.endpoint in ('times', 'detalhe_time') }}">Times{% if pedidos_entrada_pendentes %}<span class="badge-inline" title="{{ pedidos_entrada_pendentes }} pedido(s) pra entrar no seu time">{{ pedidos_entrada_pendentes if pedidos_entrada_pendentes < 10 else '9+' }}</span>{% endif %}</a>
                 <a href="{{ url_for('ranking') }}" class="{{ 'ativo' if request.endpoint in ('ranking', 'ranking_historico') }}">Ranking</a>
                 {% if current_user.is_authenticated %}
                     <a href="{{ url_for('perfil') }}" class="{{ 'ativo' if request.endpoint == 'perfil' }}">Meu perfil</a>
@@ -139,6 +139,7 @@
         <a href="{{ url_for('times') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint in ('times', 'detalhe_time') }}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 5 4.5 2.5 9l3 1.5V21h13V10.5l3-1.5L19 4.5 16 3a4 4 0 0 1-8 0Z"/></svg>
             Times
+            {% if pedidos_entrada_pendentes %}<span class="badge-notificacoes">{{ pedidos_entrada_pendentes if pedidos_entrada_pendentes < 10 else '9+' }}</span>{% endif %}
         </a>
         <a href="{{ url_for('ranking') }}" class="menu-mobile-link {{ 'ativo' if request.endpoint in ('ranking', 'ranking_historico') }}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2Z"/></svg>
@@ -314,6 +315,7 @@
         <a href="{{ url_for('times') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('times', 'detalhe_time', 'time') }}">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 5 4.5 2.5 9l3 1.5V21h13V10.5l3-1.5L19 4.5 16 3a4 4 0 0 1-8 0Z"/></svg>
             <span>Times</span>
+            {% if pedidos_entrada_pendentes %}<span class="badge-notificacoes badge-tab-bar"></span>{% endif %}
         </a>
         <a href="{{ url_for('ranking') }}" class="tab-bar-item {{ 'ativo' if request.endpoint in ('ranking', 'ranking_historico') }}">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2Z"/></svg>

@@ -204,6 +204,62 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     border: 2px solid var(--fundo);
 }
 
+/* Selo de contagem que anda junto com o texto do link (a pílula do topo não
+   é "position: relative", então o selo absoluto das notificações não serve
+   aqui). Usado em "Times" quando o capitão tem pedido esperando resposta. */
+.badge-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    margin-left: 6px;
+    background: var(--erro);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 20px;
+    vertical-align: 1px;
+}
+
+/* Quem ainda não tem time vê as três saídas lado a lado no desktop. No
+   celular elas empilham — e aí a ordem importa: o campo do código de
+   convite vem primeiro, porque quem tem um código na mão é quem mais
+   precisa dele. Antes "criar time" era o primeiro bloco e o código ficava
+   embaixo da barra de navegação, fora da tela. */
+.cartoes-sem-time {
+    display: grid;
+    gap: 18px;
+    align-items: start;
+    margin-top: 18px;
+}
+/* O conteúdo do site é travado em 640px: três colunas ali dariam cartões de
+   185px, espremidos. Só nesta tela o grid escapa da coluna e usa 960px,
+   centralizado na janela (margin-left 50% + translateX(-50%)) — dá ~300px
+   por cartão. Abaixo de 1040px não sobra margem pra isso, e aí eles
+   empilham mesmo, com o código de convite no topo. */
+@media (min-width: 1040px) {
+    .cartoes-sem-time {
+        grid-template-columns: repeat(3, 1fr);
+        align-items: stretch;
+        width: 960px;
+        margin-left: 50%;
+        transform: translateX(-50%);
+    }
+    .cartoes-sem-time .perfil-bloco { margin: 0; }
+}
+
+/* Código de convite com o botão de copiar do lado. */
+.linha-codigo-convite {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.linha-codigo-convite .codigo-convite { margin: 4px 0; }
+
 .link-sair { color: var(--texto-fraco); font-size: 14px; transition: color 0.15s; }
 .link-sair:hover { color: var(--texto); }
 

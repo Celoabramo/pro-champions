@@ -53,7 +53,10 @@
 
         <div class="perfil-bloco">
             <h2>Código de convite</h2>
-            <p class="codigo-convite">{{ usuario.time.codigo_convite }}</p>
+            <div class="linha-codigo-convite">
+                <p class="codigo-convite" id="codigo-convite">{{ usuario.time.codigo_convite }}</p>
+                <button type="button" class="botao-secundario-pequeno" onclick="copiarCodigoConvite(this)">Copiar</button>
+            </div>
             <p class="texto-fraco-pequeno">Passe esse código para quem você quiser chamar para o time.</p>
         </div>
 
@@ -171,25 +174,20 @@
     <section class="sem-time">
         <h1>Você ainda não tem um time</h1>
 
-        <div class="perfil-bloco">
-            <h2>Criar um time novo</h2>
-            <form method="POST" action="{{ url_for('criar_time') }}">
+        <div class="cartoes-sem-time">
+            <div class="perfil-bloco">
+            <h2>Entrar num time existente</h2>
+            <form method="POST" action="{{ url_for('entrar_time') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="input-time-wrapper">
-                    <input type="text" id="nome" name="nome" maxlength="60" required
-                           placeholder="Nome do time" aria-label="Nome do time" class="input-time">
+                    <input type="text" id="codigo" name="codigo" maxlength="6" required
+                           placeholder="Código de convite" aria-label="Código de convite" class="input-time">
                 </div>
 
-                <div class="input-time-wrapper">
-                    <input type="text" id="tag" name="tag" maxlength="5" required
-                           placeholder="Sigla (até 5 letras, ex: FLA)" aria-label="Sigla do time" class="input-time">
-                </div>
-
-                <button type="submit" class="botao-principal" style="margin-top:18px;">Criar time</button>
+                <button type="submit" class="botao-principal" style="margin-top:6px;">Entrar</button>
             </form>
-        </div>
-
-        <div class="perfil-bloco">
+            </div>
+            <div class="perfil-bloco">
             <h2>Procurar um time</h2>
             <p class="texto-fraco-pequeno" style="margin-bottom:10px;">
                 Times recrutando aparecem no diretório — você manda um pedido e o capitão decide.
@@ -213,21 +211,55 @@
                     {% endfor %}
                 </ul>
             {% endif %}
-        </div>
-
-        <div class="perfil-bloco">
-            <h2>Entrar num time existente</h2>
-            <form method="POST" action="{{ url_for('entrar_time') }}">
+            </div>
+            <div class="perfil-bloco">
+            <h2>Criar um time novo</h2>
+            <form method="POST" action="{{ url_for('criar_time') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="input-time-wrapper">
-                    <input type="text" id="codigo" name="codigo" maxlength="6" required
-                           placeholder="Código de convite" aria-label="Código de convite" class="input-time">
+                    <input type="text" id="nome" name="nome" maxlength="60" required
+                           placeholder="Nome do time" aria-label="Nome do time" class="input-time">
                 </div>
 
-                <button type="submit" class="botao-secundario" style="margin-top:6px;">Entrar</button>
+                <div class="input-time-wrapper">
+                    <input type="text" id="tag" name="tag" maxlength="5" required
+                           placeholder="Sigla (até 5 letras, ex: FLA)" aria-label="Sigla do time" class="input-time">
+                </div>
+
+                <button type="submit" class="botao-principal" style="margin-top:18px;">Criar time</button>
             </form>
         </div>
-    </section>
+        </div>
+</section>
 {% endif %}
 
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    // Copia o código de convite. navigator.clipboard só existe em HTTPS (em
+    // produção sempre existe); no http:// local cai no caminho antigo, com
+    // um input temporário, pra não ficar um botão que não faz nada.
+    function copiarCodigoConvite(botao) {
+        var codigo = document.getElementById("codigo-convite").textContent.trim();
+        function avisar() {
+            var rotulo = botao.textContent;
+            botao.textContent = "Copiado!";
+            setTimeout(function () { botao.textContent = rotulo; }, 2000);
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(codigo).then(avisar, copiaAntiga);
+        } else {
+            copiaAntiga();
+        }
+        function copiaAntiga() {
+            var campo = document.createElement("input");
+            campo.value = codigo;
+            document.body.appendChild(campo);
+            campo.select();
+            try { document.execCommand("copy"); avisar(); } catch (erro) { /* nada a fazer */ }
+            document.body.removeChild(campo);
+        }
+    }
+</script>
 {% endblock %}
