@@ -281,6 +281,41 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     font-size: 12px;
 }
 
+/* Lista de partidas que a EA devolveu quando a busca ficou em aberto
+   (mais de uma no horário, ou nenhuma dentro dele). */
+.candidatas-ea { margin-top: 16px; border-top: 1px solid var(--linha); padding-top: 14px; }
+.candidatas-ea h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-fraco);
+    margin: 0 0 10px;
+}
+.candidata-ea {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--linha);
+}
+.candidata-ea:last-child { border-bottom: none; }
+.candidata-ea-info { display: flex; flex-direction: column; gap: 2px; }
+/* Nome do time e placar separados: com nome terminando em numero
+   ("Leoes P3 0"), tudo junto virava "P3 0 2 x 1" e ninguem lia. */
+.candidata-ea-placar { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.candidata-ea-placar strong {
+    font-family: "Oswald", sans-serif;
+    font-size: 16px;
+    color: var(--acento);
+    padding: 0 2px;
+}
+.candidata-ea-time { font-size: 14px; font-weight: 600; }
+.candidata-ea button { margin-left: auto; }
+@media (max-width: 520px) {
+    .candidata-ea button { margin-left: 0; }
+}
+
 .link-sair { color: var(--texto-fraco); font-size: 14px; transition: color 0.15s; }
 .link-sair:hover { color: var(--texto); }
 

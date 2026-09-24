@@ -188,6 +188,59 @@
         </div>
     {% endif %}
 
+    {# Placar automático: busca a partida direto na EA. O print continua
+       logo abaixo, sempre — a API da EA não é oficial e pode falhar. #}
+    {% set sou_capitao = meu_lado and current_user.id == (confronto.time1 if meu_lado == 1 else confronto.time2).capitao_id %}
+    {% if confronto.status not in ('validado', 'wo') and not confronto.eh_bye and (sou_capitao or eh_organizador) %}
+        <div class="perfil-bloco">
+            <h2>Placar automático</h2>
+            {% if pode_placar_ea %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                    Acabou de jogar? O site busca a partida direto na EA e confirma o placar sozinho,
+                    sem print. Os dois clubes já estão cadastrados.
+                </p>
+                <form method="POST" action="{{ url_for('buscar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Buscar placar na EA</button>
+                </form>
+            {% else %}
+                <p class="texto-fraco-pequeno">{{ motivo_sem_ea }}</p>
+            {% endif %}
+
+            {% if candidatas_ea %}
+                <div class="candidatas-ea">
+                    <h3>Qual dessas é a partida de vocês?</h3>
+                    {% for candidata in candidatas_ea %}
+                        <form method="POST" class="candidata-ea"
+                              action="{{ url_for('confirmar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="match_id" value="{{ candidata.match_id }}">
+                            <div class="candidata-ea-info">
+                                <span class="candidata-ea-placar">
+                                    <span class="candidata-ea-time">{{ confronto.nome_time1 }}</span>
+                                    <strong>{{ candidata.gols_time1 }} × {{ candidata.gols_time2 }}</strong>
+                                    <span class="candidata-ea-time">{{ confronto.nome_time2 }}</span>
+                                </span>
+                                <span class="texto-fraco-pequeno">
+                                    {% if candidata.minutos_atras < 60 %}há {{ candidata.minutos_atras }} min{% else %}há {{ (candidata.minutos_atras // 60) }}h{% endif %}
+                                    · {{ candidata.quando.strftime('%d/%m %H:%M') }}
+                                    {% if not candidata.na_janela %}
+                                        · <span style="color: var(--dourado);">fora do horário da rodada</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            {% if candidata.na_janela or eh_organizador %}
+                                <button type="submit" class="botao-secundario-pequeno">Confirmar esta</button>
+                            {% else %}
+                                <span class="texto-fraco-pequeno">só a organização confirma</span>
+                            {% endif %}
+                        </form>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
     {% if confronto.status not in ('validado', 'wo') or (eh_organizador and (confronto.print_time1 or confronto.print_time2)) %}
         <div class="perfil-bloco">
             <h2>Prints da partida</h2>

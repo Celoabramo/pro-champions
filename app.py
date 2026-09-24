@@ -12,6 +12,7 @@ Como rodar:
 import base64
 import hashlib
 import threading
+import time as _relogio
 import hmac
 import json
 import os
@@ -26,7 +27,7 @@ from time import sleep as _dormir
 
 import click
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, request, flash, abort, jsonify, send_from_directory
+from flask import Flask, render_template, redirect, url_for, request, flash, abort, jsonify, send_from_directory, session
 from sqlalchemy import case
 from sqlalchemy.orm import joinedload, selectinload
 from flask_login import (
@@ -3839,12 +3840,30 @@ def detalhe_confronto(torneio_id, confronto_id):
         Notificacao.query.filter_by(confronto_id=confronto.id, tipo="placar_contestado").first()
     )
 
+    # Partidas que a busca na EA deixou em aberto pra alguém escolher. Sai
+    # da sessão na primeira vez que a tela carrega: é resultado de um
+    # clique, não estado do confronto.
+    candidatas_ea = session.pop(_chave_candidatas(confronto.id), None)
+    if candidatas_ea:
+        agora = datetime.utcnow()
+        for candidata in candidatas_ea:
+            candidata["quando"] = datetime.fromisoformat(candidata["quando"])
+            # "há X min" é o que não depende de fuso — o horário cru fica
+            # ao lado só pra bater com o "partida iniciada às", que a tela
+            # já mostra no mesmo relógio.
+            candidata["minutos_atras"] = int(
+                max(0, (agora - candidata["quando"]).total_seconds()) // 60
+            )
+
     return render_template(
         "confronto_detalhe.html",
         confronto=confronto,
         meu_lado=meu_lado,
         eh_organizador=eh_organizador,
         ja_contestado=ja_contestado,
+        candidatas_ea=candidatas_ea,
+        pode_placar_ea=_motivo_sem_placar_automatico(confronto) is None,
+        motivo_sem_ea=_motivo_sem_placar_automatico(confronto),
     )
 
 
@@ -4223,6 +4242,327 @@ def _tentar_finalizar_confronto(confronto):
     )
     confronto.status = "validado"
     return "ok"
+
+
+# ============ Placar automático pela API da EA ============
+#
+# Substitui o print quando os dois times têm clube cadastrado. O print
+# continua existindo pra sempre: a API da EA é não-oficial e pode sumir,
+# mudar ou bloquear a qualquer momento.
+
+# Uma partida de Pro Clubs leva de 15 a 20 minutos do convite ao apito
+# final. Medido em partidas reais do mesmo clube: elas saem de 20 em 20
+# minutos, cravados. 30 minutos contados do início marcado dá folga pra
+# montar o lobby sem abrir brecha pra colar um jogo de outra hora.
+JANELA_PARTIDA_EA = timedelta(minutes=30)
+
+# Quantas partidas recentes do clube olhar.
+PARTIDAS_EA_POR_CONSULTA = 10
+
+# Cache curto por clube: os dois capitães clicam quase junto, e sem isso
+# cada clique viraria uma consulta na EA.
+CACHE_EA_SEGUNDOS = 60
+_cache_ea = {}
+_trava_cache_ea = threading.Lock()
+
+
+def _partidas_ea_do_clube(club_id, plataforma):
+    """Amistosos recentes do clube, com cache de CACHE_EA_SEGUNDOS.
+
+    ATENÇÃO pra quando o site crescer: esse cache (e o intervalo entre
+    chamadas dentro do ea_client) vive na memória do processo. Hoje o
+    Procfile roda `--workers 1 --threads 8`, então é global de verdade.
+    Com mais de um worker, cada um teria o seu — o ritmo real dobraria e o
+    risco de bloqueio junto. Nesse dia, isso migra pro banco.
+    """
+    chave = (str(club_id), plataforma)
+    agora = _relogio.monotonic()
+    with _trava_cache_ea:
+        guardado = _cache_ea.get(chave)
+        if guardado and agora - guardado[0] < CACHE_EA_SEGUNDOS:
+            return guardado[1]
+
+    partidas = ea_client.buscar_partidas(
+        club_id, plataforma, PARTIDAS_EA_POR_CONSULTA, tipo="friendlyMatch"
+    )
+    with _trava_cache_ea:
+        _cache_ea[chave] = (agora, partidas)
+    return partidas
+
+
+def _candidatas_ea(confronto):
+    """Partidas da EA que podem ser esse confronto, da mais nova pra mais velha.
+
+    Uma consulta só, no clube do time 1: a partida já vem com os DOIS
+    clubes dentro dela, então consultar também pelo lado do adversário
+    devolveria o mesmo jogo com o mesmo matchId — não confirmaria nada que
+    a primeira não tenha dito, e gastaria o dobro do orçamento antes do
+    bloqueio da EA.
+
+    A prova de que a partida é essa vem de três lugares: o adversário
+    dentro do jogo tem que ser o clube cadastrado do outro time, o horário
+    tem que cair na janela, e o matchId não pode já ter fechado outro
+    confronto.
+    """
+    club1 = str(confronto.time1.ea_club_id)
+    club2 = str(confronto.time2.ea_club_id)
+    plataforma = confronto.time1.ea_platform or ea_client.PLATAFORMA_PADRAO
+
+    partidas = _partidas_ea_do_clube(club1, plataforma)
+
+    # Só as que são exatamente entre esses dois clubes.
+    entre_os_dois = [
+        p for p in partidas
+        if {club1, club2} <= {str(c) for c in (p.get("clubs") or {})}
+    ]
+    if not entre_os_dois:
+        return []
+
+    ids = [str(p.get("matchId")) for p in entre_os_dois]
+    usados = {
+        linha[0] for linha in db.session.query(Confronto.ea_match_id)
+        .filter(Confronto.ea_match_id.in_(ids), Confronto.id != confronto.id).all()
+    }
+
+    inicio = confronto.hora_inicio
+    candidatas = []
+    for partida in entre_os_dois:
+        match_id = str(partida.get("matchId"))
+        if match_id in usados:
+            continue
+        try:
+            quando = datetime.utcfromtimestamp(int(partida.get("timestamp") or 0))
+        except (TypeError, ValueError, OSError):
+            continue
+        gols = ea_client.gols_por_clube(partida)
+        candidatas.append({
+            "match_id": match_id,
+            "quando": quando,
+            "gols_time1": gols.get(club1, 0),
+            "gols_time2": gols.get(club2, 0),
+            "na_janela": bool(inicio and inicio <= quando <= inicio + JANELA_PARTIDA_EA),
+            "partida": partida,
+        })
+    return candidatas
+
+
+def _aplicar_partida_ea(confronto, candidata):
+    """Grava o placar da partida da EA no confronto. Devolve erro ou None."""
+    placar1 = candidata["gols_time1"]
+    placar2 = candidata["gols_time2"]
+
+    # Mata-mata precisa de vencedor pra avançar a chave — mesma regra do
+    # fluxo de print, que manda jogar o desempate.
+    if placar1 == placar2 and not confronto.fase.startswith("Grupo "):
+        return (
+            f"A EA registrou empate em {placar1} a {placar2}. No mata-mata precisa de vencedor: "
+            "joguem o desempate e busquem de novo (ou o organizador resolve na mão)."
+        )
+
+    confronto.placar_time1 = placar1
+    confronto.placar_time2 = placar2
+    confronto.vencedor_id = None if placar1 == placar2 else (
+        confronto.time1_id if placar1 > placar2 else confronto.time2_id
+    )
+    confronto.ea_match_id = candidata["match_id"]
+    confronto.status = "validado"
+    return None
+
+
+def _encerrar_confronto_validado(confronto):
+    """Avisos + avanço da chave, igual ao que o print faz quando confirma."""
+    if confronto.vencedor_id:
+        placar_vencedor, placar_perdedor = (
+            (confronto.placar_time1, confronto.placar_time2)
+            if confronto.vencedor_id == confronto.time1_id
+            else (confronto.placar_time2, confronto.placar_time1)
+        )
+        resultado = f"{confronto.vencedor.nome} venceu {placar_vencedor} a {placar_perdedor}."
+    else:
+        resultado = f"Empate em {confronto.placar_time1} a {confronto.placar_time2}."
+
+    notificar_federacao(
+        confronto.torneio,
+        "partida_finalizada",
+        f"A partida {confronto.nome_time1} x {confronto.nome_time2} "
+        f"({confronto.torneio.nome}) finalizou pelo placar automático: {resultado}",
+        confronto=confronto,
+    )
+    _avancar_chaveamento(confronto)
+    return resultado
+
+
+def _motivo_sem_placar_automatico(confronto):
+    """Por que esse confronto não pode usar a EA agora (texto), ou None."""
+    if confronto.eh_bye:
+        return "Esse confronto não tem adversário."
+    if confronto.status in ("validado", "wo"):
+        return "Essa partida já está encerrada."
+    sem_clube = [
+        t.nome for t in (confronto.time1, confronto.time2) if not t.ea_club_id
+    ]
+    if sem_clube:
+        return (
+            f"{' e '.join(sem_clube)} ainda não cadastrou o clube do EA FC. "
+            "O capitão cadastra em \"Meu time\" — enquanto isso, o placar sai pelo print."
+        )
+    if not confronto.hora_inicio:
+        return (
+            "O organizador precisa marcar a partida como iniciada antes: é desse horário "
+            "que a busca parte pra saber qual jogo é o de vocês."
+        )
+    return None
+
+
+def _chave_candidatas(confronto_id):
+    return f"candidatas_ea_{confronto_id}"
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/placar-ea", methods=["POST"])
+@login_required
+# 2 por minuto = no máximo um clique a cada 30s por usuário, como combinado:
+# é o que protege o orçamento de chamadas antes de a EA bloquear.
+@limiter.limit("2 per minute", methods=["POST"])
+def buscar_placar_ea(torneio_id, confronto_id):
+    """Busca na EA a partida desse confronto e confirma o placar."""
+    confronto = Confronto.query.get_or_404(confronto_id)
+    if confronto.torneio_id != torneio_id:
+        abort(404)
+
+    destino = url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id)
+    meu_lado = time_do_confronto(confronto, current_user)
+    eh_organizador = _pode_administrar_torneio(confronto.torneio)
+    meu_time = (confronto.time1 if meu_lado == 1 else confronto.time2) if meu_lado else None
+    if not eh_organizador and not (meu_time and current_user.id == meu_time.capitao_id):
+        flash("Só os capitães dos dois times ou a organização podem buscar o placar.", "erro")
+        return redirect(destino)
+
+    impedimento = _motivo_sem_placar_automatico(confronto)
+    if impedimento:
+        flash(impedimento, "erro")
+        return redirect(destino)
+
+    try:
+        candidatas = _candidatas_ea(confronto)
+    except ea_client.EaBloqueou:
+        flash(
+            "A EA está recusando consultas no momento (acontece quando ela recebe muitas seguidas). "
+            "Esperem alguns minutos e tentem de novo — ou mandem o print, que resolve na hora.",
+            "erro",
+        )
+        return redirect(destino)
+    except ea_client.EaIndisponivel as erro:
+        flash(f"Não deu para consultar a EA agora ({erro}). Dá para confirmar pelo print.", "erro")
+        return redirect(destino)
+
+    session.pop(_chave_candidatas(confronto.id), None)
+    na_janela = [c for c in candidatas if c["na_janela"]]
+
+    if len(na_janela) == 1:
+        erro = _aplicar_partida_ea(confronto, na_janela[0])
+        if erro:
+            flash(erro, "erro")
+            return redirect(destino)
+        resultado = _encerrar_confronto_validado(confronto)
+        db.session.commit()
+        flash(f"Placar confirmado direto na EA! {resultado}", "sucesso")
+        return redirect(destino)
+
+    if candidatas:
+        # Mais de uma partida na janela, ou nenhuma na janela mas alguma
+        # entre os dois clubes fora dela. Quem decide é gente — a escolha
+        # some do navegador no próximo carregamento da tela.
+        session[_chave_candidatas(confronto.id)] = [
+            {
+                "match_id": c["match_id"],
+                "quando": c["quando"].isoformat(),
+                "gols_time1": c["gols_time1"],
+                "gols_time2": c["gols_time2"],
+                "na_janela": c["na_janela"],
+            }
+            for c in candidatas[:5]
+        ]
+        if na_janela:
+            flash(
+                f"A EA achou {len(na_janela)} partidas entre esses dois clubes dentro do horário. "
+                "Escolha qual é a desse confronto.",
+                "erro",
+            )
+        else:
+            flash(
+                "Nenhuma partida entre os dois clubes no horário dessa rodada. As que existem "
+                "estão listadas abaixo, fora da janela — só a organização pode confirmar uma delas.",
+                "erro",
+            )
+        return redirect(destino)
+
+    flash(
+        "A EA ainda não tem nenhuma partida entre esses dois clubes. Se acabaram de jogar, "
+        "esperem um ou dois minutos e tentem de novo — ela demora um pouco pra registrar. "
+        "Se não aparecer, mandem o print.",
+        "erro",
+    )
+    return redirect(destino)
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/placar-ea/confirmar", methods=["POST"])
+@login_required
+@limiter.limit("5 per minute", methods=["POST"])
+def confirmar_placar_ea(torneio_id, confronto_id):
+    """Confirma uma das partidas candidatas escolhida na tela."""
+    confronto = Confronto.query.get_or_404(confronto_id)
+    if confronto.torneio_id != torneio_id:
+        abort(404)
+
+    destino = url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id)
+    meu_lado = time_do_confronto(confronto, current_user)
+    eh_organizador = _pode_administrar_torneio(confronto.torneio)
+    meu_time = (confronto.time1 if meu_lado == 1 else confronto.time2) if meu_lado else None
+    if not eh_organizador and not (meu_time and current_user.id == meu_time.capitao_id):
+        flash("Só os capitães dos dois times ou a organização podem confirmar o placar.", "erro")
+        return redirect(destino)
+
+    impedimento = _motivo_sem_placar_automatico(confronto)
+    if impedimento:
+        flash(impedimento, "erro")
+        return redirect(destino)
+
+    escolhido = request.form.get("match_id", "").strip()
+
+    # Recalcula tudo em vez de confiar no que voltou do formulário: o
+    # match_id do form é só um apontador, e o cache faz isso não custar
+    # chamada nenhuma na EA.
+    try:
+        candidatas = _candidatas_ea(confronto)
+    except ea_client.EaIndisponivel as erro:
+        flash(f"Não deu para confirmar com a EA agora ({erro}). Dá para usar o print.", "erro")
+        return redirect(destino)
+
+    candidata = next((c for c in candidatas if c["match_id"] == escolhido), None)
+    if not candidata:
+        flash("Essa partida não está mais disponível para confirmar. Busque de novo.", "erro")
+        return redirect(destino)
+
+    # Fora da janela de 30 min, só a organização confirma. Senão um capitão
+    # poderia escolher uma vitória antiga contra o mesmo adversário no lugar
+    # da partida de hoje.
+    if not candidata["na_janela"] and not eh_organizador:
+        flash(
+            "Essa partida está fora do horário dessa rodada. Só a organização pode confirmá-la.",
+            "erro",
+        )
+        return redirect(destino)
+
+    erro = _aplicar_partida_ea(confronto, candidata)
+    if erro:
+        flash(erro, "erro")
+        return redirect(destino)
+
+    session.pop(_chave_candidatas(confronto.id), None)
+    resultado = _encerrar_confronto_validado(confronto)
+    db.session.commit()
+    flash(f"Placar confirmado pela EA! {resultado}", "sucesso")
+    return redirect(destino)
 
 
 @app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/print", methods=["POST"])
