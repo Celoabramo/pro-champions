@@ -66,7 +66,7 @@ ADMIN_EMAIL = "marcelinhopolar@gmail.com"
 # de placar automático (ver _checar_partidas_vencidas_ea) é o único caso hoje.
 # Em toda rota normal o link usa o host de quem visitou, direto — isso aqui
 # nunca entra nesse caminho.
-URL_BASE_SITE = os.environ.get("URL_BASE_SITE", "https://prochampions.com.br")
+URL_BASE_SITE = os.environ.get("URL_BASE_SITE", "https://www.prochampions.com.br")
 
 # Chave secreta usada pelo Flask para proteger sessões de login e os
 # tokens CSRF dos formulários. Em produção isso PRECISA vir de uma
@@ -93,6 +93,20 @@ app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
 app.config["REMEMBER_COOKIE_HTTPONLY"] = True
 app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
 app.config["REMEMBER_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
+
+# BUG REAL relatado por usuário, corrigido aqui: o domínio cadastrado no
+# Railway é só "www.prochampions.com.br" — sem Domain explícito, o cookie
+# (de sessão e o de "manter conectado") fica preso ao host EXATO que
+# estava na barra de endereço na hora do login. Quem entra às vezes por
+# "prochampions.com.br" (sem www) e às vezes por "www.prochampions.com.br"
+# tem dois cookies diferentes, um por host — abrir pelo outro parece ter
+# "deslogado" sem a pessoa ter saído de verdade. Um Domain com ponto na
+# frente cobre o domínio e qualquer subdomínio dele (inclusive o www) com
+# o MESMO cookie. Só em produção: em localhost isso quebraria o cookie
+# (o domínio não bate) — daí o mesmo gate que já existe pro SECURE acima.
+if os.environ.get("FLASK_DEBUG") != "1":
+    app.config["SESSION_COOKIE_DOMAIN"] = ".prochampions.com.br"
+    app.config["REMEMBER_COOKIE_DOMAIN"] = ".prochampions.com.br"
 
 # Localmente usa SQLite em arquivo (simples, sem precisar instalar nada).
 # Em produção, defina DATABASE_URL no ambiente apontando pra um Postgres —
