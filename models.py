@@ -896,7 +896,14 @@ class Conquista(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     time_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
+    # campeonato | temporada | especial (comemorativa, criada no painel de
+    # admin — ver conceder_medalhas em app.py)
     tipo = db.Column(db.String(12), nullable=False)
+
+    # Só em tipo="especial": o nome que aparece embaixo do hexágono e o
+    # visual dele ("prata" pra participação, "ouro" pra conquista única).
+    rotulo = db.Column(db.String(40), nullable=True)
+    estilo = db.Column(db.String(20), nullable=True)
     torneio_id = db.Column(db.Integer, db.ForeignKey("torneios.id"), nullable=True)
     temporada_id = db.Column(db.Integer, db.ForeignKey("temporadas.id"), nullable=True)
     federacao_id = db.Column(db.Integer, db.ForeignKey("federacoes.id"), nullable=True)

@@ -3032,6 +3032,33 @@ dialog.popup-imagem img {
 .pin-inicial { font-family: "Oswald", sans-serif; font-size: 26px; font-weight: 700; color: var(--acento); }
 .pin-trofeu { font-size: 28px; }
 .pin-temporada .pin-hex { background: linear-gradient(160deg, #fff1b5, #a67c00 45%, #e8b923); box-shadow: 0 0 20px rgba(232, 185, 35, 0.4); }
+/* Medalhas comemorativas (painel de admin): prata pra participação, ouro
+   pra conquista única. Mesmo hexágono das outras, só muda o metal. */
+.pin-hex-prata {
+    background: linear-gradient(160deg, #f2f5f8, #6b7683 45%, #c3ccd6);
+    box-shadow: 0 0 18px rgba(195, 204, 214, 0.28);
+}
+.pin-hex-ouro {
+    background: linear-gradient(160deg, #fff1b5, #a67c00 45%, #e8b923);
+    box-shadow: 0 0 20px rgba(232, 185, 35, 0.4);
+}
+.pin-escudo, .pin-numero { position: relative; z-index: 1; }
+/* Escudo em SVG, não emoji: emoji muda de desenho em cada sistema e o de
+   escudo sai apagado em vários. Assim ele herda a cor prateada. */
+.pin-escudo { color: #dfe6ee; }
+.pin-numero {
+    font-family: "Oswald", sans-serif;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--dourado);
+}
+/* Versão pequena, usada na listagem do painel de admin. */
+.pin-hex-mini { width: 34px; height: 38px; flex: 0 0 auto; }
+.pin-hex-mini::before { inset: 2px; }
+.pin-hex-mini .pin-numero { font-size: 18px; }
+.pin-hex-mini .pin-escudo { width: 16px; height: 16px; }
+
 .pin-vezes {
     position: absolute; top: -4px; right: 6px; z-index: 2;
     min-width: 24px; padding: 2px 6px;

@@ -154,7 +154,20 @@
     {# Medalhas: hexágono com o logo da federação e "×N"; temporada em dourado. #}
     <div class="pins">
         {% for pin in pins %}
-            {% if pin.tipo == 'temporada' %}
+            {% if pin.tipo == 'especial' %}
+                {# Comemorativa: prateada com escudo (participação) ou
+                   dourada com o número 1 (conquista única). #}
+                <div class="pin pin-especial" title="{{ pin.rotulo }}{% if pin.torneio %} — {{ pin.torneio.nome }}{% endif %}">
+                    <span class="pin-hex {{ 'pin-hex-ouro' if pin.estilo == 'ouro' else 'pin-hex-prata' }}">
+                        {% if pin.estilo == 'ouro' %}
+                            <span class="pin-numero">1</span>
+                        {% else %}
+                            <svg class="pin-escudo" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                        {% endif %}
+                    </span>
+                    <span class="pin-rotulo">{{ pin.rotulo }}</span>
+                </div>
+            {% elif pin.tipo == 'temporada' %}
                 <div class="pin pin-temporada" title="Campeão da {{ pin.temporada.nome }}">
                     <span class="pin-hex"><span class="pin-trofeu" aria-hidden="true">🏆</span></span>
                     <span class="pin-rotulo">{{ pin.temporada.nome }}</span>

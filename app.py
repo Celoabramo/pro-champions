@@ -848,6 +848,119 @@ def admin_usuarios():
     return render_template("admin_usuarios.html", busca=busca, usuarios=usuarios, tipos=pagamentos.TIPOS_CHAVE_PIX)
 
 
+@app.route("/admin/medalhas", methods=["GET", "POST"])
+@login_required
+def admin_medalhas():
+    """Concede medalhas comemorativas aos times de um campeonato.
+
+    Serve pra marcar acontecimento: o primeiro campeonato da plataforma,
+    uma copa de fim de ano, o que aparecer. Diferente das medalhas normais
+    (que saem sozinhas de quem é campeão), estas são escolhidas na mão e
+    carregam o nome que o admin escrever.
+
+    Quem jogou leva a de participação; o campeão leva a especial por cima —
+    ficam as duas no perfil dele.
+    """
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+
+    torneios = (
+        Torneio.query
+        .options(joinedload(Torneio.time_campeao))
+        .order_by(Torneio.id.desc())
+        .limit(40)
+        .all()
+    )
+
+    if request.method == "POST":
+        torneio = Torneio.query.get(request.form.get("torneio_id", type=int))
+        if torneio is None:
+            flash("Campeonato não encontrado.", "erro")
+            return redirect(url_for("admin_medalhas"))
+
+        rotulo_todos = " ".join(request.form.get("rotulo_todos", "").split())[:40]
+        rotulo_campeao = " ".join(request.form.get("rotulo_campeao", "").split())[:40]
+        if not rotulo_todos and not rotulo_campeao:
+            flash("Escreva o nome de pelo menos uma das duas medalhas.", "erro")
+            return redirect(url_for("admin_medalhas"))
+
+        concedidas = 0
+
+        def conceder(usuario, time_obj, rotulo, estilo):
+            """Uma medalha por rótulo por campeonato — reconceder não duplica."""
+            nonlocal concedidas
+            ja_tem = Conquista.query.filter_by(
+                usuario_id=usuario.id, torneio_id=torneio.id, tipo="especial", rotulo=rotulo
+            ).first()
+            if ja_tem:
+                return
+            db.session.add(Conquista(
+                usuario_id=usuario.id,
+                time_id=time_obj.id if time_obj else None,
+                tipo="especial",
+                rotulo=rotulo,
+                estilo=estilo,
+                torneio_id=torneio.id,
+                federacao_id=torneio.federacao_id,
+            ))
+            concedidas += 1
+
+        if rotulo_todos:
+            for time_obj in torneio.times_inscritos:
+                for membro in time_obj.membros:
+                    conceder(membro, time_obj, rotulo_todos, "prata")
+
+        if rotulo_campeao:
+            if not torneio.time_campeao:
+                flash("Esse campeonato ainda não tem campeão — a medalha do campeão não foi concedida.", "erro")
+            else:
+                for membro in torneio.time_campeao.membros:
+                    conceder(membro, torneio.time_campeao, rotulo_campeao, "ouro")
+
+        db.session.commit()
+        if concedidas:
+            flash(f"{concedidas} medalha(s) concedida(s) em {torneio.nome}.", "sucesso")
+        else:
+            flash("Ninguém novo pra receber — essas medalhas já tinham sido concedidas.", "erro")
+        return redirect(url_for("admin_medalhas"))
+
+    # O que já foi concedido, pra dar pra conferir e remover
+    concedidas = (
+        db.session.query(
+            Conquista.torneio_id, Conquista.rotulo, Conquista.estilo,
+            db.func.count(Conquista.id).label("quantos"),
+        )
+        .filter(Conquista.tipo == "especial")
+        .group_by(Conquista.torneio_id, Conquista.rotulo, Conquista.estilo)
+        .all()
+    )
+    nomes_torneio = {t.id: t.nome for t in Torneio.query.all()}
+
+    return render_template(
+        "admin_medalhas.html",
+        torneios=torneios,
+        concedidas=concedidas,
+        nomes_torneio=nomes_torneio,
+    )
+
+
+@app.route("/admin/medalhas/remover", methods=["POST"])
+@login_required
+def remover_medalhas():
+    """Desfaz uma concessão inteira (errou o nome, escolheu o campeonato errado)."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+
+    torneio_id = request.form.get("torneio_id", type=int)
+    rotulo = request.form.get("rotulo", "")
+    apagadas = Conquista.query.filter_by(
+        tipo="especial", torneio_id=torneio_id, rotulo=rotulo
+    ).delete()
+    db.session.commit()
+    flash(f'{apagadas} medalha(s) "{rotulo}" removida(s).', "sucesso")
+    return redirect(url_for("admin_medalhas"))
+
+
 @app.route("/admin/temporadas", methods=["GET", "POST"])
 @login_required
 def admin_temporadas():
@@ -2802,7 +2915,7 @@ def _pins_do_jogador(usuario):
     """Medalhas agrupadas pra tela: uma por federação (com quantas vezes) e
     uma por temporada vencida. [{tipo, federacao|temporada, vezes}]"""
     conquistas = Conquista.query.filter_by(usuario_id=usuario.id).order_by(Conquista.criado_em).all()
-    por_federacao, temporadas = {}, []
+    por_federacao, temporadas, especiais = {}, [], []
     for c in conquistas:
         if c.tipo == "campeonato" and c.federacao:
             item = por_federacao.setdefault(c.federacao_id, {"tipo": "campeonato", "federacao": c.federacao, "vezes": 0, "torneios": []})
@@ -2810,7 +2923,17 @@ def _pins_do_jogador(usuario):
             item["torneios"].append(c.torneio)
         elif c.tipo == "temporada" and c.temporada:
             temporadas.append({"tipo": "temporada", "temporada": c.temporada, "vezes": 1})
-    return temporadas + sorted(por_federacao.values(), key=lambda i: -i["vezes"])
+        elif c.tipo == "especial" and c.rotulo:
+            especiais.append({
+                "tipo": "especial",
+                "rotulo": c.rotulo,
+                "estilo": c.estilo or "prata",
+                "torneio": c.torneio,
+                "vezes": 1,
+            })
+    # As comemorativas vêm primeiro: são as mais raras e as que contam uma
+    # história ("estava lá no primeiro campeonato").
+    return especiais + temporadas + sorted(por_federacao.values(), key=lambda i: -i["vezes"])
 
 
 def _creditar_xp(torneio):
@@ -4835,6 +4958,9 @@ def _garantir_colunas_novas():
         # unicidade entra logo abaixo, como índice — isso os dois bancos
         # aceitam.
         ("confrontos", "ea_match_id", "VARCHAR(40)"),
+        # Medalhas comemorativas.
+        ("conquistas", "rotulo", "VARCHAR(40)"),
+        ("conquistas", "estilo", "VARCHAR(20)"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

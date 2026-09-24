@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titulo %}Medalhas comemorativas — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="formulario">
+    <a href="{{ url_for('perfil') }}" class="link-voltar">← Voltar para o perfil</a>
+    <h1>Medalhas comemorativas</h1>
+    <p class="texto-fraco-pequeno" style="margin-bottom:18px;">
+        Marca um acontecimento no perfil de quem estava lá. Diferente das medalhas normais
+        (que saem sozinhas pra quem é campeão), estas você escolhe na mão e batiza como quiser.
+        Quem jogou leva a de participação; o campeão leva as duas.
+    </p>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <label for="torneio_id">Campeonato</label>
+        <select id="torneio_id" name="torneio_id" required>
+            {% for torneio in torneios %}
+                <option value="{{ torneio.id }}">
+                    #{{ torneio.id }} — {{ torneio.nome }}
+                    ({{ torneio.times_inscritos|length }} time(s){% if torneio.time_campeao %}, campeão {{ torneio.time_campeao.nome }}{% else %}, sem campeão ainda{% endif %})
+                </option>
+            {% endfor %}
+        </select>
+
+        <label for="rotulo_todos">Medalha de participação — todos que jogaram</label>
+        <input type="text" id="rotulo_todos" name="rotulo_todos" maxlength="40"
+               placeholder="Fundador" value="Fundador">
+        <p class="texto-fraco-pequeno" style="margin:-8px 0 18px;">Hexágono prateado com escudo. Deixe em branco pra não conceder.</p>
+
+        <label for="rotulo_campeao">Medalha do campeão</label>
+        <input type="text" id="rotulo_campeao" name="rotulo_campeao" maxlength="40"
+               placeholder="Primeiro Campeão" value="Primeiro Campeão">
+        <p class="texto-fraco-pequeno" style="margin:-8px 0 18px;">Hexágono dourado com o número 1. Deixe em branco pra não conceder.</p>
+
+        <button type="submit" class="botao-principal">Conceder medalhas</button>
+    </form>
+
+    <p class="texto-fraco-pequeno" style="margin-top:14px;">
+        Conceder de novo o mesmo nome no mesmo campeonato não duplica nada — dá pra rodar
+        outra vez depois, se entrar gente no time.
+    </p>
+
+    {% if concedidas %}
+        <div class="perfil-bloco" style="margin-top:26px;">
+            <h2>Já concedidas</h2>
+            <ul class="lista-membros">
+                {% for torneio_id, rotulo, estilo, quantos in concedidas %}
+                    <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="pin-hex pin-hex-mini {{ 'pin-hex-ouro' if estilo == 'ouro' else 'pin-hex-prata' }}">
+                            {% if estilo == 'ouro' %}<span class="pin-numero">1</span>{% else %}<svg class="pin-escudo" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>{% endif %}
+                        </span>
+                        <span>
+                            <strong>{{ rotulo }}</strong>
+                            <span class="texto-fraco-pequeno">· {{ quantos }} jogador(es) · {{ nomes_torneio.get(torneio_id, 'campeonato #%s'|format(torneio_id)) }}</span>
+                        </span>
+                        <form method="POST" action="{{ url_for('remover_medalhas') }}" style="margin-left:auto;"
+                              onsubmit="return confirm('Remover a medalha &quot;{{ rotulo }}&quot; de todos os {{ quantos }} jogadores? Não dá para desfazer.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="torneio_id" value="{{ torneio_id }}">
+                            <input type="hidden" name="rotulo" value="{{ rotulo }}">
+                            <button type="submit" class="botao-secundario-pequeno">Remover</button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
