@@ -848,6 +848,91 @@ def admin_usuarios():
     return render_template("admin_usuarios.html", busca=busca, usuarios=usuarios, tipos=pagamentos.TIPOS_CHAVE_PIX)
 
 
+@app.route("/admin/ranking", methods=["GET", "POST"])
+@login_required
+def admin_ranking():
+    """Libera um campeonato a valer pontos no ranking fora da regra normal.
+
+    A regra padrão (pago E com todas as vagas preenchidas) existe pra
+    ninguém farmar ponto com campeonato grátis de 2 times. Esta tela é a
+    exceção controlada, só pro admin do site: serve pra marcar
+    acontecimento, tipo o primeiro campeonato da plataforma.
+
+    Campeonato ainda aberto só recebe a marca — quem aplica é o sorteio do
+    chaveamento, pelo caminho normal. Já começado ou encerrado precisa da
+    correção na mão, porque a elegibilidade é travada no sorteio e nunca
+    recalculada; encerrado ainda gera os pontos na hora.
+    """
+    if current_user.email != ADMIN_EMAIL:
+        abort(404)
+
+    if request.method == "POST":
+        torneio = Torneio.query.get(request.form.get("torneio_id", type=int))
+        if torneio is None:
+            flash("Campeonato não encontrado.", "erro")
+            return redirect(url_for("admin_ranking"))
+
+        ligar = request.form.get("ligar") == "1"
+        torneio.vale_ranking_excecao = ligar
+
+        if not ligar:
+            torneio.elegivel_ranking = False
+            apagados = PontuacaoRanking.query.filter_by(torneio_id=torneio.id).delete()
+            db.session.commit()
+            flash(
+                f'"{torneio.nome}" não vale mais pontos no ranking'
+                + (f" ({apagados} pontuação(ões) removida(s))." if apagados else "."),
+                "sucesso",
+            )
+            return redirect(url_for("admin_ranking"))
+
+        temporada = torneio.temporada or _temporada_aberta()
+        if temporada is None:
+            torneio.vale_ranking_excecao = False
+            db.session.commit()
+            flash(
+                "Não tem temporada aberta agora — sem ela não existe ranking pra pontuar. "
+                "Abra uma temporada primeiro.",
+                "erro",
+            )
+            return redirect(url_for("admin_ranking"))
+
+        if torneio.status == "aberto":
+            db.session.commit()
+            flash(
+                f'"{torneio.nome}" vai valer pontos no ranking. A pontuação é travada '
+                "no sorteio do chaveamento, então é só sortear normalmente.",
+                "sucesso",
+            )
+            return redirect(url_for("admin_ranking"))
+
+        # Já sorteado: a elegibilidade foi travada como falsa lá atrás e não
+        # se recalcula sozinha — precisa ser corrigida aqui.
+        torneio.temporada_id = temporada.id
+        torneio.elegivel_ranking = True
+        if torneio.status == "finalizado":
+            _registrar_pontos_ranking(torneio)
+        db.session.commit()
+        flash(
+            f'"{torneio.nome}" agora vale pontos no ranking'
+            + (" e a pontuação foi creditada." if torneio.status == "finalizado" else "."),
+            "sucesso",
+        )
+        return redirect(url_for("admin_ranking"))
+
+    torneios = Torneio.query.order_by(Torneio.id.desc()).limit(30).all()
+    pontos_por_torneio = dict(
+        db.session.query(PontuacaoRanking.torneio_id, db.func.count(PontuacaoRanking.id))
+        .group_by(PontuacaoRanking.torneio_id).all()
+    )
+    return render_template(
+        "admin_ranking.html",
+        torneios=torneios,
+        temporada=_temporada_aberta(),
+        pontos_por_torneio=pontos_por_torneio,
+    )
+
+
 @app.route("/admin/medalhas", methods=["GET", "POST"])
 @login_required
 def admin_medalhas():
@@ -3318,7 +3403,12 @@ def gerar_chaveamento(torneio_id):
     temporada = _temporada_aberta()
     torneio.temporada_id = temporada.id if temporada else None
     torneio.elegivel_ranking = bool(
-        temporada and torneio.valor_inscricao > 0 and len(times) >= torneio.max_times
+        temporada and (
+            # Exceção marcada pelo admin do site (ver admin_ranking): vale
+            # do mesmo jeito, sem exigir pago nem cheio.
+            torneio.vale_ranking_excecao
+            or (torneio.valor_inscricao > 0 and len(times) >= torneio.max_times)
+        )
     )
 
     if torneio.formato == "fase_grupos":
@@ -4961,6 +5051,7 @@ def _garantir_colunas_novas():
         # Medalhas comemorativas.
         ("conquistas", "rotulo", "VARCHAR(40)"),
         ("conquistas", "estilo", "VARCHAR(20)"),
+        ("torneios", "vale_ranking_excecao", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

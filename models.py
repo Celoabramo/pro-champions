@@ -443,6 +443,16 @@ class Torneio(db.Model):
     temporada = db.relationship("Temporada", foreign_keys=[temporada_id])
     elegivel_ranking = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
+    # Exceção liberada pelo admin do site: esse campeonato vale pontos no
+    # ranking mesmo sem cumprir a regra (pago e cheio). Serve pra marcar
+    # acontecimento — o primeiro campeonato da plataforma, por exemplo.
+    # Só o admin do site marca; organizador de federação não, senão daria
+    # pra farmar ponto criando campeonato grátis de 2 times, que é
+    # exatamente o que a regra evita.
+    vale_ranking_excecao = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     # Todo campeonato pertence a uma federação — pode ser administrado por
     # qualquer admin dela, não só por quem criou. `criado_por` só guarda
     # quem apertou o botão, pra exibir "Federação X por Fulano" na tela do

@@ -1366,6 +1366,23 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 /* Campeonato com reserva de vaga: chip do modo, selo de pago/reservado na
    lista de times (a organizacao ve em todos, o capitao so no proprio) e o
    aviso com o botao de pagar a taxa reservada. */
+/* Selo de campeonato que vale pontos no ranking (inclusive as exceções
+   abertas pelo admin). */
+.chip-ranking {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #1a1200;
+    background: var(--dourado);
+    padding: 5px 12px;
+    border-radius: 20px;
+    margin-top: 10px;
+    margin-left: 8px;
+}
+
 .chip-reserva {
     display: inline-flex;
     align-items: center;

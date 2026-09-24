@@ -44,6 +44,9 @@
     {% else %}
         <span class="chip-valor chip-valor-gratis">Inscrição gratuita</span>
     {% endif %}
+    {% if torneio.vale_ranking_excecao or torneio.elegivel_ranking %}
+        <span class="chip-ranking">Vale pontos no ranking</span>
+    {% endif %}
     {% if torneio.eh_por_reserva %}
         <span class="chip-reserva">Vaga reservada — paga antes de começar</span>
     {% endif %}

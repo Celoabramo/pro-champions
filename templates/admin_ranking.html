@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block titulo %}Campeonatos que valem ranking — Pro Champions{% endblock %}
+{% block conteudo %}
+<section class="formulario">
+    <a href="{{ url_for('perfil') }}" class="link-voltar">← Voltar para o perfil</a>
+    <h1>Campeonatos que valem ranking</h1>
+    <p class="texto-fraco-pequeno" style="margin-bottom:6px;">
+        A regra normal é: só campeonato <strong>pago</strong> e com <strong>todas as vagas preenchidas</strong>
+        vale pontos. Isso existe pra ninguém encher o ranking criando campeonato grátis de 2 times.
+    </p>
+    <p class="texto-fraco-pequeno" style="margin-bottom:18px;">
+        Aqui você abre exceção pra um campeonato específico — uma edição comemorativa, o primeiro
+        da plataforma. Use com parcimônia: cada exceção mexe na disputa do prêmio da temporada.
+    </p>
+
+    {% if temporada %}
+        <p class="texto-aviso" style="margin-bottom:18px;">
+            Temporada aberta: <strong>{{ temporada.nome }}</strong>. Os pontos vão pra ela.
+        </p>
+    {% else %}
+        <p class="texto-aviso" style="color: var(--erro); margin-bottom:18px;">
+            Não tem temporada aberta. Sem ela não existe ranking pra pontuar —
+            <a href="{{ url_for('admin_temporadas') }}" style="color: var(--acento); font-weight:600;">abra uma primeiro</a>.
+        </p>
+    {% endif %}
+
+    <ul class="lista-membros">
+        {% for torneio in torneios %}
+            <li style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 0;">
+                <span style="display:flex; flex-direction:column; gap:3px;">
+                    <span>
+                        <strong>{{ torneio.nome }}</strong>
+                        {% if torneio.vale_ranking_excecao %}
+                            <span class="chip-ranking" style="margin-left:6px;">exceção ligada</span>
+                        {% elif torneio.elegivel_ranking %}
+                            <span class="chip-formato" style="margin:0 0 0 6px;">vale pela regra</span>
+                        {% endif %}
+                    </span>
+                    <span class="texto-fraco-pequeno">
+                        #{{ torneio.id }} · {{ torneio.nome_jogo }} ·
+                        {% if torneio.valor_inscricao > 0 %}R$ {{ "%.2f"|format(torneio.valor_inscricao) }}{% else %}gratuito{% endif %} ·
+                        {{ torneio.times_inscritos|length }}/{{ torneio.max_times }} times ·
+                        {% if torneio.status == 'aberto' %}inscrições abertas
+                        {% elif torneio.status == 'em_andamento' %}em andamento
+                        {% else %}finalizado{% endif %}
+                        {% if pontos_por_torneio.get(torneio.id) %} · {{ pontos_por_torneio[torneio.id] }} pontuação(ões) creditada(s){% endif %}
+                    </span>
+                </span>
+
+                {% if not torneio.vale_ranking_excecao and torneio.elegivel_ranking %}
+                    <span class="texto-fraco-pequeno" style="margin-left:auto;">já vale pela regra normal</span>
+                {% else %}
+                    <form method="POST" style="margin-left:auto;"
+                          {% if torneio.vale_ranking_excecao %}onsubmit="return confirm('Tirar {{ torneio.nome }} do ranking? Os pontos já creditados por ele são apagados.');"{% endif %}>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="torneio_id" value="{{ torneio.id }}">
+                        <input type="hidden" name="ligar" value="{{ '0' if torneio.vale_ranking_excecao else '1' }}">
+                        <button type="submit" class="{{ 'botao-secundario-pequeno' if torneio.vale_ranking_excecao else 'botao-principal-pequeno' }}">
+                            {{ 'Tirar do ranking' if torneio.vale_ranking_excecao else 'Fazer valer ranking' }}
+                        </button>
+                    </form>
+                {% endif %}
+            </li>
+        {% else %}
+            <li><span class="texto-fraco-pequeno">Nenhum campeonato ainda.</span></li>
+        {% endfor %}
+    </ul>
+</section>
+{% endblock %}
