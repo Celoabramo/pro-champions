@@ -4675,17 +4675,19 @@ def _confronto_aceita_print(confronto):
     """O print deve aparecer nessa partida?
 
     Em FC 26 é o único caminho. Em FC 27 o normal é o automático, e o print
-    volta sozinho quando ele não tem como resolver: EA fora do ar, clube
-    não cadastrado, ou a janela de 30 min já passou (depois dela nenhuma
-    partida nova cai dentro do horário, então insistir na EA só trava o
-    campeonato).
+    volta sozinho sempre que ele não tem como resolver — mesmos motivos de
+    _motivo_sem_placar_automatico (EA fora do ar, clube não cadastrado,
+    partida ainda sem hora_inicio) — mais a janela de 30 min já vencida,
+    que esse não bloqueia (depois dela nenhuma partida nova cai dentro do
+    horário, então insistir na EA só trava o campeonato).
+
+    BUG CORRIGIDO: a versão anterior não considerava "sem hora_inicio" como
+    motivo pro print aparecer. Resultado: antes do organizador clicar
+    "Iniciar partida", um confronto de FC 27 com os dois clubes já
+    cadastrados e a EA no ar ficava sem NENHUM jeito de confirmar o placar
+    — nem o botão da EA (que exige hora_inicio) nem o print apareciam.
     """
-    if confronto.torneio.jogo != JOGO_COM_PLACAR_EA:
-        return True
-    if not _ea_no_ar():
-        return True
-    if not (confronto.time1 and confronto.time1.ea_club_id
-            and confronto.time2 and confronto.time2.ea_club_id):
+    if _motivo_sem_placar_automatico(confronto) is not None:
         return True
     if confronto.hora_inicio and datetime.utcnow() > confronto.hora_inicio + JANELA_PARTIDA_EA:
         return True
