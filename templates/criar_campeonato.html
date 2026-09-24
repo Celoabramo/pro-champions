@@ -73,9 +73,13 @@
                         <strong>{{ nome }}</strong>
                         <span class="texto-fraco-pequeno">
                             {% if codigo == 'fc27' %}
-                                Edição nova. Se ainda não tiver lançado, marque a data do campeonato para depois do lançamento.
+                                <strong>Placar automático:</strong> o site busca a partida direto na EA e
+                                confirma o resultado sozinho, sem print. Os dois capitães precisam cadastrar
+                                o clube do time em "Meu time".
                             {% else %}
-                                Campeonato disputado no {{ nome }}.
+                                <strong>Placar por print:</strong> os dois times mandam o print da tela final
+                                e a leitura automática compara os dois. A EA não disponibiliza as partidas
+                                dessa edição.
                             {% endif %}
                         </span>
                     </div>
@@ -121,4 +125,30 @@
         premiado quando você confirmar os pagamentos no fim do campeonato.
     </p>
 </section>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    // FC 27 não saiu pra geração antiga: a opção some da tela quando esse
+    // jogo está marcado (o servidor ignora o campo nesse caso de qualquer
+    // jeito, isso aqui é só pra ninguém escolher algo impossível).
+    (function () {
+        var antiga = document.querySelector('input[name="geracao"][value="antiga"]');
+        if (!antiga) return;
+        var caixaAntiga = antiga.closest(".opcao-formato");
+        var nova = document.querySelector('input[name="geracao"][value="nova"]');
+
+        function ajustar() {
+            var jogo = document.querySelector('input[name="jogo"]:checked');
+            var ehFc27 = jogo && jogo.value === "fc27";
+            caixaAntiga.hidden = ehFc27;
+            if (ehFc27 && nova) nova.checked = true;
+        }
+
+        document.querySelectorAll('input[name="jogo"]').forEach(function (radio) {
+            radio.addEventListener("change", ajustar);
+        });
+        ajustar();
+    })();
+</script>
 {% endblock %}

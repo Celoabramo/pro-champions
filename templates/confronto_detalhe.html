@@ -241,9 +241,20 @@
         </div>
     {% endif %}
 
-    {% if confronto.status not in ('validado', 'wo') or (eh_organizador and (confronto.print_time1 or confronto.print_time2)) %}
+    {# O print aparece quando é o caminho da partida (FC 26), quando o
+       automático não tem como resolver (EA fora do ar, clube sem cadastro,
+       janela vencida) e sempre que já existe print enviado, pra não sumir
+       histórico. #}
+    {% set mostrar_print = aceita_print or confronto.print_time1 or confronto.print_time2 %}
+    {% if mostrar_print and (confronto.status not in ('validado', 'wo') or (eh_organizador and (confronto.print_time1 or confronto.print_time2))) %}
         <div class="perfil-bloco">
             <h2>Prints da partida</h2>
+            {% if confronto.torneio.jogo == 'fc27' and confronto.status not in ('validado', 'wo') %}
+                <p class="texto-aviso" style="margin-bottom:10px;">
+                    Esse campeonato é de placar automático, mas ele não dá conta dessa partida agora —
+                    então o print vale. {{ motivo_sem_ea }}
+                </p>
+            {% endif %}
             {% if confronto.status in ('validado', 'wo') %}
                 <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Partida encerrada — prints guardados para consulta.</p>
             {% endif %}

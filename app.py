@@ -2060,15 +2060,19 @@ def criar_campeonato():
             flash("Formato de campeonato inválido.", "erro")
             return redirect(url_for("criar_campeonato"))
 
-        geracao = request.form.get("geracao", "nova")
-        if geracao not in ("antiga", "nova"):
-            flash("Geração do campeonato inválida.", "erro")
-            return redirect(url_for("criar_campeonato"))
-
         jogo = request.form.get("jogo", JOGO_PADRAO)
         if jogo not in JOGOS:
             flash("Jogo do campeonato inválido.", "erro")
             return redirect(url_for("criar_campeonato"))
+
+        geracao = request.form.get("geracao", "nova")
+        if geracao not in ("antiga", "nova"):
+            flash("Geração do campeonato inválida.", "erro")
+            return redirect(url_for("criar_campeonato"))
+        # FC 27 não saiu pra geração antiga — a tela nem oferece a opção, e
+        # aqui ela é ignorada se vier mesmo assim.
+        if jogo == JOGO_COM_PLACAR_EA:
+            geracao = "nova"
 
         modo_inscricao = request.form.get("modo_inscricao", "direta")
         if modo_inscricao not in ("direta", "reserva"):
@@ -3703,6 +3707,8 @@ def editar_campeonato(torneio_id):
         if jogo not in JOGOS:
             flash("Jogo do campeonato inválido.", "erro")
             return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
+        if jogo == JOGO_COM_PLACAR_EA:
+            geracao = "nova"
 
         # O modo de inscrição só muda com as inscrições abertas — e nunca
         # com reserva em aberto, senão o time ficaria com uma vaga que o
@@ -3864,6 +3870,7 @@ def detalhe_confronto(torneio_id, confronto_id):
         candidatas_ea=candidatas_ea,
         pode_placar_ea=_motivo_sem_placar_automatico(confronto) is None,
         motivo_sem_ea=_motivo_sem_placar_automatico(confronto),
+        aceita_print=_confronto_aceita_print(confronto),
     )
 
 
@@ -4250,6 +4257,33 @@ def _tentar_finalizar_confronto(confronto):
 # continua existindo pra sempre: a API da EA é não-oficial e pode sumir,
 # mudar ou bloquear a qualquer momento.
 
+# Só o FC 27 tem placar automático: a API da EA serve os dados da edição
+# atual, e as partidas de FC 26 simplesmente não estão lá.
+JOGO_COM_PLACAR_EA = "fc27"
+
+# Quando a EA bloqueia ou sai do ar, o site inteiro volta pro print por
+# esse tempo, sem ninguém precisar fazer nada. Passado o prazo, a primeira
+# tentativa decide se volta a funcionar ou re-arma o descanso. O bloqueio
+# medido na prática durou cerca de 1 hora; 30 minutos deixa o placar
+# automático voltar sozinho assim que ela libera, sem insistir enquanto
+# está fechada.
+DESCANSO_EA = timedelta(minutes=30)
+_ea_fora_ate = None
+_trava_ea_fora = threading.Lock()
+
+
+def _marcar_ea_fora_do_ar():
+    """A EA recusou/falhou: todo mundo volta pro print por DESCANSO_EA."""
+    global _ea_fora_ate
+    with _trava_ea_fora:
+        _ea_fora_ate = datetime.utcnow() + DESCANSO_EA
+
+
+def _ea_no_ar():
+    with _trava_ea_fora:
+        return _ea_fora_ate is None or datetime.utcnow() >= _ea_fora_ate
+
+
 # Uma partida de Pro Clubs leva de 15 a 20 minutos do convite ao apito
 # final. Medido em partidas reais do mesmo clube: elas saem de 20 em 20
 # minutos, cravados. 30 minutos contados do início marcado dá folga pra
@@ -4398,6 +4432,16 @@ def _motivo_sem_placar_automatico(confronto):
         return "Esse confronto não tem adversário."
     if confronto.status in ("validado", "wo"):
         return "Essa partida já está encerrada."
+    if confronto.torneio.jogo != JOGO_COM_PLACAR_EA:
+        return (
+            f"Campeonato de {confronto.torneio.nome_jogo}: o placar é confirmado pelo print. "
+            "A EA só disponibiliza as partidas da edição atual do jogo."
+        )
+    if not _ea_no_ar():
+        return (
+            "A EA está recusando consultas no momento. O placar volta a ser confirmado "
+            "pelo print — o automático religa sozinho assim que ela liberar."
+        )
     sem_clube = [
         t.nome for t in (confronto.time1, confronto.time2) if not t.ea_club_id
     ]
@@ -4412,6 +4456,27 @@ def _motivo_sem_placar_automatico(confronto):
             "que a busca parte pra saber qual jogo é o de vocês."
         )
     return None
+
+
+def _confronto_aceita_print(confronto):
+    """O print deve aparecer nessa partida?
+
+    Em FC 26 é o único caminho. Em FC 27 o normal é o automático, e o print
+    volta sozinho quando ele não tem como resolver: EA fora do ar, clube
+    não cadastrado, ou a janela de 30 min já passou (depois dela nenhuma
+    partida nova cai dentro do horário, então insistir na EA só trava o
+    campeonato).
+    """
+    if confronto.torneio.jogo != JOGO_COM_PLACAR_EA:
+        return True
+    if not _ea_no_ar():
+        return True
+    if not (confronto.time1 and confronto.time1.ea_club_id
+            and confronto.time2 and confronto.time2.ea_club_id):
+        return True
+    if confronto.hora_inicio and datetime.utcnow() > confronto.hora_inicio + JANELA_PARTIDA_EA:
+        return True
+    return False
 
 
 def _chave_candidatas(confronto_id):
@@ -4445,6 +4510,7 @@ def buscar_placar_ea(torneio_id, confronto_id):
     try:
         candidatas = _candidatas_ea(confronto)
     except ea_client.EaBloqueou:
+        _marcar_ea_fora_do_ar()
         flash(
             "A EA está recusando consultas no momento (acontece quando ela recebe muitas seguidas). "
             "Esperem alguns minutos e tentem de novo — ou mandem o print, que resolve na hora.",
@@ -4452,7 +4518,12 @@ def buscar_placar_ea(torneio_id, confronto_id):
         )
         return redirect(destino)
     except ea_client.EaIndisponivel as erro:
-        flash(f"Não deu para consultar a EA agora ({erro}). Dá para confirmar pelo print.", "erro")
+        _marcar_ea_fora_do_ar()
+        flash(
+            f"Não deu para consultar a EA agora ({erro}). O placar dessa rodada volta "
+            "a ser confirmado pelo print, logo abaixo.",
+            "erro",
+        )
         return redirect(destino)
 
     session.pop(_chave_candidatas(confronto.id), None)
@@ -4535,6 +4606,7 @@ def confirmar_placar_ea(torneio_id, confronto_id):
     try:
         candidatas = _candidatas_ea(confronto)
     except ea_client.EaIndisponivel as erro:
+        _marcar_ea_fora_do_ar()
         flash(f"Não deu para confirmar com a EA agora ({erro}). Dá para usar o print.", "erro")
         return redirect(destino)
 
