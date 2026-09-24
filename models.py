@@ -691,9 +691,19 @@ class Confronto(db.Model):
     vencedor_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
     vencedor = db.relationship("Team", foreign_keys=[vencedor_id])
 
-    # Horário em que o organizador marcou a partida como iniciada. É a
-    # partir daqui que conta o prazo de 1h pro W.O. automático.
+    # Horário em que a partida foi marcada como iniciada — pelo organizador
+    # (força sozinho) ou pelos dois capitães concordando (ver pronto_timeN
+    # abaixo). É a partir daqui que conta o prazo de 1h pro W.O. automático
+    # e a janela de 30 min do placar automático da EA.
     hora_inicio = db.Column(db.DateTime, nullable=True)
+
+    # Confirmação mútua "vamos começar": cada capitão marca a própria, e
+    # quando os dois estão marcados o site seta hora_inicio sozinho, sem
+    # precisar do organizador. O organizador continua podendo iniciar por
+    # conta própria a qualquer momento (time sumiu, precisa forçar o
+    # relógio do W.O.) — os dois caminhos convivem.
+    pronto_time1 = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    pronto_time2 = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
     # Id da partida na API da EA que validou esse placar. Único: a mesma
     # partida do jogo não pode ser usada pra fechar dois confrontos

@@ -184,6 +184,41 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="botao-secundario">Iniciar partida</button>
                 </form>
+                <p class="texto-fraco-pequeno" style="margin-top:8px;">
+                    Ou espere os dois capitães confirmarem sozinhos, ali embaixo.
+                </p>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {# Confirmação mútua "vamos começar": os dois capitães concordam sem
+       precisar da organização. Some assim que hora_inicio existir — não
+       importa por qual dos dois caminhos ela foi marcada. #}
+    {% if meu_lado and confronto.status not in ('validado', 'wo') and not confronto.eh_bye and not confronto.hora_inicio %}
+        {% set meu_time_pronto = confronto.pronto_time1 if meu_lado == 1 else confronto.pronto_time2 %}
+        <div class="perfil-bloco">
+            <h2>Vamos começar?</h2>
+            <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                Quando os dois capitães confirmarem, a partida já entra como iniciada — sem esperar a
+                organização. É esse horário que abre a janela do placar automático (e o prazo do W.O.).
+            </p>
+            <div class="status-prints" style="margin-bottom:14px;">
+                <div class="status-print-item {{ 'enviado' if confronto.pronto_time1 }}">
+                    <span>{{ confronto.nome_time1 }}</span>
+                    {% if confronto.pronto_time1 %}<strong>Pronto</strong>{% else %}<span class="texto-fraco-pequeno">Aguardando confirmar</span>{% endif %}
+                </div>
+                <div class="status-print-item {{ 'enviado' if confronto.pronto_time2 }}">
+                    <span>{{ confronto.nome_time2 }}</span>
+                    {% if confronto.pronto_time2 %}<strong>Pronto</strong>{% else %}<span class="texto-fraco-pequeno">Aguardando confirmar</span>{% endif %}
+                </div>
+            </div>
+            {% if not meu_time_pronto %}
+                <form method="POST" action="{{ url_for('confirmar_pronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Estou pronto pra começar</button>
+                </form>
+            {% else %}
+                <p class="texto-fraco-pequeno">Você já confirmou — falta o adversário.</p>
             {% endif %}
         </div>
     {% endif %}
@@ -197,11 +232,12 @@
             {% if pode_placar_ea %}
                 <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
                     Acabou de jogar? O site busca a partida direto na EA e confirma o placar sozinho,
-                    sem print. Os dois clubes já estão cadastrados.
+                    sem print. Os dois clubes já estão cadastrados — e o site também tenta buscar
+                    sozinho, a partir de 20 minutos do início. Só clique se quiser adiantar.
                 </p>
                 <form method="POST" action="{{ url_for('buscar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="botao-principal">Buscar placar na EA</button>
+                    <button type="submit" class="botao-principal">Já terminamos — buscar agora</button>
                 </form>
             {% else %}
                 <p class="texto-fraco-pequeno">{{ motivo_sem_ea }}</p>

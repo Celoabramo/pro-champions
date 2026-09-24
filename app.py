@@ -61,6 +61,13 @@ app = Flask(__name__)
 # organizador (só organizadores podem criar federação/campeonato).
 ADMIN_EMAIL = "marcelinhopolar@gmail.com"
 
+# Endereço base do site, só pra gerar link ABSOLUTO (url_for ..., _external=True)
+# de dentro de código que roda sem requisição HTTP nenhuma por trás — o poller
+# de placar automático (ver _checar_partidas_vencidas_ea) é o único caso hoje.
+# Em toda rota normal o link usa o host de quem visitou, direto — isso aqui
+# nunca entra nesse caminho.
+URL_BASE_SITE = os.environ.get("URL_BASE_SITE", "https://prochampions.com.br")
+
 # Chave secreta usada pelo Flask para proteger sessões de login e os
 # tokens CSRF dos formulários. Em produção isso PRECISA vir de uma
 # variável de ambiente — o valor fixo abaixo é só um fallback para rodar
@@ -4281,6 +4288,66 @@ def iniciar_confronto(torneio_id, confronto_id):
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/pronto", methods=["POST"])
+@login_required
+@limiter.limit("10 per minute", methods=["POST"])
+def confirmar_pronto(torneio_id, confronto_id):
+    """Capitão marca "pronto pra começar". Quando os dois times marcam, a
+    partida inicia sozinha — sem precisar esperar o organizador clicar em
+    "Iniciar partida". Os dois caminhos convivem: o organizador continua
+    podendo forçar o início por conta própria a qualquer momento.
+
+    De propósito, um capitão sozinho não inicia nada: se bastasse um lado
+    confirmar, ele poderia disparar o relógio do W.O. escondido do
+    adversário, que nem saberia que o prazo já está contando.
+    """
+    confronto = Confronto.query.get_or_404(confronto_id)
+    if confronto.torneio_id != torneio_id:
+        abort(404)
+
+    destino = url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id)
+    meu_lado = time_do_confronto(confronto, current_user)
+    meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 else None
+    if not meu_time or current_user.id != meu_time.capitao_id:
+        flash("Só o capitão de um dos dois times pode confirmar.", "erro")
+        return redirect(destino)
+
+    if confronto.status in ("validado", "wo"):
+        flash("Essa partida já foi encerrada.", "erro")
+        return redirect(destino)
+
+    if confronto.hora_inicio:
+        flash("A partida já está marcada como iniciada.", "erro")
+        return redirect(destino)
+
+    if meu_lado == 1:
+        if confronto.pronto_time1:
+            flash("Você já confirmou — falta o adversário.", "erro")
+            return redirect(destino)
+        confronto.pronto_time1 = True
+    else:
+        if confronto.pronto_time2:
+            flash("Você já confirmou — falta o adversário.", "erro")
+            return redirect(destino)
+        confronto.pronto_time2 = True
+
+    if confronto.pronto_time1 and confronto.pronto_time2:
+        confronto.hora_inicio = datetime.utcnow()
+        notificar_federacao(
+            confronto.torneio,
+            "partida_iniciada",
+            f'A partida {confronto.nome_time1} x {confronto.nome_time2} ({confronto.torneio.nome}) começou — os dois capitães confirmaram.',
+            confronto=confronto,
+        )
+        db.session.commit()
+        flash(f"Os dois confirmaram! Partida iniciada às {confronto.hora_inicio.strftime('%H:%M')}.", "sucesso")
+    else:
+        db.session.commit()
+        flash("Confirmado! Assim que o adversário também confirmar, a partida começa.", "sucesso")
+
+    return redirect(destino)
+
+
 OPCOES_WO = {"time1", "time2", "duplo"}
 
 
@@ -4698,6 +4765,112 @@ def _chave_candidatas(confronto_id):
     return f"candidatas_ea_{confronto_id}"
 
 
+# ============ Checagem automática do placar (sem precisar de clique) ============
+#
+# Partida real de Pro Clubs dura uns 20 minutos do convite ao apito final
+# (medido em partidas reais do mesmo clube: saem 20 em 20 minutos,
+# cravados — ver ea_client.py). Em vez de depender de alguém lembrar de
+# clicar "Buscar placar na EA", um processo em segundo plano tenta sozinho
+# a partir desse ponto. Continua tentando a cada minuto até a janela de 30
+# min (JANELA_PARTIDA_EA) fechar — depois disso o print assume, igual ao
+# fluxo manual.
+CHECAGEM_AUTOMATICA_EA_APOS = timedelta(minutes=20)
+INTERVALO_POLLER_EA_SEGUNDOS = 60
+
+
+def _checar_partidas_vencidas_ea():
+    """Uma varredura: acha confrontos de FC 27 iniciados há mais de 20 min,
+    ainda sem placar, dentro da janela de 30 min, e tenta resolver sozinho.
+
+    Só aplica quando sobra exatamente UMA partida candidata dentro do
+    horário — igual à regra do clique manual. Ambíguo (mais de uma) ou
+    vazio (nenhuma ainda) não mexe em nada: ou alguém clica na mão, ou o
+    print assume quando a janela vencer.
+
+    Roda dentro do próprio processo do site (ver _iniciar_poller_ea) — não
+    depende de nenhum serviço externo de agendamento.
+
+    Usa test_request_context (não só app_context): a notificação que sai
+    daqui monta link ABSOLUTO com url_for(..., _external=True), que exige
+    uma requisição por trás pra saber o host — e aqui não tem nenhuma, é
+    uma thread de fundo. Sem isso, a primeira vez que o poller resolvesse
+    um placar sozinho quebrava bem no meio, antes até do db.session.commit()
+    — achado escrevendo o teste desta função, nunca chegou em produção.
+    """
+    agora = datetime.utcnow()
+    limite_minimo = agora - JANELA_PARTIDA_EA  # partidas iniciadas antes disso: janela já vencida, print assume
+    limite_maximo = agora - CHECAGEM_AUTOMATICA_EA_APOS  # só mexe depois dos 20 min
+
+    with app.test_request_context(base_url=URL_BASE_SITE):
+        candidatos = (
+            Confronto.query
+            .join(Torneio, Confronto.torneio_id == Torneio.id)
+            .filter(
+                Torneio.jogo == JOGO_COM_PLACAR_EA,
+                Confronto.status.notin_(("validado", "wo")),
+                Confronto.hora_inicio.isnot(None),
+                Confronto.hora_inicio >= limite_minimo,
+                Confronto.hora_inicio <= limite_maximo,
+                Confronto.ea_match_id.is_(None),
+            )
+            .all()
+        )
+        for confronto in candidatos:
+            if _motivo_sem_placar_automatico(confronto) is not None:
+                continue
+            try:
+                candidatas = _candidatas_ea(confronto)
+            except ea_client.EaBloqueou:
+                _marcar_ea_fora_do_ar()
+                app.logger.info("Poller de placar automático: EA bloqueou, pausando essa rodada.")
+                return
+            except ea_client.EaIndisponivel as erro:
+                _marcar_ea_fora_do_ar()
+                app.logger.info(f"Poller de placar automático: EA indisponível ({erro}).")
+                return
+
+            na_janela = [c for c in candidatas if c["na_janela"]]
+            if len(na_janela) != 1:
+                continue  # nada ainda, ou ambíguo — deixa pro clique manual decidir
+
+            erro = _aplicar_partida_ea(confronto, na_janela[0])
+            if erro:
+                continue  # ex.: empate no mata-mata — precisa de gente pra resolver
+            _encerrar_confronto_validado(confronto)
+            db.session.commit()
+            app.logger.info(f"Placar automático da EA aplicado sozinho no confronto {confronto.id}.")
+
+
+_poller_ea_iniciado = False
+_trava_poller_ea = threading.Lock()
+
+
+def _iniciar_poller_ea():
+    """Sobe a thread de fundo uma única vez por processo.
+
+    Guardado contra duplo início: com `FLASK_DEBUG=1` o reloader do Flask
+    importa este arquivo duas vezes (processo pai + filho), e sem a trava
+    isso ligaria dois pollers rodando junto localmente. Em produção
+    (gunicorn `--workers 1`, sem reloader) só existe uma importação mesmo,
+    então a trava não muda nada ali — é rede de segurança só pro debug local.
+    """
+    global _poller_ea_iniciado
+    with _trava_poller_ea:
+        if _poller_ea_iniciado:
+            return
+        _poller_ea_iniciado = True
+
+    def laco():
+        while True:
+            _dormir(INTERVALO_POLLER_EA_SEGUNDOS)
+            try:
+                _checar_partidas_vencidas_ea()
+            except Exception as erro:
+                app.logger.error(f"Poller de placar automático falhou: {erro}")
+
+    threading.Thread(target=laco, daemon=True, name="poller-placar-ea").start()
+
+
 @app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/placar-ea", methods=["POST"])
 @login_required
 # 2 por minuto = no máximo um clique a cada 30s por usuário, como combinado:
@@ -5054,6 +5227,9 @@ def _garantir_colunas_novas():
         ("conquistas", "rotulo", "VARCHAR(40)"),
         ("conquistas", "estilo", "VARCHAR(20)"),
         ("torneios", "vale_ranking_excecao", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        # Confirmação mútua "vamos começar" (ver rota /pronto).
+        ("confrontos", "pronto_time1", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("confrontos", "pronto_time2", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ]
     for tabela, coluna, tipo in colunas:
         try:
@@ -5112,6 +5288,8 @@ with app.app_context():
     db.create_all()
     _garantir_colunas_novas()
     _preencher_conquistas_antigas()
+
+_iniciar_poller_ea()
 
 if __name__ == "__main__":
     # Debug SÓ fica ligado se você setar FLASK_DEBUG=1 no ambiente. Com
