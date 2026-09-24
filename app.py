@@ -98,7 +98,32 @@ app.config["REMEMBER_COOKIE_SECURE"] = os.environ.get("FLASK_DEBUG") != "1"
 # Em produção, defina DATABASE_URL no ambiente apontando pra um Postgres —
 # o Railway não mantém arquivos entre deploys, um banco em arquivo local
 # se perderia a cada atualização do site.
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///pro_clubs.db")
+
+
+def _normalizar_url_banco(url):
+    """Corrige apelido antigo de esquema e TRAVA o driver do Postgres.
+
+    - "postgres://" é um apelido antigo que várias plataformas (Heroku,
+      às vezes Supabase) ainda devolvem, e que o SQLAlchemy 1.4+ recusa
+      direto — precisa virar "postgresql://".
+    - Sem dizer explicitamente o driver, o SQLAlchemy escolhe sozinho qual
+      biblioteca usar pra falar com o Postgres — e essa escolha padrão já
+      mudou de uma versão pra outra sem aviso nenhum: o site caiu em
+      produção porque um `pip install` puxou SQLAlchemy 2.1, que passou a
+      tentar "psycopg" (a v3) em vez de "psycopg2", e só o
+      psycopg2-binary está no requirements.txt. Fixando "+psycopg2" aqui,
+      a escolha nunca mais fica na mão do SQLAlchemy.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    return url
+
+
+app.config["SQLALCHEMY_DATABASE_URI"] = _normalizar_url_banco(
+    os.environ.get("DATABASE_URL", "sqlite:///pro_clubs.db")
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Prints do placar, escudos de time e logos de federação — arquivos

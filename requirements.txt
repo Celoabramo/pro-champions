@@ -1,4 +1,10 @@
 Flask==3.0.3
+# Flask-SQLAlchemy não trava a versão do SQLAlchemy — sem travar aqui, um
+# "pip install" puxa a mais nova disponível na hora do build, e não são
+# todas compatíveis com o driver instalado (psycopg2-binary abaixo). Foi
+# isso que derrubou o site em produção: o build pegou SQLAlchemy 2.1, que
+# tentou usar "psycopg" (v3, não instalado) no lugar de "psycopg2".
+SQLAlchemy>=2.0,<2.1
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
 Flask-WTF==1.3.0
