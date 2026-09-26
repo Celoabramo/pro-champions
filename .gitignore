@@ -4,6 +4,7 @@ backups/
 __pycache__/
 *.pyc
 venv/
+.venv/
 uploads/
 static/escudos/*
 !static/escudos/generico.png

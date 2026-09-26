@@ -23,6 +23,13 @@
         <p style="margin-top:14px;"><a href="{{ time_obj.link_grupo_whatsapp }}" target="_blank" rel="noopener" class="botao-secundario">Grupo de WhatsApp do time</a></p>
     {% endif %}
 
+    {% if pins %}
+        <div class="perfil-bloco">
+            <h2>Medalhas</h2>
+            {{ macros.pins_jogador(pins) }}
+        </div>
+    {% endif %}
+
     {% if time_obj.recrutando %}
         <div class="perfil-bloco" style="border-left-color: var(--acento);">
             <h2>Recrutando <span class="selo-status selo-status-aberto" style="margin-left:8px;">Vaga aberta</span></h2>

@@ -1219,6 +1219,10 @@ def criar_federacao():
 @login_required
 @limiter.limit("10 per minute")
 def entrar_federacao():
+    if not current_user.is_organizador:
+        flash("Só organizadores autorizados podem entrar em uma federação.", "erro")
+        return redirect(url_for("perfil"))
+
     if current_user.federacao_id:
         flash("Você já faz parte de uma federação.", "erro")
         return redirect(url_for("perfil"))
@@ -2094,6 +2098,7 @@ def detalhe_time(time_id):
         titulos=titulos,
         extrato=extrato,
         pedido_pendente=pedido_pendente,
+        pins=_pins_do_time(time_obj),
     )
 
 
@@ -3064,6 +3069,43 @@ def _pins_do_jogador(usuario):
             })
     # As comemorativas vêm primeiro: são as mais raras e as que contam uma
     # história ("estava lá no primeiro campeonato").
+    return especiais + temporadas + sorted(por_federacao.values(), key=lambda i: -i["vezes"])
+
+
+def _pins_do_time(time_obj):
+    """Vitrine de medalhas do time — mesmo formato de _pins_do_jogador, mas
+    contando o título uma vez só. Cada conquista de campeonato/temporada é
+    gravada uma vez por jogador do elenco (ver _registrar_conquistas_*), e
+    todos apontam pro mesmo time_id — sem o dedup abaixo o time apareceria
+    com o título multiplicado pelo tamanho do elenco."""
+    conquistas = Conquista.query.filter_by(time_id=time_obj.id).order_by(Conquista.criado_em).all()
+    por_federacao, temporadas, especiais = {}, [], []
+    vistos_torneio, vistos_temporada, vistos_especial = set(), set(), set()
+    for c in conquistas:
+        if c.tipo == "campeonato" and c.federacao:
+            if c.torneio_id in vistos_torneio:
+                continue
+            vistos_torneio.add(c.torneio_id)
+            item = por_federacao.setdefault(c.federacao_id, {"tipo": "campeonato", "federacao": c.federacao, "vezes": 0, "torneios": []})
+            item["vezes"] += 1
+            item["torneios"].append(c.torneio)
+        elif c.tipo == "temporada" and c.temporada:
+            if c.temporada_id in vistos_temporada:
+                continue
+            vistos_temporada.add(c.temporada_id)
+            temporadas.append({"tipo": "temporada", "temporada": c.temporada, "vezes": 1})
+        elif c.tipo == "especial" and c.rotulo:
+            chave = (c.torneio_id, c.rotulo)
+            if chave in vistos_especial:
+                continue
+            vistos_especial.add(chave)
+            especiais.append({
+                "tipo": "especial",
+                "rotulo": c.rotulo,
+                "estilo": c.estilo or "prata",
+                "torneio": c.torneio,
+                "vezes": 1,
+            })
     return especiais + temporadas + sorted(por_federacao.values(), key=lambda i: -i["vezes"])
 
 

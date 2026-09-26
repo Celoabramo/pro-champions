@@ -210,20 +210,22 @@
                 </form>
             {% endif %}
         {% else %}
-            <p class="texto-fraco-pequeno" style="margin-bottom:14px;">Você ainda não faz parte de uma federação.</p>
-
-            <form method="POST" action="{{ url_for('entrar_federacao') }}" class="form-escudo">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="text" name="codigo" placeholder="Código de convite" maxlength="6" required style="text-transform:uppercase;">
-                <button type="submit" class="botao-principal-pequeno">Entrar com código</button>
-            </form>
-
             {% if usuario.is_organizador %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:14px;">Você ainda não faz parte de uma federação.</p>
+
+                <form method="POST" action="{{ url_for('entrar_federacao') }}" class="form-escudo">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="codigo" placeholder="Código de convite" maxlength="6" required style="text-transform:uppercase;">
+                    <button type="submit" class="botao-principal-pequeno">Entrar com código</button>
+                </form>
+
                 <form method="POST" action="{{ url_for('criar_federacao') }}" class="form-escudo" style="margin-top:12px;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="text" name="nome" placeholder="Nome da federação" required>
                     <button type="submit" class="botao-principal-pequeno">Criar federação</button>
                 </form>
+            {% else %}
+                <p class="texto-fraco-pequeno">Federações são administradas só por organizadores autorizados.</p>
             {% endif %}
         {% endif %}
     </div>
