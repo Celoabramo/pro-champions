@@ -3053,12 +3053,22 @@ dialog.popup-imagem img {
 .pin-hex::after {
     content: "";
     position: absolute; inset: 0;
+    z-index: 2;
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     background: linear-gradient(115deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 68%, rgba(255, 255, 255, 0.15) 100%);
     pointer-events: none;
 }
-.pin-hex img, .pin-inicial, .pin-trofeu { position: relative; z-index: 1; }
-.pin-hex img { width: 50px; height: 50px; object-fit: contain; border-radius: 8px; }
+.pin-inicial, .pin-trofeu { position: relative; z-index: 1; }
+/* O logo preenche o hexágono inteiro (mesmo recorte do ::before, sem
+   sobra de fundo escuro em volta) — cover em vez de contain, porque aqui
+   é melhor cortar uma borda do logo do que deixar espaço vazio. */
+.pin-hex img {
+    position: absolute; top: 4px; left: 4px;
+    width: 70px; height: 80px;
+    z-index: 1;
+    object-fit: cover;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
 .pin-inicial { font-family: "Oswald", sans-serif; font-size: 32px; font-weight: 700; color: var(--acento); }
 .pin-trofeu { font-size: 36px; }
 .pin-temporada .pin-hex { background: linear-gradient(155deg, #fff6d6, #a67c00 55%, #e8b923); box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4), 0 0 28px rgba(232, 185, 35, 0.45); }
