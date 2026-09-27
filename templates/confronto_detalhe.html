@@ -4,7 +4,9 @@
 {% block conteudo %}
 <section class="detalhe-confronto">
     <a href="{{ url_for('detalhe_campeonato', torneio_id=confronto.torneio_id) }}" class="link-voltar">← Voltar para o campeonato</a>
-    <p class="fase-titulo" style="margin-bottom:6px;">{{ confronto.fase }}</p>
+    <p class="fase-titulo" style="margin-bottom:6px;">
+        {{ confronto.fase }}{% if confronto.rotulo_perna %} · {{ confronto.rotulo_perna }}{% endif %}
+    </p>
 
     <div class="placar-confronto">
         <div class="lado-confronto">
@@ -29,6 +31,54 @@
             <span class="nome-time">{{ confronto.nome_time2 }}</span>
         </div>
     </div>
+
+    {% if confronto.eh_ida_volta %}
+        {% set outro = confronto.outro_jogo %}
+        {% set agregado = confronto.agregado %}
+        {% set vencedor_duelo = confronto.vencedor_do_duelo %}
+        <div class="perfil-bloco" style="margin-top:20px;">
+            <h2>Duelo de ida e volta</h2>
+            <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                Quem avança sai da soma dos dois jogos. Empatou no agregado, decide quem fez mais gol
+                fora de casa — cada time joga fora uma vez, porque a volta inverte os lados.
+            </p>
+
+            {% if agregado %}
+                <p style="margin:0 0 10px;">
+                    <strong>Agregado:</strong>
+                    {{ confronto.nome_time1 }} {{ agregado[0] }} — {{ agregado[1] }} {{ confronto.nome_time2 }}
+                    {% set fora = confronto.gols_fora %}
+                    {% if fora and agregado[0] == agregado[1] %}
+                        <span class="texto-fraco-pequeno">
+                            · gol fora de casa: {{ fora[0] }} a {{ fora[1] }}
+                        </span>
+                    {% endif %}
+                </p>
+                {% if vencedor_duelo %}
+                    <div style="margin:0 0 10px;">
+                        <span class="chip-premio">
+                            <span class="trofeu-chip" aria-hidden="true">🏆</span> {{ vencedor_duelo.nome }} avançou
+                        </span>
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {% if outro %}
+                <a href="{{ url_for('detalhe_confronto', torneio_id=confronto.torneio_id, confronto_id=outro.id) }}" class="link-bloco" style="display:block;">
+                    Ver o {{ outro.rotulo_perna|lower }}
+                    {% if outro.status == 'validado' %}
+                        ({{ outro.nome_time1 }} {{ outro.placar_time1 }} — {{ outro.placar_time2 }} {{ outro.nome_time2 }})
+                    {% elif outro.status == 'wo' %}
+                        (W.O.)
+                    {% endif %}
+                </a>
+            {% elif confronto.perna == 1 %}
+                <p class="texto-fraco-pequeno" style="margin:0;">
+                    O jogo de volta é criado sozinho assim que o placar daqui for confirmado.
+                </p>
+            {% endif %}
+        </div>
+    {% endif %}
 
     <div class="cabecalho-secao" style="margin-top:24px;">
         <span class="selo-status {{ 'selo-status-aberto' if confronto.status == 'validado' else 'selo-status-divergente' if confronto.status in ('divergente', 'wo') else 'selo-status-em_andamento' }}">
@@ -90,7 +140,18 @@
 
     {% if confronto.status == 'validado' %}
         <p class="texto-fraco-pequeno" style="margin-top:8px;">
-            {% if confronto.vencedor_id %}
+            {% if confronto.eh_ida_volta %}
+                {% if confronto.vencedor_id %}
+                    {{ confronto.vencedor.nome }} venceu este jogo.
+                {% else %}
+                    Empate neste jogo.
+                {% endif %}
+                {% if confronto.vencedor_do_duelo %}
+                    Somando os dois jogos, {{ confronto.vencedor_do_duelo.nome }} avança de fase.
+                {% else %}
+                    Quem avança sai do agregado, no fim do jogo de volta.
+                {% endif %}
+            {% elif confronto.vencedor_id %}
                 {{ confronto.vencedor.nome }} venceu e avança de fase.
             {% else %}
                 Empate — vale ponto pros dois times na tabela do grupo.
@@ -168,7 +229,7 @@
 
                 {% if confronto.elegivel_wo %}
                     <p class="texto-aviso" style="margin: 12px 0; color: var(--erro);">
-                        O prazo de 1h já passou e a partida ainda não foi confirmada. Esse confronto já está elegível para W.O.
+                        O prazo de 30 min já passou e a partida ainda não foi confirmada. Esse confronto já está elegível para W.O.
                     </p>
                 {% endif %}
 
@@ -178,7 +239,7 @@
                 </a>
             {% else %}
                 <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
-                    Marque o início para começar a contar o prazo de 1h do W.O. automático.
+                    Marque o início para começar a contar o prazo de 30 min do W.O. automático.
                 </p>
                 <form method="POST" action="{{ url_for('iniciar_confronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

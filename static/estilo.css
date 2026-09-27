@@ -1697,7 +1697,8 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 
 .bracket-lado-direita .fase-titulo,
 .bracket-lado-direita .bracket-time,
-.bracket-lado-direita .bracket-selo-wo {
+.bracket-lado-direita .bracket-selo-wo,
+.bracket-lado-direita .bracket-selo-perna {
     transform: scaleX(-1);
 }
 
@@ -1757,6 +1758,19 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
     border-top: 1px solid var(--linha);
 }
 
+/* Duelo de ida e volta: avisa que o placar ali é a soma dos dois jogos. */
+.bracket-selo-perna {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--texto-fraco);
+    background: var(--fundo-card);
+    padding: 3px 10px;
+    text-align: center;
+    border-top: 1px solid var(--linha);
+}
+
 /* ============ Final em destaque (estilo "VS") ============ */
 .bracket-final-vs {
     display: flex;
@@ -1799,6 +1813,7 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 .bracket-final-time.bracket-vencedor .bracket-final-placar { color: var(--acento); }
 .bracket-final-trofeu { height: 46px; width: auto; flex-shrink: 0; }
 .bracket-selo-wo-final { position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%) translateY(100%); border-radius: 0 0 8px 8px; }
+.bracket-selo-perna-final { position: absolute; top: -1px; left: 50%; transform: translateX(-50%) translateY(-100%); border-radius: 8px 8px 0 0; border-top: 0; border-bottom: 1px solid var(--linha); }
 
 /* ============ Detalhe do confronto ============ */
 .placar-confronto {

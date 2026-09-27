@@ -418,6 +418,12 @@ class Torneio(db.Model):
     def eh_por_reserva(self):
         return self.modo_inscricao == "reserva" and self.valor_inscricao > 0
 
+    # Mata-mata em dois jogos: cada duelo tem ida e volta (com o mando
+    # invertido no segundo jogo) e quem avança sai da soma dos dois. Não
+    # vale pra fase de grupos — lá os grupos seguem em turno único. Só dá
+    # pra mudar enquanto o chaveamento não foi sorteado.
+    ida_volta = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+
     # geracao: antiga (last gen) | nova (next gen) — só informativo, não
     # afeta nenhuma regra do campeonato, é pra jogador saber em qual
     # geração de console o campeonato vai rolar.
@@ -668,6 +674,17 @@ class Confronto(db.Model):
     nick_fc_time1 = db.Column(db.String(40), nullable=True)
     nick_fc_time2 = db.Column(db.String(40), nullable=True)
 
+    # Ida e volta (Torneio.ida_volta): o duelo vira dois confrontos, um por
+    # perna. A volta nasce quando a ida termina no placar, com os times
+    # trocados de lado — é isso que dá sentido ao critério de gol fora de
+    # casa. Campeonato de jogo único tem só a perna 1, como sempre foi.
+    perna = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    confronto_ida_id = db.Column(db.Integer, db.ForeignKey("confrontos.id"), nullable=True)
+    confronto_ida = db.relationship(
+        "Confronto", remote_side=[id], back_populates="jogos_volta"
+    )
+    jogos_volta = db.relationship("Confronto", back_populates="confronto_ida")
+
     # Disputa de 3º lugar: jogo entre os dois perdedores da semifinal,
     # criado junto com a final. Fica fora da progressão da chave — o
     # resultado dele não alimenta fase nenhuma, só define o 3º colocado
@@ -715,7 +732,155 @@ class Confronto(db.Model):
     vencedor_wo_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
     vencedor_wo = db.relationship("Team", foreign_keys=[vencedor_wo_id])
 
-    PRAZO_WO = timedelta(hours=1)
+    # Contado do início da partida (organizador forçou ou os dois capitães
+    # confirmaram "pronto"). Uma partida de Pro Clubs leva de 15 a 20 min do
+    # convite ao apito final, então meia hora já cobre o jogo inteiro com
+    # folga pra montar o lobby — quem não apareceu nesse tempo não vai mais
+    # aparecer, e o campeonato inteiro rola numa sessão só.
+    PRAZO_WO = timedelta(minutes=30)
+
+    @property
+    def eh_ida_volta(self):
+        """Esse confronto é uma das duas pernas de um duelo.
+
+        Vale só pro mata-mata de campeonato marcado como ida e volta: jogo
+        de grupo segue em turno único, e vaga sem adversário (bye) já nasce
+        decidida por W.O., não tem segundo jogo pra jogar.
+        """
+        if self.eh_bye or self.fase.startswith("Grupo "):
+            return False
+        return bool(self.torneio and self.torneio.ida_volta)
+
+    @property
+    def jogo_ida(self):
+        return self.confronto_ida if self.perna == 2 else self
+
+    @property
+    def jogo_volta(self):
+        if self.perna == 2:
+            return self
+        return self.jogos_volta[0] if self.jogos_volta else None
+
+    @property
+    def outro_jogo(self):
+        """A outra perna do duelo, quando ela já existe."""
+        return self.jogo_ida if self.perna == 2 else self.jogo_volta
+
+    @property
+    def jogo_atual(self):
+        """Pra onde mandar quem clica no duelo: o jogo que está valendo
+        agora — a volta assim que ela existe, senão a ida."""
+        return self.jogo_volta or self.jogo_ida
+
+    @property
+    def rotulo_perna(self):
+        if not self.eh_ida_volta:
+            return None
+        return "Jogo de volta" if self.perna == 2 else "Jogo de ida"
+
+    @property
+    def agregado(self):
+        """(gols do time1 deste confronto, gols do time2) somando os dois
+        jogos do duelo, ou None enquanto algum dos dois não tem placar.
+
+        A volta inverte o mando, então o time1 daqui é o time2 de lá — por
+        isso a soma cruza os lados antes de devolver na orientação desta
+        tela.
+        """
+        ida, volta = self.jogo_ida, self.jogo_volta
+        if ida is None or volta is None:
+            return None
+        placares = (ida.placar_time1, ida.placar_time2, volta.placar_time1, volta.placar_time2)
+        if any(p is None for p in placares):
+            return None
+        gols_time1_da_ida = ida.placar_time1 + volta.placar_time2
+        gols_time2_da_ida = ida.placar_time2 + volta.placar_time1
+        if self.perna == 1:
+            return (gols_time1_da_ida, gols_time2_da_ida)
+        return (gols_time2_da_ida, gols_time1_da_ida)
+
+    @property
+    def gols_fora(self):
+        """(gols fora do time1 deste confronto, gols fora do time2) — o
+        critério que decide quando o agregado empata. Cada time jogou fora
+        exatamente uma vez: o mandante da ida é o visitante da volta."""
+        ida, volta = self.jogo_ida, self.jogo_volta
+        if ida is None or volta is None:
+            return None
+        if ida.placar_time2 is None or volta.placar_time2 is None:
+            return None
+        fora_do_time1_da_ida = volta.placar_time2
+        fora_do_time2_da_ida = ida.placar_time2
+        if self.perna == 1:
+            return (fora_do_time1_da_ida, fora_do_time2_da_ida)
+        return (fora_do_time2_da_ida, fora_do_time1_da_ida)
+
+    @property
+    def vencedor_final(self):
+        """Quem venceu ESTA partida, por placar ou por W.O. None enquanto
+        ela não terminou — e também quando terminou sem vencedor (empate de
+        grupo, W.O. duplo)."""
+        if self.status == "validado":
+            return self.vencedor
+        if self.status == "wo":
+            return self.vencedor_wo
+        return None
+
+    @property
+    def duelo_encerrado(self):
+        """Não sobrou jogo pra acontecer nesse duelo — mesmo que ele tenha
+        acabado sem ninguém passando (W.O. duplo)."""
+        ida = self.jogo_ida
+        if ida.status not in ("validado", "wo"):
+            return False
+        if not ida.eh_ida_volta or ida.status == "wo":
+            return True
+        volta = ida.jogo_volta
+        return volta is not None and volta.status in ("validado", "wo")
+
+    @property
+    def vencedor_do_duelo(self):
+        """Quem passou de fase — é isso que o chaveamento enxerga.
+
+        Em jogo único é o vencedor da partida. Em ida e volta precisa dos
+        dois jogos: soma dos gols e, se empatar, quem fez mais gol fora de
+        casa. None enquanto o duelo não está decidido, ou quando ninguém
+        venceu (W.O. duplo).
+        """
+        ida = self.jogo_ida
+        if not ida.eh_ida_volta:
+            return ida.vencedor_final
+
+        # W.O. em qualquer uma das pernas elimina na hora: W.O. não grava
+        # placar, então não existe gol dele pra entrar no agregado.
+        if ida.status == "wo":
+            return ida.vencedor_wo
+        if ida.status != "validado":
+            return None
+
+        volta = ida.jogo_volta
+        if volta is None:
+            return None
+        if volta.status == "wo":
+            return volta.vencedor_wo
+        if volta.status != "validado":
+            return None
+
+        agregado = ida.agregado
+        if agregado is None:
+            return None
+        gols1, gols2 = agregado
+        if gols1 != gols2:
+            return ida.time1 if gols1 > gols2 else ida.time2
+
+        fora1, fora2 = ida.gols_fora
+        if fora1 != fora2:
+            return ida.time1 if fora1 > fora2 else ida.time2
+
+        # Empatado nos dois critérios. Pelo caminho normal não chega aqui (o
+        # placar da volta só é aceito quando alguém passa), mas se acontecer
+        # a fase trava esperando o organizador resolver, igual ao W.O. duplo.
+        return None
 
     @property
     def eh_bye(self):

@@ -60,6 +60,7 @@
         <span class="chip-premio chip-premio-secundario">3º R$ {{ "%.2f"|format(torneio.valor_premio_terceiro) }}</span>
     {% endif %}
     <span class="chip-formato">{{ 'Fase de grupos' if torneio.formato == 'fase_grupos' else 'Mata-mata direto' }}</span>
+    {% if torneio.ida_volta %}<span class="chip-formato">Mata-mata de ida e volta</span>{% endif %}
     <span class="chip-geracao chip-jogo">{{ torneio.nome_jogo }}</span>
 
     {% if grupos_info %}

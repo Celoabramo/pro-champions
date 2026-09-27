@@ -2331,6 +2331,8 @@ def criar_campeonato():
         if valor <= 0:
             modo_inscricao = "direta"
 
+        ida_volta = request.form.get("ida_volta") == "1"
+
         novo_campeonato = Torneio(
             nome=nome,
             descricao=descricao,
@@ -2345,6 +2347,7 @@ def criar_campeonato():
             geracao=geracao,
             jogo=jogo,
             modo_inscricao=modo_inscricao,
+            ida_volta=ida_volta,
             federacao_id=current_user.federacao_id,
             criado_por_id=current_user.id,
         )
@@ -2445,7 +2448,7 @@ def detalhe_campeonato(torneio_id):
         eh_membro_campeao=eh_membro_campeao,
         grupos_info=grupos_info,
         rodadas_bracket=_estrutura_bracket(torneio) if torneio.status != "aberto" else None,
-        disputa_terceiro=Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first(),
+        disputa_terceiro=Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True, perna=1).first(),
         colocacoes=_colocacoes_do_torneio(torneio) if torneio.status == "finalizado" else {},
         destaques=_destaques_do_torneio(torneio) if torneio.status == "finalizado" else None,
         xp_destaque=XP_DESTAQUE if len(torneio.times_inscritos) >= 4 else 0,
@@ -2854,12 +2857,58 @@ FASES_POR_TAMANHO = {
 }
 
 
-def _vencedor_confronto(confronto):
-    if confronto.status == "validado":
-        return confronto.vencedor
-    if confronto.status == "wo":
-        return confronto.vencedor_wo
-    return None
+def _criar_jogo_de_volta(ida):
+    """Segundo jogo do duelo, com o mando invertido: quem era time1 na ida
+    entra como time2 na volta. É essa inversão que faz o gol fora de casa
+    significar alguma coisa. Idempotente."""
+    if Confronto.query.filter_by(confronto_ida_id=ida.id).first() is not None:
+        return
+    db.session.add(Confronto(
+        torneio_id=ida.torneio_id,
+        fase=ida.fase,
+        ordem=ida.ordem,
+        perna=2,
+        confronto_ida_id=ida.id,
+        eh_disputa_3_lugar=ida.eh_disputa_3_lugar,
+        time1_id=ida.time2_id,
+        time2_id=ida.time1_id,
+    ))
+
+
+def _motivo_placar_recusado(confronto, placar1, placar2):
+    """Por que esse placar não pode encerrar a partida, ou None se pode.
+
+    - "empate": jogo único de mata-mata, que precisa de vencedor pra chave
+      andar.
+    - "empate_agregado": jogo de volta em que a soma dos dois jogos E o gol
+      fora de casa continuam empatados — ninguém passaria de fase.
+
+    Jogo de grupo aceita qualquer placar (empate vale ponto), e o jogo de
+    ida também: lá o empate é resultado normal, quem decide é o agregado.
+    """
+    if confronto.fase.startswith("Grupo "):
+        return None
+    if not confronto.eh_ida_volta:
+        return "empate" if placar1 == placar2 else None
+    if confronto.perna == 1:
+        return None
+
+    ida = confronto.jogo_ida
+    if ida is None or ida.placar_time1 is None or ida.placar_time2 is None:
+        # Ida sem placar (W.O., por exemplo): não tem agregado pra somar, e
+        # o duelo se resolve por fora.
+        return None
+
+    # O time1 da volta é o time2 da ida — por isso a soma cruza os lados.
+    total_time1 = placar1 + ida.placar_time2
+    total_time2 = placar2 + ida.placar_time1
+    if total_time1 != total_time2:
+        return None
+    # Agregado empatado: decide quem fez mais gol fora. O time1 daqui jogou
+    # fora na ida; o time2 daqui está jogando fora agora.
+    if ida.placar_time2 != placar2:
+        return None
+    return "empate_agregado"
 
 
 def _avancar_chaveamento(confronto):
@@ -2868,8 +2917,14 @@ def _avancar_chaveamento(confronto):
     dependendo de qual fase esse confronto pertence."""
     if confronto.fase.startswith("Grupo "):
         _avancar_grupo(confronto)
-    else:
-        _avancar_mata_mata(confronto)
+        return
+    # Ida decidida no placar não avança chave nenhuma: o duelo continua no
+    # segundo jogo, que nasce aqui. (W.O. na ida já elimina, então cai no
+    # caminho normal de baixo.)
+    if confronto.eh_ida_volta and confronto.perna == 1 and confronto.status == "validado":
+        _criar_jogo_de_volta(confronto)
+        return
+    _avancar_mata_mata(confronto)
 
 
 def _avancar_mata_mata(confronto):
@@ -2889,16 +2944,18 @@ def _avancar_mata_mata(confronto):
         _tentar_finalizar_torneio(torneio)
         return
 
+    # Uma linha por duelo (a ida): em ida e volta, o segundo jogo é outra
+    # linha com a mesma fase e ordem, e quem decide é a soma dos dois.
     confrontos_fase = (
         Confronto.query
-        .filter_by(torneio_id=torneio.id, fase=confronto.fase, eh_disputa_3_lugar=False)
+        .filter_by(torneio_id=torneio.id, fase=confronto.fase, eh_disputa_3_lugar=False, perna=1)
         .order_by(Confronto.ordem)
         .all()
     )
-    if any(c.status not in ("validado", "wo") for c in confrontos_fase):
+    if any(not c.duelo_encerrado for c in confrontos_fase):
         return
 
-    vencedores = [_vencedor_confronto(c) for c in confrontos_fase]
+    vencedores = [c.vencedor_do_duelo for c in confrontos_fase]
     if any(v is None for v in vencedores):
         return
 
@@ -2936,12 +2993,13 @@ FASE_DISPUTA_TERCEIRO = "Disputa de 3º lugar"
 
 
 def _perdedor_confronto(confronto):
-    """O time que perdeu — ou None se o confronto não teve adversário (bye)
-    ou não tem vencedor definido (W.O. duplo)."""
-    vencedor = _vencedor_confronto(confronto)
-    if vencedor is None or confronto.time1_id is None or confronto.time2_id is None:
+    """O time que foi eliminado no duelo — ou None se não teve adversário
+    (bye) ou ninguém venceu (W.O. duplo)."""
+    ida = confronto.jogo_ida
+    vencedor = ida.vencedor_do_duelo
+    if vencedor is None or ida.time1_id is None or ida.time2_id is None:
         return None
-    return confronto.time2 if vencedor.id == confronto.time1_id else confronto.time1
+    return ida.time2 if vencedor.id == ida.time1_id else ida.time1
 
 
 def _criar_disputa_terceiro_lugar(torneio, semifinais):
@@ -2976,8 +3034,8 @@ def _tentar_finalizar_torneio(torneio):
     estejam definidas."""
     if torneio.status == "finalizado" or not torneio.time_campeao_id:
         return
-    disputa = Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first()
-    if disputa and disputa.status not in ("validado", "wo"):
+    disputa = Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True, perna=1).first()
+    if disputa and not disputa.duelo_encerrado:
         return
 
     torneio.status = "finalizado"
@@ -3147,21 +3205,21 @@ def _colocacoes_do_torneio(torneio):
     if torneio.time_campeao:
         colocacoes["campeao"] = torneio.time_campeao
 
-    final = Confronto.query.filter_by(torneio_id=torneio.id, fase="Final", eh_disputa_3_lugar=False).first()
+    final = Confronto.query.filter_by(torneio_id=torneio.id, fase="Final", eh_disputa_3_lugar=False, perna=1).first()
     if final is not None:
         vice = _perdedor_confronto(final)
         if vice is not None:
             colocacoes["vice"] = vice
 
-    disputa = Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True).first()
+    disputa = Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True, perna=1).first()
     if disputa is not None:
-        terceiro = _vencedor_confronto(disputa)
+        terceiro = disputa.vencedor_do_duelo
         if terceiro is not None:
             colocacoes["terceiro"] = terceiro
     else:
         # Sem disputa: só rola quando uma semifinal foi bye. O único
         # perdedor real de semifinal é o 3º.
-        semifinais = Confronto.query.filter_by(torneio_id=torneio.id, fase="Semifinal", eh_disputa_3_lugar=False).all()
+        semifinais = Confronto.query.filter_by(torneio_id=torneio.id, fase="Semifinal", eh_disputa_3_lugar=False, perna=1).all()
         perdedores = [p for p in (_perdedor_confronto(c) for c in semifinais) if p is not None]
         if len(perdedores) == 1:
             colocacoes["terceiro"] = perdedores[0]
@@ -3402,8 +3460,12 @@ def _estrutura_bracket(torneio):
     rodada, sempre com 1 confronto só). Para campeonato de 2 times, esquerda
     e direita ficam vazios — só tem a final mesmo.
     """
+    # Só a ida entra na chave: em ida e volta o duelo é uma vaga só na tela,
+    # com o placar somado dos dois jogos (a volta tem a mesma fase e ordem).
     confrontos_por_fase = {}
     for confronto in torneio.confrontos:
+        if confronto.perna != 1:
+            continue
         confrontos_por_fase.setdefault(confronto.fase, {})[confronto.ordem] = confronto
 
     if torneio.formato == "fase_grupos":
@@ -4028,6 +4090,12 @@ def editar_campeonato(torneio_id):
                 )
                 return redirect(url_for("editar_campeonato", torneio_id=torneio_id))
 
+        # Ida e volta muda o número de jogos do campeonato inteiro, então só
+        # vale enquanto o chaveamento não foi sorteado.
+        ida_volta = torneio.ida_volta
+        if torneio.status == "aberto":
+            ida_volta = request.form.get("ida_volta") == "1"
+
         senha = request.form.get("senha", "")
         if not check_password_hash(current_user.senha_hash, senha):
             flash("Senha incorreta. Nenhuma alteração foi salva.", "erro")
@@ -4045,6 +4113,7 @@ def editar_campeonato(torneio_id):
         torneio.geracao = geracao
         torneio.jogo = jogo
         torneio.modo_inscricao = modo_inscricao
+        torneio.ida_volta = ida_volta
 
         # Quem já pagou a inscrição precisa ficar sabendo que a data mudou —
         # é a informação que fez o time se inscrever.
@@ -4306,8 +4375,16 @@ def resolver_confronto_manual(torneio_id, confronto_id):
         flash("Placar inválido. Use números de 0 a 99 nos dois campos.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
-    if placar1 == placar2 and not confronto.fase.startswith("Grupo "):
+    motivo = _motivo_placar_recusado(confronto, placar1, placar2)
+    if motivo == "empate":
         flash("Empate não decide mata-mata — coloque o placar do desempate para alguém avançar.", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+    if motivo == "empate_agregado":
+        flash(
+            "Esse placar deixa o duelo empatado no agregado e no gol fora de casa — "
+            "coloque o placar do desempate para alguém avançar.",
+            "erro",
+        )
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
     confronto.placar_time1 = placar1
@@ -4597,11 +4674,12 @@ def _tentar_finalizar_confronto(confronto):
         confronto.status = "divergente"
         return "nomes_nao_identificados"
 
-    if placar_time1 == placar_time2 and not confronto.fase.startswith("Grupo "):
-        # As duas leituras bateram, mas deu empate — no mata-mata precisa de
-        # vencedor para avançar, então precisa jogar o desempate e reenviar.
+    motivo = _motivo_placar_recusado(confronto, placar_time1, placar_time2)
+    if motivo:
+        # As duas leituras bateram, mas o resultado não faz ninguém passar
+        # de fase — precisa jogar o desempate e reenviar o print.
         confronto.status = "divergente"
-        return "empate"
+        return motivo
 
     confronto.placar_time1 = placar_time1
     confronto.placar_time2 = placar_time2
@@ -4748,10 +4826,17 @@ def _aplicar_partida_ea(confronto, candidata):
 
     # Mata-mata precisa de vencedor pra avançar a chave — mesma regra do
     # fluxo de print, que manda jogar o desempate.
-    if placar1 == placar2 and not confronto.fase.startswith("Grupo "):
+    motivo = _motivo_placar_recusado(confronto, placar1, placar2)
+    if motivo == "empate":
         return (
             f"A EA registrou empate em {placar1} a {placar2}. No mata-mata precisa de vencedor: "
             "joguem o desempate e busquem de novo (ou o organizador resolve na mão)."
+        )
+    if motivo == "empate_agregado":
+        return (
+            f"A EA registrou {placar1} a {placar2}, que deixa o duelo empatado no agregado e "
+            "no gol fora de casa. Joguem o desempate e busquem de novo (ou o organizador "
+            "resolve na mão)."
         )
 
     confronto.placar_time1 = placar1
@@ -5221,6 +5306,12 @@ def enviar_print(torneio_id, confronto_id):
             flash(f"Print lido e confirmado! Empate em {confronto.placar_time1} a {confronto.placar_time2}.", "sucesso")
     elif motivo_divergencia == "empate":
         flash("As duas leituras bateram, mas deu empate — essa fase não aceita empate. Reenviem o print (do desempate, se já tiver rolado).", "erro")
+    elif motivo_divergencia == "empate_agregado":
+        flash(
+            "As duas leituras bateram, mas o duelo continua empatado no agregado e no gol fora "
+            "de casa — ninguém passa assim. Joguem o desempate e reenviem o print.",
+            "erro",
+        )
     elif motivo_divergencia == "nao_bateu":
         flash("A leitura dos dois prints não bateu. Confiram o resultado combinado e reenviem o print.", "erro")
     elif motivo_divergencia == "nomes_nao_identificados":
@@ -5311,6 +5402,11 @@ def _garantir_colunas_novas():
         # Confirmação mútua "vamos começar" (ver rota /pronto).
         ("confrontos", "pronto_time1", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("confrontos", "pronto_time2", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        # Mata-mata de ida e volta: campeonato antigo fica em jogo único e
+        # todo confronto que já existe vira a perna 1 do próprio duelo.
+        ("torneios", "ida_volta", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("confrontos", "perna", "INTEGER NOT NULL DEFAULT 1"),
+        ("confrontos", "confronto_ida_id", "INTEGER"),
     ]
     for tabela, coluna, tipo in colunas:
         try:

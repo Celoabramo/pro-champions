@@ -64,6 +64,28 @@
             </label>
         </div>
 
+        <label>Jogos do mata-mata</label>
+        <div class="opcoes-formato">
+            <label class="opcao-formato">
+                <input type="radio" name="ida_volta" value="0" checked>
+                <div>
+                    <strong>Jogo único</strong>
+                    <span class="texto-fraco-pequeno">Cada confronto é decidido numa partida só — empatou, joga o desempate na hora.</span>
+                </div>
+            </label>
+            <label class="opcao-formato">
+                <input type="radio" name="ida_volta" value="1">
+                <div>
+                    <strong>Ida e volta</strong>
+                    <span class="texto-fraco-pequeno">
+                        Cada confronto tem dois jogos (o segundo com os lados trocados) e quem avança sai da
+                        soma dos dois. Empatou no agregado, decide o gol fora de casa. Vale para todo o
+                        mata-mata, inclusive final e disputa de 3º — a fase de grupos segue em turno único.
+                    </span>
+                </div>
+            </label>
+        </div>
+
         <label>Jogo</label>
         <div class="opcoes-formato">
             {% for codigo, nome in jogos.items() %}
