@@ -921,6 +921,17 @@ button:disabled, input[type="submit"]:disabled {
 .botao-arquivo svg { flex-shrink: 0; color: var(--acento); }
 .botao-arquivo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Escolher imagem: botão de câmera + botão de galeria lado a lado. */
+.escolher-imagem { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Câmera só em aparelho de toque — no PC o botão abriria a mesma janela de
+   arquivos do outro, ou uma webcam que ninguém usa pra isso. A consulta é
+   por tipo de ponteiro, não por largura de tela: um monitor estreito
+   continua sendo PC, e um tablet largo continua tendo câmera. */
+.botao-so-celular { display: none; }
+@media (hover: none) and (pointer: coarse) {
+    .botao-so-celular { display: inline-flex; }
+}
+
 .botao-principal-pequeno {
     display: inline-flex;
     align-items: center;
@@ -2046,6 +2057,9 @@ dialog.popup-print .acoes button,
     padding: 36px 10px 18px;
     text-align: center;
 }
+/* O "display: flex" acima ganha do atributo hidden, então a tela de espera
+   aparecia junto com os botões de escolher o print. */
+.carregando-print[hidden] { display: none; }
 .carregando-print img {
     width: 54px;
     height: 54px;

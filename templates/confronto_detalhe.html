@@ -426,10 +426,14 @@
 
         <form method="POST" action="{{ url_for('enviar_print', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}" enctype="multipart/form-data" id="form-print">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="file" id="input-print" name="print" accept="image/*" capture="environment" style="display:none;" onchange="enviarPrint()">
+            {# Sem "capture" fixo: o print da tela final quase sempre já está
+               salvo na galeria (quem joga no console fotografa a TV). Os dois
+               caminhos ficam disponíveis — ver abrirSeletorImagem. #}
+            <input type="file" id="input-print" name="print" accept="image/*" style="display:none;" onchange="enviarPrint()">
             <div class="acoes">
                 <button type="button" class="botao-secundario" onclick="document.getElementById('popup-print').close()">Cancelar</button>
-                <button type="button" class="botao-principal" onclick="document.getElementById('input-print').click()">Tirar o print</button>
+                <button type="button" class="botao-secundario botao-so-celular" onclick="abrirSeletorImagem('input-print', true)">Tirar foto</button>
+                <button type="button" class="botao-principal" onclick="abrirSeletorImagem('input-print', false)">Escolher print</button>
             </div>
         </form>
     </div>

@@ -362,6 +362,30 @@
             window.addEventListener("resize", atualizar, { passive: true });
         })();
     </script>
+    <script>
+        // Escolher imagem no celular: o MESMO input é usado pelos dois
+        // botões, só ligando/desligando o "capture" antes de abrir. Com
+        // capture o celular abre a câmera direto; sem ele, abre a galeria.
+        // Dois inputs separados não serviriam: os dois iriam no POST com o
+        // mesmo nome e o servidor pegaria o vazio.
+        function abrirSeletorImagem(idDoInput, usarCamera) {
+            var input = document.getElementById(idDoInput);
+            if (!input) return;
+            if (usarCamera) {
+                input.setAttribute("capture", "environment");
+            } else {
+                input.removeAttribute("capture");
+            }
+            input.click();
+        }
+
+        // Troca o texto do botão pelo nome do arquivo escolhido.
+        function mostrarArquivoEscolhido(input, idDoTexto, rotuloPadrao) {
+            var alvo = document.getElementById(idDoTexto);
+            if (!alvo) return;
+            alvo.textContent = input.files && input.files[0] ? input.files[0].name : rotuloPadrao;
+        }
+    </script>
     {% block script_extra %}{% endblock %}
 </body>
 </html>

@@ -37,11 +37,7 @@
         <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Aparece no seu perfil, no elenco do time e no ranking.</p>
         <form method="POST" action="{{ url_for('enviar_foto_perfil') }}" enctype="multipart/form-data" class="form-escudo">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label for="foto" class="botao-arquivo">
-                <span id="nome-arquivo-foto">Escolher imagem</span>
-            </label>
-            <input type="file" id="foto" name="foto" accept="image/*" required
-                   onchange="document.getElementById('nome-arquivo-foto').textContent = this.files[0] ? this.files[0].name : 'Escolher imagem'">
+            {{ macros.escolher_imagem('foto') }}
             <button type="submit" class="botao-principal-pequeno">Enviar foto</button>
         </form>
         {% if usuario.foto %}
@@ -164,12 +160,7 @@
 
             <form method="POST" action="{{ url_for('enviar_logo_federacao') }}" enctype="multipart/form-data" class="form-escudo" style="margin-top:16px;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <label for="logo" class="botao-arquivo">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span id="nome-arquivo-federacao">Escolher imagem</span>
-                </label>
-                <input type="file" id="logo" name="logo" accept="image/*" required
-                       onchange="document.getElementById('nome-arquivo-federacao').textContent = this.files[0] ? this.files[0].name : 'Escolher imagem'">
+                {{ macros.escolher_imagem('logo') }}
                 <button type="submit" class="botao-principal-pequeno">{{ 'Trocar logo' if federacao.logo else 'Enviar logo' }}</button>
             </form>
 
