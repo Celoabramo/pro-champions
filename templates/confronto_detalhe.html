@@ -398,28 +398,37 @@
     <div class="popup-print-conteudo" id="popup-print-conteudo">
         <div class="eyebrow-print"><span class="ponto-pulsante"></span>Print da partida</div>
         <h2 class="popup-print-titulo">Antes de tirar a foto</h2>
-        <p class="popup-print-sub">O placar é conferido pelos dois prints — do seu time e do adversário. Sem o placar visível e completo, a validação não passa.</p>
+        <p class="popup-print-sub">O placar é conferido pelos dois prints — o seu e o do adversário.</p>
 
         <div class="passos">
             <div class="passo">
-                <span class="passo-num">1</span>
+                <span class="passo-figura">
+                    <img src="{{ url_for('static', filename='passo-print-1.webp') }}" alt="" width="384" height="288">
+                    <span class="passo-num">1</span>
+                </span>
                 <div class="passo-corpo">
-                    <strong>Espere a tela final da partida</strong>
-                    <span>A que mostra o placar cheio — não vale print do meio do jogo.</span>
+                    <strong>Enquadre apenas o placar</strong>
+                    <span>Espere a tela final da partida e pegue só o placar — nítido, sem zoom e sem editar.</span>
                 </div>
             </div>
             <div class="passo">
-                <span class="passo-num">2</span>
+                <span class="passo-figura">
+                    <img src="{{ url_for('static', filename='passo-print-2.webp') }}" alt="" width="384" height="288">
+                    <span class="passo-num">2</span>
+                </span>
                 <div class="passo-corpo">
-                    <strong>Enquadre a tela toda</strong>
-                    <span>Sem cortar os escudos ou o placar, sem zoom, sem editar.</span>
+                    <strong>A gente envia o print</strong>
+                    <span>É automático, assim que você escolhe a imagem.</span>
                 </div>
             </div>
             <div class="passo">
-                <span class="passo-num">3</span>
+                <span class="passo-figura">
+                    <img src="{{ url_for('static', filename='passo-print-3.webp') }}" alt="" width="384" height="288">
+                    <span class="passo-num">3</span>
+                </span>
                 <div class="passo-corpo">
-                    <strong>Print nítido</strong>
-                    <span>Direto da tela — nada de foto tremida ou com reflexo.</span>
+                    <strong>A IA confere o placar</strong>
+                    <span>Os dois times enviam e o site compara as duas leituras pra validar.</span>
                 </div>
             </div>
         </div>

@@ -1958,7 +1958,11 @@ dialog.popup-print,
 }
 dialog.popup-print::-webkit-scrollbar,
 .cartao-popup::-webkit-scrollbar { display: none; }
-dialog.popup-print { position: fixed; top: 50%; transform: translateY(-50%); }
+/* Centralização de modal: com inset 0 (que o próprio navegador já põe em
+   dialog:modal) + margin auto, ele se centraliza sozinho e respeita o
+   max-height. O "top: 50% + translateY(-50%)" que estava aqui jogava o
+   popup pra cima quando o conteúdo crescia, cortando o topo no celular. */
+dialog.popup-print { position: fixed; inset: 0; }
 dialog.popup-print::backdrop { background: rgba(4, 8, 6, 0.75); backdrop-filter: blur(2px); }
 
 /* Página inteira agindo como palco pro cartão flutuante (ex: tela do Pix) */
@@ -2024,18 +2028,25 @@ dialog.popup-print::backdrop { background: rgba(4, 8, 6, 0.75); backdrop-filter:
 }
 
 .passos { display: flex; flex-direction: column; gap: 2px; margin-bottom: 20px; }
-.passo { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--linha); }
+.passo { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--linha); align-items: center; }
 .passo:last-child { border-bottom: none; }
+/* Ilustração do passo com o número no canto — as imagens já são escuras,
+   então encostam no fundo do popup sem precisar de moldura. Largura contida
+   de propósito: o popup inteiro precisa caber na tela do celular sem rolar. */
+.passo-figura { position: relative; flex-shrink: 0; width: 72px; line-height: 0; }
+.passo-figura img { width: 100%; height: auto; border-radius: 8px; display: block; }
 .passo-num {
     flex-shrink: 0;
     width: 20px; height: 20px;
     border-radius: 50%;
     border: 1px solid var(--linha);
+    background: var(--fundo);
     color: var(--texto-fraco);
     font-size: 11px;
+    line-height: 1;
     display: flex; align-items: center; justify-content: center;
-    margin-top: 1px;
 }
+.passo-figura .passo-num { position: absolute; top: -6px; left: -6px; }
 .passo-corpo strong { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 1px; }
 .passo-corpo span { display: block; font-size: 12px; color: var(--texto-fraco); line-height: 1.45; }
 
