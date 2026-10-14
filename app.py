@@ -746,7 +746,7 @@ def _tabela_ranking(temporada):
 
     if torneio_ids:
         # Participação: inscrição paga e não devolvida num campeonato elegível.
-        inscricoes = Inscricao.query.filter(
+        inscricoes = Inscricao.query.options(joinedload(Inscricao.time)).filter(
             Inscricao.torneio_id.in_(torneio_ids), Inscricao.status == "pago"
         ).all()
         for inscricao in inscricoes:
@@ -754,7 +754,9 @@ def _tabela_ranking(temporada):
                 linha(inscricao.time)["campeonatos"] += 1
 
         # Partidas jogadas de verdade (bye não conta — não teve adversário).
-        confrontos = Confronto.query.filter(
+        confrontos = Confronto.query.options(
+            joinedload(Confronto.time1), joinedload(Confronto.time2)
+        ).filter(
             Confronto.torneio_id.in_(torneio_ids), Confronto.status.in_(["validado", "wo"])
         ).all()
         for confronto in confrontos:
@@ -764,7 +766,8 @@ def _tabela_ranking(temporada):
                 if time_obj.id in linhas:
                     linhas[time_obj.id]["partidas"] += 1
 
-    for pontuacao in PontuacaoRanking.query.filter_by(temporada_id=temporada.id).all():
+    consulta_pontos = PontuacaoRanking.query.options(joinedload(PontuacaoRanking.time))
+    for pontuacao in consulta_pontos.filter_by(temporada_id=temporada.id).all():
         if pontuacao.time is None:
             continue
         item = linha(pontuacao.time)
@@ -1866,7 +1869,13 @@ def campeonatos():
         (Torneio.status == "em_andamento", 1),
         else_=2,
     )
-    consulta = Torneio.query
+    # Traz de uma vez a federação e os times inscritos: a tela mostra os dois
+    # pra cada campeonato da lista, e sem isso cada um deles vira uma consulta
+    # separada (eram 28 numa lista de 6 campeonatos).
+    consulta = Torneio.query.options(
+        joinedload(Torneio.federacao),
+        selectinload(Torneio.inscricoes).joinedload(Inscricao.time),
+    )
 
     federacao_id = request.args.get("federacao", type=int)
     if federacao_id:
@@ -2370,7 +2379,22 @@ def criar_campeonato():
 
 @app.route("/campeonatos/<int:torneio_id>")
 def detalhe_campeonato(torneio_id):
-    torneio = Torneio.query.get_or_404(torneio_id)
+    # A tela percorre o chaveamento inteiro e a lista de inscritos, tocando
+    # nos dois times de cada confronto (e no jogo de volta, quando o
+    # campeonato é de ida e volta). Sem trazer tudo junto, cada um desses
+    # acessos vira uma consulta solta.
+    torneio = (
+        Torneio.query
+        .options(
+            joinedload(Torneio.federacao),
+            selectinload(Torneio.inscricoes).joinedload(Inscricao.time),
+            selectinload(Torneio.confrontos).joinedload(Confronto.time1),
+            selectinload(Torneio.confrontos).joinedload(Confronto.time2),
+            selectinload(Torneio.confrontos).selectinload(Confronto.jogos_volta),
+        )
+        .filter_by(id=torneio_id)
+        .first_or_404()
+    )
 
     time_ja_inscrito = False
     inscricao_pendente = None
