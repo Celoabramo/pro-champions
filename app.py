@@ -156,6 +156,15 @@ app.config["PASTA_ESCUDOS"] = os.path.join(app.config["PASTA_UPLOADS"], "escudos
 app.config["PASTA_FEDERACOES"] = os.path.join(app.config["PASTA_UPLOADS"], "federacoes")
 app.config["PASTA_FOTOS"] = os.path.join(app.config["PASTA_UPLOADS"], "fotos")
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB por upload
+
+# Quanto tempo o navegador pode guardar um arquivo estático sem perguntar de
+# novo. Sem isso o Flask manda "no-cache", e aí o celular revalida CADA
+# arquivo (CSS, logo, ícones, escudo de cada time) a cada página aberta —
+# medido em produção, ~330 ms por arquivo, só de ida e volta até o servidor.
+# Um ano é seguro porque toda URL de estático leva a data do arquivo no fim
+# (ver _versionar_static) e todo arquivo enviado por usuário tem nome único.
+CACHE_ESTATICOS = 365 * 24 * 60 * 60
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = CACHE_ESTATICOS
 EXTENSOES_PRINT_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
 EXTENSOES_IMAGEM_PERMITIDAS = {"png", "jpg", "jpeg", "webp"}
 CATEGORIAS_UPLOAD_VALIDAS = {"prints", "escudos", "federacoes", "fotos"}
@@ -170,7 +179,13 @@ os.makedirs(app.config["PASTA_FOTOS"], exist_ok=True)
 def arquivo_upload(categoria, nome_arquivo):
     if categoria not in CATEGORIAS_UPLOAD_VALIDAS:
         abort(404)
-    return send_from_directory(os.path.join(app.config["PASTA_UPLOADS"], categoria), nome_arquivo)
+    # Escudo, foto e print nunca mudam de conteúdo: cada envio gera um nome
+    # novo com uuid. Então o navegador pode guardar à vontade — trocar a
+    # imagem troca a URL junto.
+    return send_from_directory(
+        os.path.join(app.config["PASTA_UPLOADS"], categoria), nome_arquivo,
+        max_age=CACHE_ESTATICOS,
+    )
 
 
 def _apagar_upload(categoria, nome_arquivo):
@@ -393,25 +408,24 @@ def injetar_pedidos_pendentes():
     return dict(pedidos_entrada_pendentes=total)
 
 
-@app.context_processor
-def injetar_static_versionado():
-    """static_v(arquivo) gera a URL do arquivo estático com a data de
-    modificação dele colada no final (?v=169...). Assim, toda vez que a
-    gente altera o CSS/JS, o link muda e o navegador do usuário busca a
-    versão nova na hora — sem isso, o navegador podia continuar usando o
-    estilo.css antigo guardado em cache e a pessoa achar que a mudança
-    não foi aplicada.
+@app.url_defaults
+def _versionar_static(endpoint, values):
+    """Cola a data de modificação do arquivo no fim de toda URL de estático
+    (?v=169...). Assim, toda vez que a gente altera o CSS, o logo ou um
+    ícone, o link muda e o navegador busca a versão nova na hora — sem isso
+    ele continuaria usando a cópia antiga guardada em cache e a pessoa acha
+    que a mudança não foi aplicada.
+
+    É isso que deixa o cache longo lá em cima (SEND_FILE_MAX_AGE_DEFAULT)
+    ser seguro: o arquivo pode ficar guardado por um ano porque, quando ele
+    muda, a URL muda junto.
     """
-
-    def static_v(nome_arquivo):
-        caminho = os.path.join(app.static_folder, nome_arquivo)
-        try:
-            versao = int(os.path.getmtime(caminho))
-        except OSError:
-            versao = 0
-        return f"{url_for('static', filename=nome_arquivo)}?v={versao}"
-
-    return dict(static_v=static_v)
+    if endpoint != "static" or "filename" not in values:
+        return
+    try:
+        values["v"] = int(os.path.getmtime(os.path.join(app.static_folder, values["filename"])))
+    except OSError:
+        pass
 
 
 @app.context_processor
