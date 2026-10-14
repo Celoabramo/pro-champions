@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Em manutenção — Pro Champions</title>
+<!-- Página solta de propósito: não estende o base.html nem passa por
+     template nenhum, porque ela precisa abrir mesmo com o banco de dados
+     fora do ar (é exatamente pra isso que ela existe). Por isso o estilo
+     está aqui dentro e a fonte é a do próprio sistema. -->
+<link rel="icon" href="/static/favicon.ico" sizes="any">
+<style>
+    :root {
+        --fundo: #0b0f14;
+        --fundo-card: #121820;
+        --linha: #212a34;
+        --texto: #eef2f5;
+        --texto-fraco: #8a95a3;
+        --acento: #2ecc71;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--fundo);
+        color: var(--texto);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+    }
+    .cartao {
+        width: 100%;
+        max-width: 420px;
+        padding: 36px 26px 30px;
+        background: var(--fundo-card);
+        border: 1px solid var(--linha);
+        border-radius: 16px;
+        box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+    }
+    .logo { width: 84px; height: auto; margin-bottom: 20px; }
+    h1 { font-size: 22px; margin: 0 0 12px; letter-spacing: -0.01em; }
+    p { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: var(--texto-fraco); }
+    .prazo {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 18px;
+        padding: 10px 18px;
+        border-radius: 999px;
+        background: rgba(46, 204, 113, 0.12);
+        color: var(--acento);
+        font-weight: 700;
+        font-size: 14px;
+    }
+    .ponto {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--acento);
+        animation: pulsar 1.4s ease-in-out infinite;
+    }
+    @keyframes pulsar { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+    @media (prefers-reduced-motion: reduce) { .ponto { animation: none; } }
+</style>
+</head>
+<body>
+    <main class="cartao">
+        <img src="/static/logo.png" alt="Pro Champions" class="logo">
+        <h1>Já voltamos</h1>
+        <p>O site está em manutenção rápida pra ficar mais veloz.</p>
+        <p>Nenhum campeonato, inscrição ou resultado seu é perdido — está tudo guardado.</p>
+        <div class="prazo"><span class="ponto"></span> Voltamos em ~10 minutos</div>
+    </main>
+    <script>
+        // Tenta sozinho de 30 em 30s, pra pessoa não precisar ficar atualizando.
+        setTimeout(function () { location.reload(); }, 30000);
+    </script>
+</body>
+</html>

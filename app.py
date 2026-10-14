@@ -175,6 +175,29 @@ os.makedirs(app.config["PASTA_FEDERACOES"], exist_ok=True)
 os.makedirs(app.config["PASTA_FOTOS"], exist_ok=True)
 
 
+# Chave de manutenção: com MANUTENCAO=1 no ambiente, o site inteiro vira uma
+# tela de "já voltamos" e ninguém consegue gravar nada. Serve pra trocar o
+# banco de lugar sem alguém salvar um placar no meio da mudança e esse dado
+# se perder. Liga e desliga pela variável no Railway — reiniciar o serviço
+# leva menos de um minuto.
+MODO_MANUTENCAO = os.environ.get("MANUTENCAO", "").strip().lower() in ("1", "true", "sim", "on")
+
+
+@app.before_request
+def _tela_de_manutencao():
+    """De propósito não toca em NADA que dependa do banco — nem no
+    current_user, porque só de olhar pra ele o Flask-Login iria buscar a
+    pessoa no banco, que é justamente o que pode estar fora do ar nessa
+    hora. Por isso a página é um arquivo solto, servido direto."""
+    if not MODO_MANUTENCAO or request.endpoint == "static":
+        return None
+    resposta = send_from_directory(app.static_folder, "manutencao.html")
+    resposta.status_code = 503
+    resposta.headers["Retry-After"] = "600"
+    resposta.headers["Cache-Control"] = "no-store"
+    return resposta
+
+
 @app.route("/uploads/<categoria>/<path:nome_arquivo>")
 def arquivo_upload(categoria, nome_arquivo):
     if categoria not in CATEGORIAS_UPLOAD_VALIDAS:
