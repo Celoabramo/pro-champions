@@ -10,3 +10,5 @@ static/escudos/*
 !static/escudos/generico.png
 static/federacoes/*
 .claude/scheduled_tasks.lock
+.claude/settings.local.json
+migracao.env
