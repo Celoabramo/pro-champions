@@ -2301,10 +2301,14 @@ def criar_campeonato():
             return redirect(url_for("criar_campeonato"))
 
         if valor > 0:
-            # Estimativa conservadora de leituras de IA (mata-mata: max_times-1 partidas,
-            # 2 prints por partida, +20% de folga pra reenvio em caso de divergência).
-            leituras_estimadas = (max_times - 1) * 2 * 1.2
-            custo_ia_estimado = leituras_estimadas * CUSTO_IA_POR_LEITURA_ESTIMADO
+            # Formato e ida e volta mudam quantas partidas (e prints pra IA
+            # ler) o campeonato tem. Eles são validados mais abaixo; aqui só
+            # entram na estimativa de custo.
+            custo_ia_estimado = _custo_ia_estimado(
+                max_times,
+                request.form.get("formato", "mata_mata"),
+                request.form.get("ida_volta") == "1",
+            )
 
             # A AbacatePay cobra a mesma taxa fixa em QUALQUER envio, não só
             # no recebimento — então mandar o prêmio e o repasse cheios
@@ -3447,6 +3451,28 @@ def _custo_premios(valores):
     return sum(v + TAXA_ABACATEPAY_ESTIMADA for v in valores if v and v > 0)
 
 
+def _partidas_estimadas(num_times, formato="mata_mata", ida_volta=False):
+    """Quantas partidas o campeonato deve ter. Fase de grupos: grupos de 4
+    em turno único (6 jogos cada) e depois o mata-mata com os 2 primeiros de
+    cada grupo. Ida e volta dobra só o mata-mata — os grupos não mudam."""
+    if num_times < 2:
+        return 0
+    if formato == "fase_grupos":
+        grupos = num_times // 4
+        jogos_grupos = grupos * 6
+        duelos_mata_mata = max(grupos * 2 - 1, 0)
+    else:
+        jogos_grupos = 0
+        duelos_mata_mata = num_times - 1
+    return jogos_grupos + duelos_mata_mata * (2 if ida_volta else 1)
+
+
+def _custo_ia_estimado(num_times, formato="mata_mata", ida_volta=False):
+    """Custo da leitura dos prints: 2 por partida, +20% de folga pros
+    reenvios quando as duas leituras não batem."""
+    return _partidas_estimadas(num_times, formato, ida_volta) * 2 * 1.2 * CUSTO_IA_POR_LEITURA_ESTIMADO
+
+
 def _status_premios(torneio):
     """{colocacao: (valor, status)} dos prêmios acima de zero."""
     return {
@@ -3465,38 +3491,50 @@ def _premios_pendentes(torneio):
     ]
 
 
+# Daqui pra cima o campeonato conta como "quase cheio": o prêmio fica
+# inteiro e quem absorve o dinheiro que não entrou é o lucro (federação).
+OCUPACAO_QUASE_CHEIO = 0.75
+
+
 def _premios_ajustados_para(torneio, num_times):
-    """Prêmios possíveis com `num_times` pagando, em vez das vagas todas.
+    """Prêmios com `num_times` pagando, em vez das vagas todas.
 
-    Os prêmios foram calibrados na criação pra sobrar o lucro mínimo da
-    plataforma com o campeonato CHEIO. Começando com menos times entra menos
-    dinheiro, e manter os prêmios cheios faria a plataforma pagar a
-    diferença do próprio bolso. Aqui a gente refaz a mesma conta da criação,
-    só que com o número real de times, e reduz os três prêmios na mesma
-    proporção até caber no piso (nunca aumenta — no máximo mantém o que já
-    estava combinado). Prêmio que cair abaixo do mínimo de Pix vira zero.
+    Duas regras, nessa ordem:
 
-    Devolve {colocacao: valor} só com os prêmios acima de zero.
+    1. Ocupação. Com o campeonato quase cheio (OCUPACAO_QUASE_CHEIO das vagas
+       ou mais) o prêmio fica inteiro — a federação segura a diferença.
+       Abaixo disso o prêmio cai junto com os inscritos, mantendo a mesma
+       relação prêmio x arrecadação que ele tinha no limite do "quase cheio".
+       Isso evita o prêmio ficar intacto até o lucro bater no piso e daí
+       despencar de uma vez.
+
+    2. Piso. O prêmio nunca passa do que deixa a plataforma com o lucro
+       mínimo — taxas de Pix e leitura de IA têm custo fixo e não diminuem
+       com menos times, então com pouca gente o piso aperta mais que a regra
+       de ocupação.
+
+    Nunca aumenta o prêmio combinado. Prêmio abaixo do mínimo de Pix vira
+    zero. Devolve {colocacao: valor} só com os prêmios acima de zero.
     """
     premios = dict(torneio.premios)
     if not premios or num_times >= torneio.max_times:
         return premios
 
-    leituras = (num_times - 1) * 2 * 1.2
-    custo_ia = leituras * CUSTO_IA_POR_LEITURA_ESTIMADO
-    arrecadacao = num_times * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
+    total_cheio = sum(premios.values())
+    fator = min(1.0, (num_times / torneio.max_times) / OCUPACAO_QUASE_CHEIO)
 
     # Da fórmula do lucro da plataforma:
     #   (arrecadacao - custo_premios) * (1 - fatia) - taxa - ia = lucro_minimo
     # com custo_premios = soma(premio + taxa) — a taxa de envio de cada
     # prêmio entra no custo, então sai do "teto" antes de dividir.
+    custo_ia = _custo_ia_estimado(num_times, torneio.formato, torneio.ida_volta)
+    arrecadacao = num_times * max(torneio.valor_inscricao - TAXA_ABACATEPAY_ESTIMADA, 0)
     base_necessaria = (LUCRO_MINIMO_PLATAFORMA + TAXA_ABACATEPAY_ESTIMADA + custo_ia) / (1 - _fatia_federacao(torneio.federacao))
     teto_total = arrecadacao - base_necessaria - len(premios) * TAXA_ABACATEPAY_ESTIMADA
-    total_atual = sum(premios.values())
-    if teto_total >= total_atual:
-        return premios
+    fator = min(fator, max(teto_total, 0) / total_cheio)
 
-    fator = max(teto_total, 0) / total_atual
+    if fator >= 1:
+        return premios
     ajustados = {}
     for colocacao, valor in premios.items():
         novo = round(valor * fator, 2)
