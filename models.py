@@ -919,6 +919,30 @@ class Confronto(db.Model):
         return f"<Confronto {self.fase} #{self.ordem}>"
 
 
+class MensagemConfronto(db.Model):
+    """Mensagem do chat entre os dois capitães de uma partida.
+
+    Só os capitães escrevem; o elenco dos dois times e o organizador leem.
+    Fica guardada depois que a partida encerra — serve de registro quando
+    alguém contesta placar ou pede W.O. ("combinamos outro horário").
+
+    lado é 1 ou 2 (time1/time2 do confronto) e é o que a tela usa pra
+    desenhar a bolha de cada lado; o autor fica só pra consulta.
+    """
+
+    __tablename__ = "mensagens_confronto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    confronto_id = db.Column(db.Integer, db.ForeignKey("confrontos.id"), nullable=False, index=True)
+    lado = db.Column(db.Integer, nullable=False)
+    autor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    texto = db.Column(db.String(500), nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<MensagemConfronto confronto={self.confronto_id} lado={self.lado}>"
+
+
 class Notificacao(db.Model):
     """Aviso pro organizador sobre o andamento dos campeonatos dele.
 

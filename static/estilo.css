@@ -3185,3 +3185,97 @@ dialog.popup-imagem img {
 @media (prefers-reduced-motion: reduce) {
     .rolagem-indicador { transition: none; }
 }
+
+/* ===== Chat da partida (capitães) ===== */
+.chat-nicks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.chat-nick {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 10px 12px;
+    background: var(--fundo);
+    border: 1px solid var(--linha);
+    border-radius: var(--raio);
+}
+.chat-nick.chat-lado-1 { border-left: 3px solid var(--acento); }
+.chat-nick.chat-lado-2 { border-left: 3px solid var(--dourado); }
+.chat-nick-time { font-size: 12px; color: var(--texto-fraco); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-nick strong { font-size: 15px; overflow-wrap: anywhere; }
+.chat-nick strong.chat-nick-vazio { font-weight: 500; font-size: 13px; color: var(--texto-fraco); }
+
+.chat-mensagens {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 280px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--fundo);
+    border: 1px solid var(--linha);
+    border-radius: var(--raio);
+    overscroll-behavior: contain;
+}
+.chat-vazio { margin: auto; text-align: center; font-size: 13px; color: var(--texto-fraco); max-width: 320px; }
+.chat-bolha {
+    align-self: flex-start;
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: 12px 12px 12px 4px;
+    background: var(--fundo-card-hover);
+    border-left: 3px solid var(--dourado);
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+.chat-bolha.chat-lado-1 { border-left-color: var(--acento); }
+.chat-bolha.chat-minha {
+    align-self: flex-end;
+    border-radius: 12px 12px 4px 12px;
+    background: var(--acento-fraco);
+}
+.chat-bolha time { align-self: flex-end; font-size: 11px; color: var(--texto-fraco); }
+
+.chat-form { display: flex; gap: 8px; margin-top: 10px; }
+.chat-form input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    background: var(--fundo);
+    border: 1px solid var(--linha);
+    color: var(--texto);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 16px; /* 16px evita o zoom automático do iPhone ao focar */
+    font-family: inherit;
+}
+.chat-form input[type="text"]:focus { outline: none; border-color: var(--acento); }
+.chat-form button:disabled { opacity: 0.6; cursor: default; }
+.chat-rodape { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 22px; margin-top: 6px; }
+.chat-erro { font-size: 13px; color: var(--erro); }
+.chat-trocar-nick {
+    margin-left: auto;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--texto-fraco);
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.chat-trocar-nick:hover { color: var(--texto); }
+@media (max-width: 480px) {
+    /* Nick precisa aparecer inteiro (o adversário digita ele no jogo):
+       em tela estreita, um embaixo do outro em vez de quebrar no meio. */
+    .chat-nicks { grid-template-columns: 1fr; gap: 6px; }
+    .chat-nick { flex-direction: row; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .chat-nick strong { text-align: right; }
+    .chat-mensagens { height: 240px; }
+}

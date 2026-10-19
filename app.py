@@ -43,6 +43,7 @@ from models import (
     db, User, Team, Torneio, Confronto, Inscricao, Notificacao, Federacao, Grupo,
     Temporada, PontuacaoRanking, PONTOS_POR_COLOCACAO, JOGOS, JOGO_PADRAO, XP_DESTAQUE,
     PedidoEntrada, POSICOES, FORMACOES, chaves_da_formacao, InscricaoPush, Conquista,
+    MensagemConfronto,
 )
 import email_util
 import notificacoes_push
@@ -4280,6 +4281,11 @@ def excluir_campeonato(torneio_id):
         _limpar_prints_do_torneio(torneio)
         Notificacao.query.filter_by(torneio_id=torneio.id).delete()
         PontuacaoRanking.query.filter_by(torneio_id=torneio.id).delete()
+        MensagemConfronto.query.filter(
+            MensagemConfronto.confronto_id.in_(
+                db.session.query(Confronto.id).filter_by(torneio_id=torneio.id)
+            )
+        ).delete(synchronize_session=False)
         Confronto.query.filter_by(torneio_id=torneio.id).delete()
         Inscricao.query.filter_by(torneio_id=torneio.id).delete()
         Grupo.query.filter_by(torneio_id=torneio.id).delete()
@@ -4399,43 +4405,105 @@ def contestar_placar(torneio_id, confronto_id):
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
 
-@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/nick", methods=["POST"])
-@login_required
-@limiter.limit("20 per minute", methods=["POST"])
-def salvar_nick_fc(torneio_id, confronto_id):
-    """Capitão publica o nick dele no FC 26 pra essa partida.
+TAMANHO_MAXIMO_MENSAGEM = 500
 
-    Os dois times passam a ver os dois nicks e combinam entre eles quem
-    manda o convite dentro do jogo. O site não usa esse nome pra mais nada.
+
+def _confronto_do_chat(torneio_id, confronto_id):
+    """Confronto + lado de quem está pedindo, ou 404 pra quem não pode ler.
+
+    Leem: o elenco dos dois times e quem administra o campeonato. Quem não
+    tem nada a ver com a partida recebe 404, não 403 — não precisa nem
+    saber que o chat existe.
     """
     confronto = Confronto.query.get_or_404(confronto_id)
     if confronto.torneio_id != torneio_id:
         abort(404)
-
     meu_lado = time_do_confronto(confronto, current_user)
+    if not meu_lado and not _pode_administrar_torneio(confronto.torneio):
+        abort(404)
+    return confronto, meu_lado
+
+
+def _sou_capitao_no_confronto(confronto, meu_lado):
     meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 else None
-    if not meu_time or current_user.id != meu_time.capitao_id:
-        flash("Só o capitão de um dos dois times pode informar o nick da partida.", "erro")
-        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+    return bool(meu_time and current_user.id == meu_time.capitao_id)
 
+
+def _estado_do_chat(confronto, depois_de=0):
+    """O que a tela precisa pra se redesenhar: os nicks fixados no topo e as
+    mensagens novas desde a última que ela já tem."""
+    mensagens = (
+        MensagemConfronto.query
+        .filter(MensagemConfronto.confronto_id == confronto.id, MensagemConfronto.id > depois_de)
+        .order_by(MensagemConfronto.id.asc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "nick1": confronto.nick_fc_time1,
+        "nick2": confronto.nick_fc_time2,
+        "encerrado": confronto.status in ("validado", "wo"),
+        "mensagens": [
+            {
+                "id": m.id,
+                "lado": m.lado,
+                "texto": m.texto,
+                # Guardado em UTC; o "Z" deixa o navegador converter pro
+                # horário de quem está vendo.
+                "criado_em": m.criado_em.isoformat(timespec="seconds") + "Z",
+            }
+            for m in mensagens
+        ],
+    }
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/chat")
+@login_required
+@limiter.limit("120 per minute")
+def ler_chat_confronto(torneio_id, confronto_id):
+    """A tela pergunta aqui a cada poucos segundos se chegou mensagem nova."""
+    confronto, _ = _confronto_do_chat(torneio_id, confronto_id)
+    depois_de = request.args.get("depois", 0, type=int)
+    return jsonify(_estado_do_chat(confronto, depois_de))
+
+
+@app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/chat", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute")
+def escrever_chat_confronto(torneio_id, confronto_id):
+    """Capitão manda o nick (que fica fixado no topo) ou uma mensagem.
+
+    O primeiro envio de cada capitão é sempre o nick dele no jogo — é o que
+    abre a conversa. Depois disso, tudo o que ele escreve vira mensagem;
+    pra trocar o nick a tela manda tipo=nick de novo.
+    """
+    confronto, meu_lado = _confronto_do_chat(torneio_id, confronto_id)
+    if not _sou_capitao_no_confronto(confronto, meu_lado):
+        return jsonify(erro="Só os capitães dos dois times escrevem no chat."), 403
     if confronto.status in ("validado", "wo"):
-        flash("Essa partida já foi encerrada.", "erro")
-        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+        return jsonify(erro="Essa partida já foi encerrada — o chat fica só pra consulta."), 400
 
-    nick = request.form.get("nick_fc", "").strip()[:40]
+    texto = " ".join(request.form.get("texto", "").split())
+    if not texto:
+        return jsonify(erro="Escreva alguma coisa antes de enviar."), 400
 
-    if meu_lado == 1:
-        confronto.nick_fc_time1 = nick or None
+    meu_nick = confronto.nick_fc_time1 if meu_lado == 1 else confronto.nick_fc_time2
+    if request.form.get("tipo") == "nick" or not meu_nick:
+        nick = texto[:40]
+        if meu_lado == 1:
+            confronto.nick_fc_time1 = nick
+        else:
+            confronto.nick_fc_time2 = nick
     else:
-        confronto.nick_fc_time2 = nick or None
+        db.session.add(MensagemConfronto(
+            confronto_id=confronto.id,
+            lado=meu_lado,
+            autor_id=current_user.id,
+            texto=texto[:TAMANHO_MAXIMO_MENSAGEM],
+        ))
     db.session.commit()
 
-    flash(
-        f"Nick salvo! O {confronto.nome_time2 if meu_lado == 1 else confronto.nome_time1} já consegue te achar no jogo."
-        if nick else "Nick removido.",
-        "sucesso",
-    )
-    return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+    return jsonify(_estado_do_chat(confronto, request.form.get("depois", 0, type=int)))
 
 
 @app.route("/campeonatos/<int:torneio_id>/confrontos/<int:confronto_id>/resolver", methods=["POST"])

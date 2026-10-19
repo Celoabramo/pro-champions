@@ -89,53 +89,183 @@
         </span>
     </div>
 
-    {% if (meu_lado or eh_organizador) and confronto.status not in ('validado', 'wo') %}
-        {% set meu_time_nick = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
+    {# Chat dos capitães. O primeiro envio de cada um é o nick no jogo, que
+       fica fixado no topo; depois disso a conversa corre embaixo. Encerrada
+       a partida, continua visível (só leitura) como registro. #}
+    {% set encerrada = confronto.status in ('validado', 'wo') %}
+    {% if (meu_lado or eh_organizador) and not confronto.eh_bye
+          and (not encerrada or confronto.nick_fc_time1 or confronto.nick_fc_time2) %}
+        {% set sou_capitao_chat = meu_lado and current_user.id == (confronto.time1 if meu_lado == 1 else confronto.time2).capitao_id %}
         {% set meu_nick = confronto.nick_fc_time1 if meu_lado == 1 else confronto.nick_fc_time2 if meu_lado == 2 %}
-        <div class="perfil-bloco">
-            <h2>Combinar a partida no {{ confronto.torneio.nome_jogo }}</h2>
-            <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
-                Cada capitão coloca aqui o nick dele <strong>exatamente como aparece no {{ confronto.torneio.nome_jogo }}</strong>.
-                Quando os dois enviarem, vocês se acham dentro do jogo e combinam entre si quem manda o convite.
-            </p>
+        <div class="perfil-bloco chat-partida" id="chat-partida"
+             data-url="{{ url_for('ler_chat_confronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
+             data-meu-lado="{{ meu_lado or 0 }}"
+             data-tem-nick="{{ 1 if meu_nick else 0 }}"
+             data-encerrado="{{ 1 if encerrada else 0 }}">
+            <h2>Chat da partida</h2>
 
-            <div class="status-prints" style="margin-bottom:14px;">
-                <div class="status-print-item {{ 'enviado' if confronto.nick_fc_time1 }}">
-                    <span>{{ confronto.nome_time1 }}</span>
-                    {% if confronto.nick_fc_time1 %}
-                        <strong>{{ confronto.nick_fc_time1 }}</strong>
-                    {% else %}
-                        <span class="texto-fraco-pequeno">Aguardando o nick</span>
-                    {% endif %}
+            <div class="chat-nicks">
+                <div class="chat-nick chat-lado-1">
+                    <span class="chat-nick-time">{{ confronto.nome_time1 }}</span>
+                    <strong id="chat-nick-1" class="{{ '' if confronto.nick_fc_time1 else 'chat-nick-vazio' }}">{{ confronto.nick_fc_time1 or 'Aguardando o nick' }}</strong>
                 </div>
-                <div class="status-print-item {{ 'enviado' if confronto.nick_fc_time2 }}">
-                    <span>{{ confronto.nome_time2 }}</span>
-                    {% if confronto.nick_fc_time2 %}
-                        <strong>{{ confronto.nick_fc_time2 }}</strong>
-                    {% else %}
-                        <span class="texto-fraco-pequeno">Aguardando o nick</span>
-                    {% endif %}
+                <div class="chat-nick chat-lado-2">
+                    <span class="chat-nick-time">{{ confronto.nome_time2 }}</span>
+                    <strong id="chat-nick-2" class="{{ '' if confronto.nick_fc_time2 else 'chat-nick-vazio' }}">{{ confronto.nick_fc_time2 or 'Aguardando o nick' }}</strong>
                 </div>
             </div>
 
-            {% if confronto.nick_fc_time1 and confronto.nick_fc_time2 %}
-                <p class="texto-fraco-pequeno" style="margin-bottom:14px;">
-                    Os dois nicks estão aí — combinem entre vocês quem envia o convite dentro do jogo.
+            <div class="chat-mensagens" id="chat-mensagens" aria-live="polite">
+                <p class="chat-vazio" id="chat-vazio">
+                    {% if encerrada %}Ninguém escreveu nessa partida.
+                    {% else %}Os nicks ficam fixados aqui em cima. Combinem quem manda o convite no {{ confronto.torneio.nome_jogo }}.{% endif %}
                 </p>
-            {% endif %}
+            </div>
 
-            {% if meu_time_nick and current_user.id == meu_time_nick.capitao_id %}
-                <form method="POST" action="{{ url_for('salvar_nick_fc', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
-                      class="form-escudo">
+            {% if sou_capitao_chat and not encerrada %}
+                <form class="chat-form" id="chat-form" method="POST"
+                      action="{{ url_for('escrever_chat_confronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="text" name="nick_fc" maxlength="40" value="{{ meu_nick or '' }}"
-                           placeholder="Seu nick igual está no {{ confronto.torneio.nome_jogo }}" aria-label="Seu nick no {{ confronto.torneio.nome_jogo }}" style="flex:1; min-width:160px;">
-                    <button type="submit" class="botao-principal-pequeno">{{ 'Atualizar nick' if meu_nick else 'Enviar nick' }}</button>
+                    <input type="hidden" name="tipo" id="chat-tipo" value="{{ 'mensagem' if meu_nick else 'nick' }}">
+                    <input type="text" name="texto" id="chat-texto" autocomplete="off"
+                           maxlength="{{ 500 if meu_nick else 40 }}"
+                           placeholder="{{ 'Escreva uma mensagem' if meu_nick else 'Digite seu nick para começar a conversa' }}"
+                           aria-label="{{ 'Mensagem' if meu_nick else 'Seu nick no ' ~ confronto.torneio.nome_jogo }}">
+                    <button type="submit" class="botao-principal-pequeno" id="chat-enviar">Enviar</button>
                 </form>
+                <div class="chat-rodape">
+                    <span class="chat-erro" id="chat-erro" role="alert"></span>
+                    <button type="button" class="chat-trocar-nick" id="chat-trocar-nick" {{ '' if meu_nick else 'hidden' }}>Trocar meu nick</button>
+                </div>
+            {% elif encerrada %}
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">Partida encerrada — a conversa fica guardada só pra consulta.</p>
             {% elif meu_lado %}
-                <p class="texto-fraco-pequeno">Só o capitão do seu time informa o nick da partida.</p>
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">Só os capitães escrevem aqui — você acompanha a conversa.</p>
+            {% else %}
+                <p class="texto-fraco-pequeno" style="margin-top:10px;">Você está vendo como organizador — só os capitães escrevem.</p>
             {% endif %}
         </div>
+        <script>
+        (function () {
+            var caixa = document.getElementById("chat-partida");
+            var lista = document.getElementById("chat-mensagens");
+            var vazio = document.getElementById("chat-vazio");
+            var form = document.getElementById("chat-form");
+            var campo = document.getElementById("chat-texto");
+            var tipo = document.getElementById("chat-tipo");
+            var erro = document.getElementById("chat-erro");
+            var trocar = document.getElementById("chat-trocar-nick");
+            var meuLado = Number(caixa.dataset.meuLado);
+            var encerrado = caixa.dataset.encerrado === "1";
+            var temNick = caixa.dataset.temNick === "1";
+            var ultimoId = 0;
+            var timer = null;
+            // A tela pergunta ao servidor a cada 3s se tem mensagem nova, e
+            // para quando a aba fica escondida.
+            var INTERVALO = 3000;
+
+            function hora(iso) {
+                return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            }
+
+            function modoNick(ligado) {
+                tipo.value = ligado ? "nick" : "mensagem";
+                campo.maxLength = ligado ? 40 : 500;
+                campo.placeholder = ligado ? "Digite seu nick para começar a conversa" : "Escreva uma mensagem";
+                trocar.hidden = ligado || !temNick;
+            }
+
+            function desenharNick(lado, nick) {
+                var el = document.getElementById("chat-nick-" + lado);
+                el.textContent = nick || "Aguardando o nick";
+                el.classList.toggle("chat-nick-vazio", !nick);
+            }
+
+            function aplicar(estado) {
+                desenharNick(1, estado.nick1);
+                desenharNick(2, estado.nick2);
+                var chegouNova = false;
+                estado.mensagens.forEach(function (m) {
+                    if (m.id <= ultimoId) return;
+                    ultimoId = m.id;
+                    chegouNova = true;
+                    vazio.hidden = true;
+                    var bolha = document.createElement("div");
+                    bolha.className = "chat-bolha chat-lado-" + m.lado + (m.lado === meuLado ? " chat-minha" : "");
+                    var texto = document.createElement("span");
+                    texto.textContent = m.texto;
+                    var quando = document.createElement("time");
+                    quando.textContent = hora(m.criado_em);
+                    bolha.appendChild(texto);
+                    bolha.appendChild(quando);
+                    lista.appendChild(bolha);
+                });
+                if (chegouNova) lista.scrollTop = lista.scrollHeight;
+                if (estado.encerrado && !encerrado) {
+                    // A partida acabou com a tela aberta: recarrega pra mostrar
+                    // o resultado e travar o campo.
+                    window.location.reload();
+                }
+            }
+
+            function agendar() {
+                clearTimeout(timer);
+                if (encerrado || document.hidden) return;
+                timer = setTimeout(buscar, INTERVALO);
+            }
+
+            function buscar() {
+                fetch(caixa.dataset.url + "?depois=" + ultimoId, { credentials: "same-origin" })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (estado) { if (estado) aplicar(estado); })
+                    .catch(function () {})
+                    .then(agendar);
+            }
+
+            document.addEventListener("visibilitychange", function () {
+                if (!document.hidden && !encerrado) { clearTimeout(timer); buscar(); }
+            });
+
+            if (form) {
+                form.addEventListener("submit", function (e) {
+                    e.preventDefault();
+                    if (!campo.value.trim()) return;
+                    var dados = new FormData(form);
+                    dados.append("depois", ultimoId);
+                    var botao = document.getElementById("chat-enviar");
+                    botao.disabled = true;
+                    erro.textContent = "";
+                    fetch(form.action, { method: "POST", body: dados, credentials: "same-origin" })
+                        .then(function (r) {
+                            return r.json().catch(function () { return {}; })
+                                .then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+                        })
+                        .then(function (res) {
+                            if (!res.ok) {
+                                erro.textContent = res.j.erro || (res.status === 429
+                                    ? "Muitas mensagens seguidas — espera um pouquinho."
+                                    : "Não deu pra enviar. Tenta de novo.");
+                                return;
+                            }
+                            if (tipo.value === "nick") temNick = true;
+                            campo.value = "";
+                            modoNick(false);
+                            aplicar(res.j);
+                        })
+                        .catch(function () { erro.textContent = "Sem conexão. Tenta de novo."; })
+                        .then(function () { botao.disabled = false; campo.focus(); });
+                });
+
+                trocar.addEventListener("click", function () {
+                    modoNick(true);
+                    campo.value = "";
+                    campo.focus();
+                });
+            }
+
+            buscar();
+        })();
+        </script>
     {% endif %}
 
     {% if confronto.status == 'validado' %}
