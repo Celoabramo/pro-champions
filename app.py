@@ -2515,11 +2515,34 @@ def detalhe_campeonato(torneio_id):
         grupos_info=grupos_info,
         rodadas_bracket=_estrutura_bracket(torneio) if torneio.status != "aberto" else None,
         disputa_terceiro=Confronto.query.filter_by(torneio_id=torneio.id, eh_disputa_3_lugar=True, perna=1).first(),
+        meu_confronto_id=_meu_confronto_na_chave(torneio),
         colocacoes=_colocacoes_do_torneio(torneio) if torneio.status == "finalizado" else {},
         destaques=_destaques_do_torneio(torneio) if torneio.status == "finalizado" else None,
         xp_destaque=XP_DESTAQUE if len(torneio.times_inscritos) >= 4 else 0,
         tem_contestacao_aberta=_tem_contestacao_aberta(torneio) if eh_organizador else False,
     )
+
+
+def _meu_confronto_na_chave(torneio):
+    """Id do duelo de mata-mata que a chave destaca como "Seu jogo".
+
+    É o jogo que importa agora pro time de quem está vendo: o que ainda
+    está por jogar; se o time já não tem nenhum (foi eliminado ou o
+    campeonato acabou), o último que ele jogou. Só a ida entra — é ela que
+    aparece na chave.
+    """
+    if not current_user.is_authenticated or not current_user.time_id:
+        return None
+    meus = [
+        c for c in torneio.confrontos
+        if c.perna == 1
+        and not c.fase.startswith("Grupo ")
+        and current_user.time_id in (c.time1_id, c.time2_id)
+    ]
+    if not meus:
+        return None
+    abertos = [c for c in meus if not c.duelo_encerrado]
+    return max(abertos or meus, key=lambda c: c.id).id
 
 
 def _pode_administrar_torneio(torneio):

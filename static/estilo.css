@@ -1608,67 +1608,6 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 .bracket-lado { display: flex; align-items: stretch; gap: 56px; }
 .bracket-lado-direita { transform: scaleX(-1); }
 
-/* Chaveamento no mobile: lista vertical simples (uma fase por vez), em vez
-   do chaveamento espelhado horizontal encolhido — muito difícil de tocar
-   certo quando fica pequeno demais pra caber na tela. */
-.bracket-mobile { display: none; }
-.bracket-mobile-rodada { margin-top: 8px; }
-.bracket-mobile-rodada + .bracket-mobile-rodada { margin-top: 36px; }
-.bracket-mobile-rodada .fase-titulo { text-align: center; margin: 0 0 14px; }
-.bracket-mobile-jogos { display: flex; flex-direction: column; gap: 36px; }
-
-/* Confronto sozinho (final) — cartão cheio, do jeito que já era. */
-.bracket-mobile-jogos > .bracket-jogo { width: 100%; }
-.bracket-mobile-jogos > .bracket-final-vs { width: 100%; }
-.bracket-mobile-jogos .bracket-time { padding: 13px 14px; font-size: 15px; }
-.bracket-mobile-jogos .escudo-time-pequeno { width: 34px; height: 34px; }
-
-/* Dois confrontos lado a lado que avançam pro mesmo confronto seguinte —
-   com linhas de conexão, tipo árvore de chaveamento (na vertical). */
-.bracket-mobile-par {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    position: relative;
-}
-.bracket-mobile-par .bracket-jogo {
-    flex: 1;
-    min-width: 0;
-    position: relative;
-    width: auto;
-}
-.bracket-mobile-par .bracket-time { padding: 9px 8px; font-size: 12.5px; gap: 6px; }
-.bracket-mobile-par .escudo-time-pequeno { width: 24px; height: 24px; border-radius: 6px; }
-.bracket-mobile-par .bracket-placar { font-size: 12.5px; }
-
-.bracket-mobile-par .bracket-jogo::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 100%;
-    width: 1px;
-    height: 18px;
-    background: var(--linha);
-}
-.bracket-mobile-par::before {
-    content: "";
-    position: absolute;
-    left: 25%;
-    right: 25%;
-    bottom: -18px;
-    height: 1px;
-    background: var(--linha);
-}
-.bracket-mobile-par::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: -36px;
-    width: 1px;
-    height: 18px;
-    background: var(--linha);
-}
-
 .bracket-coluna { display: flex; flex-direction: column; min-width: 220px; }
 .bracket-coluna .fase-titulo { margin: 0 0 16px; white-space: nowrap; text-align: center; }
 .bracket-jogos { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 16px; }
@@ -2618,10 +2557,6 @@ dialog.popup-imagem img {
 }
 
 /* ============ Responsivo ============ */
-@media (max-width: 680px) {
-    .bracket-wrap { display: none; }
-    .bracket-mobile { display: block; }
-}
 
 @media (max-width: 520px) {
     .topo { padding: 16px 20px; }
@@ -3303,3 +3238,76 @@ dialog.popup-imagem img {
 .prazo-print-texto { margin: 0; font-size: 13px; line-height: 1.45; color: var(--texto); }
 .prazo-print-vencido { border-color: rgba(229, 84, 77, 0.45); background: var(--erro-fraco); }
 .prazo-print-vencido .prazo-print-relogio { color: var(--erro); }
+
+/* ===== Chave encolhida com zoom + "Seu jogo" ===== */
+.bracket-palco { position: relative; }
+.bracket-com-zoom { cursor: zoom-in; }
+.bracket-ampliado { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.bracket-controles {
+    position: sticky;
+    top: 8px;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 4px 0 10px;
+    padding: 8px 10px;
+    background: var(--fundo-card);
+    border: 1px solid var(--linha);
+    border-radius: var(--raio);
+}
+.bracket-controles[hidden] { display: none; }
+.bracket-dica { font-size: 12px; color: var(--texto-fraco); margin-right: auto; }
+.bracket-botao {
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--linha);
+    background: var(--fundo);
+    color: var(--texto);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.bracket-botao[hidden] { display: none; }
+.bracket-botao-meu { border-color: var(--acento); color: var(--acento); }
+
+/* O jogo do time de quem está vendo. --zoom-inverso (posto pelo script) é
+   1 / escala da chave: com ela encolhida, contorno e plaquinha crescem na
+   mesma proporção e continuam do tamanho de sempre na tela. */
+.bracket-jogo-meu {
+    position: relative;
+    border-color: var(--acento) !important;
+    box-shadow: 0 0 0 calc(2px * var(--zoom-inverso, 1)) var(--acento);
+}
+.bracket-marcador-meu {
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    margin-bottom: 8px;
+    z-index: 4;
+    transform: translateX(-50%) scale(var(--zoom-inverso, 1));
+    transform-origin: bottom center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--acento);
+    color: #06120a;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+}
+.bracket-marcador-meu::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--acento);
+}
+/* Lado direito é a esquerda espelhada (scaleX(-1)): desespelha a plaquinha. */
+.bracket-lado-direita .bracket-marcador-meu {
+    transform: translateX(-50%) scale(calc(-1 * var(--zoom-inverso, 1)), var(--zoom-inverso, 1));
+}

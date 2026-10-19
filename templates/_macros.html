@@ -60,7 +60,10 @@
 
 {# Em ida e volta a chave mostra uma vaga só por duelo (a ida), com o placar
    somado dos dois jogos — o link leva pro jogo que está valendo agora. #}
-{% macro bracket_jogo(confronto, torneio, classe_extra='') %}
+{# meu_id: duelo do time de quem está vendo (ver _meu_confronto_na_chave) —
+   ganha contorno e a plaquinha "Seu jogo", que cresce quando a chave está
+   encolhida pra caber no celular. #}
+{% macro bracket_jogo(confronto, torneio, classe_extra='', meu_id=None) %}
     {% if confronto %}
         {% set vencedor = confronto.vencedor_do_duelo %}
         {% set vencedor_id = vencedor.id if vencedor %}
@@ -68,7 +71,9 @@
         {% set mostra_placar = placar or confronto.status == 'validado' %}
         {% set placar1 = placar[0] if placar else confronto.placar_time1 %}
         {% set placar2 = placar[1] if placar else confronto.placar_time2 %}
-        <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.jogo_atual.id) }}" class="bracket-jogo bracket-jogo-link {{ classe_extra }}">
+        {% set eh_meu = meu_id and confronto.id == meu_id %}
+        <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.jogo_atual.id) }}" class="bracket-jogo bracket-jogo-link {{ classe_extra }} {{ 'bracket-jogo-meu' if eh_meu }}"{% if eh_meu %} id="meu-jogo-chave"{% endif %}>
+            {% if eh_meu %}<span class="bracket-marcador-meu">Seu jogo</span>{% endif %}
             <div class="bracket-jogo-corpo">
                 <div class="bracket-time {{ 'bracket-vencedor' if vencedor_id == confronto.time1_id }}">
                     {{ escudo_time(confronto.time1, 'escudo-time-pequeno') }}
@@ -98,13 +103,15 @@
     {% endif %}
 {% endmacro %}
 
-{% macro bracket_final_vs(confronto, torneio) %}
+{% macro bracket_final_vs(confronto, torneio, meu_id=None) %}
     {% if confronto %}
         {% set vencedor = confronto.vencedor_do_duelo %}
         {% set vencedor_id = vencedor.id if vencedor %}
         {% set placar = confronto.agregado if confronto.eh_ida_volta else None %}
         {% set mostra_placar = placar or confronto.status == 'validado' %}
-        <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.jogo_atual.id) }}" class="bracket-final-vs bracket-final-link">
+        {% set eh_meu = meu_id and confronto.id == meu_id %}
+        <a href="{{ url_for('detalhe_confronto', torneio_id=torneio.id, confronto_id=confronto.jogo_atual.id) }}" class="bracket-final-vs bracket-final-link {{ 'bracket-jogo-meu' if eh_meu }}"{% if eh_meu %} id="meu-jogo-chave"{% endif %}>
+            {% if eh_meu %}<span class="bracket-marcador-meu">Seu jogo</span>{% endif %}
             <div class="bracket-final-time {{ 'bracket-vencedor' if vencedor_id == confronto.time1_id }}">
                 {{ escudo_time(confronto.time1, 'escudo-time-final') }}
                 <span class="bracket-final-nome">{{ confronto.nome_time1 }}</span>
@@ -136,7 +143,7 @@
     {% endif %}
 {% endmacro %}
 
-{% macro bracket_coluna(fase, vagas, torneio) %}
+{% macro bracket_coluna(fase, vagas, torneio, meu_id=None) %}
     <div class="bracket-coluna">
         <h3 class="fase-titulo">{{ fase }}</h3>
         <div class="bracket-jogos">
@@ -144,13 +151,13 @@
                 {% for par in vagas|batch(2) %}
                     <div class="bracket-par">
                         {% for confronto in par %}
-                            {{ bracket_jogo(confronto, torneio) }}
+                            {{ bracket_jogo(confronto, torneio, meu_id=meu_id) }}
                         {% endfor %}
                     </div>
                 {% endfor %}
             {% else %}
                 {% for confronto in vagas %}
-                    {{ bracket_jogo(confronto, torneio) }}
+                    {{ bracket_jogo(confronto, torneio, meu_id=meu_id) }}
                 {% endfor %}
             {% endif %}
         </div>

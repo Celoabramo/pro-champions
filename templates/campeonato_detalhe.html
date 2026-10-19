@@ -113,12 +113,23 @@
     {% if rodadas_bracket %}
         <div class="bloco-chaveamento">
             <h2>Mata-mata</h2>
+            {# Chave grande demais pra tela (celular): aparece encolhida inteira,
+               e um toque amplia naquele ponto. Os botões só aparecem quando a
+               chave não cabe — no computador nada muda. #}
+            <div class="bracket-controles" id="bracket-controles" hidden>
+                <span class="bracket-dica" id="bracket-dica">Toque na chave para ampliar</span>
+                {% if meu_confronto_id %}
+                    <button type="button" class="bracket-botao bracket-botao-meu" id="bracket-ir-meu">Ver meu jogo</button>
+                {% endif %}
+                <button type="button" class="bracket-botao" id="bracket-tudo" hidden>Ver chave inteira</button>
+            </div>
             <div class="bracket-wrap" id="bracket-wrap">
+              <div class="bracket-palco" id="bracket-palco">
                 <div class="bracket" id="bracket">
                     {% if rodadas_bracket.esquerda %}
                         <div class="bracket-lado">
                             {% for fase, vagas in rodadas_bracket.esquerda %}
-                                {{ macros.bracket_coluna(fase, vagas, torneio) }}
+                                {{ macros.bracket_coluna(fase, vagas, torneio, meu_id=meu_confronto_id) }}
                             {% endfor %}
                         </div>
                     {% endif %}
@@ -126,18 +137,19 @@
                     <div class="bracket-coluna bracket-coluna-final">
                         <h3 class="fase-titulo">{{ rodadas_bracket.final[0] }}</h3>
                         <div class="bracket-jogos bracket-jogos-final">
-                            {{ macros.bracket_final_vs(rodadas_bracket.final[1][0], torneio) }}
+                            {{ macros.bracket_final_vs(rodadas_bracket.final[1][0], torneio, meu_id=meu_confronto_id) }}
                         </div>
                     </div>
 
                     {% if rodadas_bracket.direita %}
                         <div class="bracket-lado bracket-lado-direita">
                             {% for fase, vagas in rodadas_bracket.direita %}
-                                {{ macros.bracket_coluna(fase, vagas, torneio) }}
+                                {{ macros.bracket_coluna(fase, vagas, torneio, meu_id=meu_confronto_id) }}
                             {% endfor %}
                         </div>
                     {% endif %}
                 </div>
+              </div>
             </div>
 
             {% if disputa_terceiro %}
@@ -146,65 +158,138 @@
                     <p class="texto-fraco-pequeno" style="margin:0 0 10px;">
                         Os dois times que perderam a semifinal jogam pelo 3º lugar. O campeonato só encerra depois desse jogo e da final.
                     </p>
-                    {{ macros.bracket_jogo(disputa_terceiro, torneio, 'bracket-jogo-terceiro') }}
+                    {{ macros.bracket_jogo(disputa_terceiro, torneio, 'bracket-jogo-terceiro', meu_id=meu_confronto_id) }}
                 </div>
             {% endif %}
 
-            <div class="bracket-mobile">
-                {% for fase, vagas_esquerda in rodadas_bracket.esquerda %}
-                    {% set vagas_rodada = vagas_esquerda + rodadas_bracket.direita[loop.index0][1] %}
-                    <div class="bracket-mobile-rodada">
-                        <h3 class="fase-titulo">{{ fase }}</h3>
-                        <div class="bracket-mobile-jogos">
-                            {% if vagas_rodada|length > 1 %}
-                                {% for par in vagas_rodada|batch(2) %}
-                                    <div class="bracket-mobile-par">
-                                        {% for confronto in par %}
-                                            {{ macros.bracket_jogo(confronto, torneio) }}
-                                        {% endfor %}
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                {% for confronto in vagas_rodada %}
-                                    {{ macros.bracket_jogo(confronto, torneio) }}
-                                {% endfor %}
-                            {% endif %}
-                        </div>
-                    </div>
-                {% endfor %}
-
-                <div class="bracket-mobile-rodada bracket-mobile-final">
-                    <h3 class="fase-titulo">{{ rodadas_bracket.final[0] }}</h3>
-                    <div class="bracket-mobile-jogos">
-                        {{ macros.bracket_final_vs(rodadas_bracket.final[1][0], torneio) }}
-                    </div>
-                </div>
-            </div>
         </div>
         <script>
             (function () {
                 var contorno = document.getElementById("bracket-wrap");
+                var palco = document.getElementById("bracket-palco");
                 var bracket = document.getElementById("bracket");
-                if (!contorno || !bracket) return;
+                var controles = document.getElementById("bracket-controles");
+                if (!contorno || !palco || !bracket) return;
+                var dica = document.getElementById("bracket-dica");
+                var botaoTudo = document.getElementById("bracket-tudo");
+                var botaoMeu = document.getElementById("bracket-ir-meu");
 
-                function ajustarEscala() {
+                // Tamanho em que a chave fica legível quando ampliada.
+                var ESCALA_AMPLIADA = 1;
+                // Abaixo disso a chave encolhida já não dá pra ler: liga o zoom.
+                var ESCALA_MINIMA_LEGIVEL = 0.85;
+                var ampliado = false;
+                var escalaAtual = 1;
+
+                function tamanhoNatural() {
                     bracket.style.transform = "none";
-                    contorno.style.height = "";
-
-                    var larguraDisponivel = contorno.clientWidth;
-                    var larguraNatural = bracket.scrollWidth;
-                    var alturaNatural = bracket.scrollHeight;
-                    if (larguraDisponivel <= 0 || larguraNatural <= 0) return;
-
-                    var escala = Math.min(1, larguraDisponivel / larguraNatural);
-                    var deslocamentoX = (larguraDisponivel - larguraNatural * escala) / 2;
-
-                    bracket.style.transform = "translateX(" + deslocamentoX + "px) scale(" + escala + ")";
-                    contorno.style.height = (alturaNatural * escala) + "px";
+                    return { largura: bracket.scrollWidth, altura: bracket.scrollHeight };
                 }
 
-                ajustarEscala();
-                window.addEventListener("resize", ajustarEscala);
+                function escalaQueCabe() {
+                    var natural = tamanhoNatural();
+                    if (natural.largura <= 0) return 1;
+                    return Math.min(1, contorno.clientWidth / natural.largura);
+                }
+
+                function aplicar(escala) {
+                    var natural = tamanhoNatural();
+                    var disponivel = contorno.clientWidth;
+                    var sobra = Math.max(0, (disponivel - natural.largura * escala) / 2);
+                    escalaAtual = escala;
+                    bracket.style.transform = "translateX(" + sobra + "px) scale(" + escala + ")";
+                    // A plaquinha "Seu jogo" e o contorno crescem na mesma
+                    // proporção em que a chave encolhe — dá pra achar de longe.
+                    bracket.style.setProperty("--zoom-inverso", Math.min(4, 1 / escala).toFixed(3));
+                    palco.style.width = Math.max(disponivel, natural.largura * escala) + "px";
+                    palco.style.height = (natural.altura * escala) + "px";
+                }
+
+                // Zoom só no layout de celular: no computador a chave encolhida
+                // ainda dá pra ler e clicar direto, como sempre foi.
+                var telaPequena = window.matchMedia("(max-width: 680px)");
+
+                function atualizarControles() {
+                    var precisaZoom = telaPequena.matches && escalaQueCabe() < ESCALA_MINIMA_LEGIVEL;
+                    if (!precisaZoom && ampliado) {
+                        ampliado = false;
+                        contorno.classList.remove("bracket-ampliado");
+                    }
+                    aplicar(ampliado ? ESCALA_AMPLIADA : escalaQueCabe());
+                    contorno.classList.toggle("bracket-com-zoom", precisaZoom && !ampliado);
+                    if (!controles) return;
+                    controles.hidden = !precisaZoom;
+                    if (botaoTudo) botaoTudo.hidden = !ampliado;
+                    if (dica) dica.textContent = ampliado
+                        ? "Arraste para o lado para ver o resto da chave"
+                        : "Toque na chave para ampliar";
+                }
+
+                function encolher() {
+                    ampliado = false;
+                    contorno.classList.remove("bracket-ampliado");
+                    contorno.scrollLeft = 0;
+                    atualizarControles();
+                }
+
+                // xNatural/yNatural: ponto da chave (no tamanho natural) que
+                // deve ficar no meio da tela depois de ampliar.
+                function ampliarEm(xNatural, yNatural) {
+                    ampliado = true;
+                    contorno.classList.add("bracket-ampliado");
+                    atualizarControles();
+                    contorno.scrollLeft = xNatural * ESCALA_AMPLIADA - contorno.clientWidth / 2;
+                    var topoChave = palco.getBoundingClientRect().top + window.scrollY;
+                    window.scrollTo(0, topoChave + yNatural * ESCALA_AMPLIADA - window.innerHeight / 2);
+                }
+
+                function pontoNatural(alvo) {
+                    var caixa = bracket.getBoundingClientRect();
+                    var x, y;
+                    if (alvo.getBoundingClientRect) {
+                        var r = alvo.getBoundingClientRect();
+                        x = r.left + r.width / 2;
+                        y = r.top + r.height / 2;
+                    } else {
+                        x = alvo.clientX;
+                        y = alvo.clientY;
+                    }
+                    return { x: (x - caixa.left) / escalaAtual, y: (y - caixa.top) / escalaAtual };
+                }
+
+                // Chave encolhida: o primeiro toque amplia ali em vez de abrir a
+                // partida (com tudo pequeno, o dedo acertaria o jogo errado).
+                contorno.addEventListener("click", function (evento) {
+                    if (ampliado || !contorno.classList.contains("bracket-com-zoom")) return;
+                    evento.preventDefault();
+                    var ponto = pontoNatural(evento);
+                    ampliarEm(ponto.x, ponto.y);
+                }, true);
+
+                if (botaoTudo) botaoTudo.addEventListener("click", function () {
+                    encolher();
+                    controles.scrollIntoView({ block: "start" });
+                });
+
+                if (botaoMeu) botaoMeu.addEventListener("click", function () {
+                    var meu = document.getElementById("meu-jogo-chave");
+                    if (!meu) return;
+                    if (!bracket.contains(meu) || !contorno.classList.contains("bracket-com-zoom") && !ampliado) {
+                        meu.scrollIntoView({ block: "center" });
+                        return;
+                    }
+                    if (!ampliado) {
+                        var ponto = pontoNatural(meu);
+                        ampliarEm(ponto.x, ponto.y);
+                    } else {
+                        meu.scrollIntoView({ block: "center", inline: "center" });
+                    }
+                });
+
+                atualizarControles();
+                window.addEventListener("resize", function () {
+                    if (ampliado) atualizarControles(); else encolher();
+                });
             })();
         </script>
     {% elif eh_organizador and torneio.status == 'aberto' and reservas_pendentes %}
