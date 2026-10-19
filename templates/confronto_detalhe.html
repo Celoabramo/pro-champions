@@ -89,7 +89,7 @@
         </span>
     </div>
 
-    {# Chat dos capitães. O primeiro envio de cada um é o nick no jogo, que
+    {# Chat dos capitães. O primeiro envio de cada um é o nick do time no jogo, que
        fica fixado no topo; depois disso a conversa corre embaixo. Encerrada
        a partida, continua visível (só leitura) como registro. #}
     {% set encerrada = confronto.status in ('validado', 'wo') %}
@@ -118,7 +118,7 @@
             <div class="chat-mensagens" id="chat-mensagens" aria-live="polite">
                 <p class="chat-vazio" id="chat-vazio">
                     {% if encerrada %}Ninguém escreveu nessa partida.
-                    {% else %}Os nicks ficam fixados aqui em cima. Combinem quem manda o convite no {{ confronto.torneio.nome_jogo }}.{% endif %}
+                    {% else %}Os nicks dos times ficam fixados aqui em cima. Combinem quem manda o convite no {{ confronto.torneio.nome_jogo }}.{% endif %}
                 </p>
             </div>
 
@@ -129,13 +129,13 @@
                     <input type="hidden" name="tipo" id="chat-tipo" value="{{ 'mensagem' if meu_nick else 'nick' }}">
                     <input type="text" name="texto" id="chat-texto" autocomplete="off"
                            maxlength="{{ 500 if meu_nick else 40 }}"
-                           placeholder="{{ 'Escreva uma mensagem' if meu_nick else 'Digite seu nick para começar a conversa' }}"
-                           aria-label="{{ 'Mensagem' if meu_nick else 'Seu nick no ' ~ confronto.torneio.nome_jogo }}">
+                           placeholder="{{ 'Escreva uma mensagem' if meu_nick else 'Digite o nick do time para começar a conversa' }}"
+                           aria-label="{{ 'Mensagem' if meu_nick else 'Nick do time no ' ~ confronto.torneio.nome_jogo }}">
                     <button type="submit" class="botao-principal-pequeno" id="chat-enviar">Enviar</button>
                 </form>
                 <div class="chat-rodape">
                     <span class="chat-erro" id="chat-erro" role="alert"></span>
-                    <button type="button" class="chat-trocar-nick" id="chat-trocar-nick" {{ '' if meu_nick else 'hidden' }}>Trocar meu nick</button>
+                    <button type="button" class="chat-trocar-nick" id="chat-trocar-nick" {{ '' if meu_nick else 'hidden' }}>Trocar o nick do time</button>
                 </div>
             {% elif encerrada %}
                 <p class="texto-fraco-pequeno" style="margin-top:10px;">Partida encerrada — a conversa fica guardada só pra consulta.</p>
@@ -171,7 +171,7 @@
             function modoNick(ligado) {
                 tipo.value = ligado ? "nick" : "mensagem";
                 campo.maxLength = ligado ? 40 : 500;
-                campo.placeholder = ligado ? "Digite seu nick para começar a conversa" : "Escreva uma mensagem";
+                campo.placeholder = ligado ? "Digite o nick do time para começar a conversa" : "Escreva uma mensagem";
                 trocar.hidden = ligado || !temNick;
             }
 
