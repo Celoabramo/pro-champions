@@ -150,36 +150,113 @@
                 </div>
             {% endif %}
 
-            <div class="bracket-mobile">
-                {% for fase, vagas_esquerda in rodadas_bracket.esquerda %}
-                    {% set vagas_rodada = vagas_esquerda + rodadas_bracket.direita[loop.index0][1] %}
-                    <div class="bracket-mobile-rodada">
-                        <h3 class="fase-titulo">{{ fase }}</h3>
-                        <div class="bracket-mobile-jogos">
-                            {% if vagas_rodada|length > 1 %}
-                                {% for par in vagas_rodada|batch(2) %}
-                                    <div class="bracket-mobile-par">
-                                        {% for confronto in par %}
-                                            {{ macros.bracket_jogo(confronto, torneio) }}
-                                        {% endfor %}
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                {% for confronto in vagas_rodada %}
-                                    {{ macros.bracket_jogo(confronto, torneio) }}
-                                {% endfor %}
-                            {% endif %}
-                        </div>
-                    </div>
+            {# Chave no celular: uma aba por fase (abre na fase que está
+               rolando), e cada duelo num cartão de largura toda com nome
+               inteiro, status escrito e contra quem o vencedor vai jogar. A
+               árvore espelhada fica só pra tela grande — no celular ela
+               virava caixinhas espremidas com o nome cortado. #}
+            {% set curtos = {'Fase de 32': '32 avos', 'Oitavas de final': 'Oitavas', 'Quartas de final': 'Quartas', 'Semifinal': 'Semi', 'Final': 'Final'} %}
+            {% set na_fase = {'Fase de 32': 'na fase de 32', 'Oitavas de final': 'nas oitavas', 'Quartas de final': 'nas quartas', 'Semifinal': 'na semifinal', 'Final': 'na final'} %}
+            {% set rodadas_m = [] %}
+            {% for fase, vagas_esquerda in rodadas_bracket.esquerda %}
+                {% set _ = rodadas_m.append((fase, vagas_esquerda + rodadas_bracket.direita[loop.index0][1])) %}
+            {% endfor %}
+            {% set _ = rodadas_m.append(rodadas_bracket.final) %}
+
+            {# Fase aberta ao carregar: a primeira com duelo ainda por jogar;
+               campeonato acabado abre na final. #}
+            {% set ns = namespace(atual=None) %}
+            {% for fase, vagas in rodadas_m %}
+                {% set i = loop.index0 %}
+                {% for c in vagas %}
+                    {% if ns.atual is none and c and not c.eh_bye and not c.duelo_encerrado %}{% set ns.atual = i %}{% endif %}
+                {% endfor %}
+            {% endfor %}
+            {% if ns.atual is none %}{% set ns.atual = rodadas_m|length - 1 %}{% endif %}
+            {% set meu_time_id = current_user.time_id if current_user.is_authenticated else None %}
+            {% set final_duelo = rodadas_bracket.final[1][0] %}
+            {% set campeao = final_duelo.vencedor_do_duelo if final_duelo else None %}
+
+            <div class="chave-mobile" id="chave-mobile">
+                <div class="chave-abas" role="tablist" aria-label="Fases do mata-mata">
+                    {% for fase, vagas in rodadas_m %}
+                        <button type="button" role="tab" class="chave-aba" id="chave-aba-{{ loop.index0 }}"
+                                aria-controls="chave-fase-{{ loop.index0 }}"
+                                aria-selected="{{ 'true' if loop.index0 == ns.atual else 'false' }}">{{ curtos.get(fase, fase) }}</button>
+                    {% endfor %}
+                    {% if disputa_terceiro %}
+                        <button type="button" role="tab" class="chave-aba" id="chave-aba-3lugar"
+                                aria-controls="chave-fase-3lugar" aria-selected="false">3º lugar</button>
+                    {% endif %}
+                </div>
+
+                {% for fase, vagas in rodadas_m %}
+                    {% set i = loop.index0 %}
+                    {% set ultima = loop.last %}
+                    {% set proxima = rodadas_m[i + 1][0] if not ultima else None %}
+                    {% set anterior = rodadas_m[i - 1][0] if i > 0 else None %}
+                    <section class="chave-fase" role="tabpanel" id="chave-fase-{{ i }}" aria-labelledby="chave-aba-{{ i }}"
+                             {{ '' if i == ns.atual else 'hidden' }}>
+                        <h3 class="chave-fase-titulo">{{ fase }}</h3>
+                        {% if ultima and campeao %}
+                            <div class="chave-campeao">
+                                <span class="chave-campeao-rotulo">🏆 Campeão</span>
+                                {{ macros.escudo_time(campeao, 'chave-escudo') }}
+                                <strong>{{ campeao.nome }}</strong>
+                            </div>
+                        {% endif %}
+                        {% for c in vagas %}
+                            {% set j = loop.index0 %}
+                            {% set dica = ('Quem vencer pega o vencedor do Jogo ' ~ ((j // 2) * 2 + (2 if j % 2 == 0 else 1)) ~ ' ' ~ na_fase.get(proxima, 'na próxima fase') ~ '.') if proxima and vagas|length > 1 else None %}
+                            {{ macros.chave_card(
+                                c, torneio, j + 1,
+                                origem1=('Vencedor do Jogo ' ~ (j * 2 + 1) ~ ' ' ~ na_fase.get(anterior, '')) if anterior else 'A definir',
+                                origem2=('Vencedor do Jogo ' ~ (j * 2 + 2) ~ ' ' ~ na_fase.get(anterior, '')) if anterior else 'A definir',
+                                dica=dica,
+                                primeira_rodada=(i == 0),
+                                meu_time_id=meu_time_id,
+                            ) }}
+                        {% endfor %}
+                    </section>
                 {% endfor %}
 
-                <div class="bracket-mobile-rodada bracket-mobile-final">
-                    <h3 class="fase-titulo">{{ rodadas_bracket.final[0] }}</h3>
-                    <div class="bracket-mobile-jogos">
-                        {{ macros.bracket_final_vs(rodadas_bracket.final[1][0], torneio) }}
-                    </div>
-                </div>
+                {% if disputa_terceiro %}
+                    <section class="chave-fase" role="tabpanel" id="chave-fase-3lugar" aria-labelledby="chave-aba-3lugar" hidden>
+                        <h3 class="chave-fase-titulo">Disputa de 3º lugar</h3>
+                        {{ macros.chave_card(
+                            disputa_terceiro, torneio, 1,
+                            origem1='Perdedor da semifinal', origem2='Perdedor da semifinal',
+                            dica='Os dois que perderam a semifinal decidem o 3º lugar.',
+                            meu_time_id=meu_time_id,
+                        ) }}
+                    </section>
+                {% endif %}
             </div>
+            <script>
+                (function () {
+                    var raiz = document.getElementById("chave-mobile");
+                    if (!raiz) return;
+                    var abas = raiz.querySelectorAll(".chave-aba");
+                    function abrir(aba, rolar) {
+                        abas.forEach(function (a) {
+                            var ativa = a === aba;
+                            a.setAttribute("aria-selected", ativa ? "true" : "false");
+                            document.getElementById(a.getAttribute("aria-controls")).hidden = !ativa;
+                        });
+                        if (rolar) aba.scrollIntoView({ block: "nearest", inline: "center" });
+                    }
+                    abas.forEach(function (aba) {
+                        aba.addEventListener("click", function () { abrir(aba, true); });
+                    });
+                    // Deixa a aba da fase atual visível na barra (com muitas fases ela
+                    // pode estar fora da tela), sem mexer na rolagem da página.
+                    var atual = raiz.querySelector('.chave-aba[aria-selected="true"]');
+                    if (atual) {
+                        var barra = atual.parentElement;
+                        barra.scrollLeft = atual.offsetLeft - (barra.clientWidth - atual.offsetWidth) / 2;
+                    }
+                })();
+            </script>
         </div>
         <script>
             (function () {

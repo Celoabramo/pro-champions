@@ -1608,67 +1608,6 @@ a.notificacao-corpo-link:hover p { color: var(--acento); }
 .bracket-lado { display: flex; align-items: stretch; gap: 56px; }
 .bracket-lado-direita { transform: scaleX(-1); }
 
-/* Chaveamento no mobile: lista vertical simples (uma fase por vez), em vez
-   do chaveamento espelhado horizontal encolhido — muito difícil de tocar
-   certo quando fica pequeno demais pra caber na tela. */
-.bracket-mobile { display: none; }
-.bracket-mobile-rodada { margin-top: 8px; }
-.bracket-mobile-rodada + .bracket-mobile-rodada { margin-top: 36px; }
-.bracket-mobile-rodada .fase-titulo { text-align: center; margin: 0 0 14px; }
-.bracket-mobile-jogos { display: flex; flex-direction: column; gap: 36px; }
-
-/* Confronto sozinho (final) — cartão cheio, do jeito que já era. */
-.bracket-mobile-jogos > .bracket-jogo { width: 100%; }
-.bracket-mobile-jogos > .bracket-final-vs { width: 100%; }
-.bracket-mobile-jogos .bracket-time { padding: 13px 14px; font-size: 15px; }
-.bracket-mobile-jogos .escudo-time-pequeno { width: 34px; height: 34px; }
-
-/* Dois confrontos lado a lado que avançam pro mesmo confronto seguinte —
-   com linhas de conexão, tipo árvore de chaveamento (na vertical). */
-.bracket-mobile-par {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    position: relative;
-}
-.bracket-mobile-par .bracket-jogo {
-    flex: 1;
-    min-width: 0;
-    position: relative;
-    width: auto;
-}
-.bracket-mobile-par .bracket-time { padding: 9px 8px; font-size: 12.5px; gap: 6px; }
-.bracket-mobile-par .escudo-time-pequeno { width: 24px; height: 24px; border-radius: 6px; }
-.bracket-mobile-par .bracket-placar { font-size: 12.5px; }
-
-.bracket-mobile-par .bracket-jogo::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 100%;
-    width: 1px;
-    height: 18px;
-    background: var(--linha);
-}
-.bracket-mobile-par::before {
-    content: "";
-    position: absolute;
-    left: 25%;
-    right: 25%;
-    bottom: -18px;
-    height: 1px;
-    background: var(--linha);
-}
-.bracket-mobile-par::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: -36px;
-    width: 1px;
-    height: 18px;
-    background: var(--linha);
-}
-
 .bracket-coluna { display: flex; flex-direction: column; min-width: 220px; }
 .bracket-coluna .fase-titulo { margin: 0 0 16px; white-space: nowrap; text-align: center; }
 .bracket-jogos { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 16px; }
@@ -2620,7 +2559,6 @@ dialog.popup-imagem img {
 /* ============ Responsivo ============ */
 @media (max-width: 680px) {
     .bracket-wrap { display: none; }
-    .bracket-mobile { display: block; }
 }
 
 @media (max-width: 520px) {
@@ -3303,3 +3241,120 @@ dialog.popup-imagem img {
 .prazo-print-texto { margin: 0; font-size: 13px; line-height: 1.45; color: var(--texto); }
 .prazo-print-vencido { border-color: rgba(229, 84, 77, 0.45); background: var(--erro-fraco); }
 .prazo-print-vencido .prazo-print-relogio { color: var(--erro); }
+
+/* ===== Chave no celular: abas por fase + cartão por duelo ===== */
+.chave-mobile { display: none; margin-top: 4px; }
+.chave-abas {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px 0 12px;
+    margin-bottom: 4px;
+}
+.chave-abas::-webkit-scrollbar { display: none; }
+.chave-aba {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--linha);
+    background: var(--fundo-card);
+    color: var(--texto-fraco);
+    font: 600 13px/1 inherit;
+    font-family: inherit;
+    cursor: pointer;
+}
+.chave-aba[aria-selected="true"] {
+    background: var(--acento);
+    border-color: var(--acento);
+    color: #06120a;
+}
+.chave-fase-titulo {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--dourado);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.chave-fase { display: flex; flex-direction: column; gap: 10px; }
+.chave-fase[hidden] { display: none; }
+
+.chave-card {
+    display: block;
+    background: var(--fundo-card);
+    border: 1px solid var(--linha);
+    border-radius: var(--raio);
+    padding: 10px 12px;
+    color: var(--texto);
+    text-decoration: none;
+}
+a.chave-card:active { background: var(--fundo-card-hover); }
+.chave-card-meu { border-color: var(--acento); box-shadow: inset 3px 0 0 var(--acento); }
+.chave-card-vazio { border-style: dashed; }
+
+.chave-card-topo { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.chave-card-num { font-size: 12px; color: var(--texto-fraco); font-weight: 600; }
+.chave-selo-meu {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--acento);
+    background: var(--acento-fraco);
+    padding: 2px 7px;
+    border-radius: 999px;
+}
+.chave-status {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.chave-status-encerrado { color: var(--texto-fraco); background: rgba(138, 149, 163, 0.12); }
+.chave-status-aguardando { color: var(--texto-fraco); border: 1px solid var(--linha); }
+.chave-status-ao-vivo { color: var(--acento); background: var(--acento-fraco); }
+.chave-status-ao-vivo::before { content: "● "; }
+.chave-status-atencao { color: var(--dourado); background: rgba(232, 185, 35, 0.12); }
+
+.chave-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    font-size: 15px;
+}
+.chave-linha + .chave-linha { border-top: 1px solid var(--linha); }
+.chave-escudo { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.chave-escudo-vazio { display: inline-block; border: 1px dashed var(--linha); }
+.chave-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chave-nome-vazio { color: var(--texto-fraco); font-size: 13px; }
+.chave-placar { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 20px; text-align: right; }
+.chave-vencedor .chave-nome { font-weight: 700; }
+.chave-vencedor .chave-placar { color: var(--acento); }
+.chave-perdedor { opacity: 0.55; }
+.chave-card-dica {
+    margin-top: 6px;
+    padding-top: 7px;
+    border-top: 1px dashed var(--linha);
+    font-size: 12px;
+    color: var(--texto-fraco);
+}
+
+.chave-campeao {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--raio);
+    border: 1px solid rgba(232, 185, 35, 0.45);
+    background: rgba(232, 185, 35, 0.1);
+    font-size: 16px;
+}
+.chave-campeao-rotulo { font-size: 12px; font-weight: 700; color: var(--dourado); text-transform: uppercase; letter-spacing: 0.04em; }
+
+@media (max-width: 680px) {
+    .chave-mobile { display: block; }
+    /* A disputa de 3º vira uma aba da chave no celular. */
+    .bloco-chaveamento .disputa-terceiro { display: none; }
+}
