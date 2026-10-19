@@ -286,7 +286,12 @@
             {% else %}
                 Empate — vale ponto pros dois times na tabela do grupo.
             {% endif %}
-            Resultado lido e confirmado automaticamente pela IA a partir dos dois prints.
+            {% if confronto.primeiro_print_em and not confronto.ea_match_id and (confronto.leitura_time1_ok != confronto.leitura_time2_ok) %}
+                Valeu o print do {{ confronto.nome_time1 if confronto.leitura_time1_ok else confronto.nome_time2 }}:
+                o {{ confronto.nome_time2 if confronto.leitura_time1_ok else confronto.nome_time1 }} não enviou o dele dentro dos 2 minutos.
+            {% else %}
+                Resultado lido e confirmado automaticamente pela IA a partir dos dois prints.
+            {% endif %}
         </p>
 
         {% set meu_time_validado = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
@@ -504,6 +509,55 @@
                 </div>
             </div>
 
+            {# Prazo do segundo print: o primeiro time mandou, o outro tem 2 min.
+               O relógio é só visual — quem encerra é o servidor (tela, chat e
+               varredura de fundo). Ao zerar, recarrega uma vez pra mostrar o
+               resultado; se a página já abriu com o prazo vencido e a partida
+               segue aberta, é porque o print não deu pra validar sozinho. #}
+            {% set lado_atrasado = confronto.lado_aguardando_print %}
+            {% if lado_atrasado %}
+                {% set time_atrasado = confronto.time1 if lado_atrasado == 1 else confronto.time2 %}
+                {% set time_enviou = confronto.time2 if lado_atrasado == 1 else confronto.time1 %}
+                <div class="prazo-print" id="prazo-print"
+                     data-prazo="{{ confronto.prazo_segundo_print.isoformat(timespec='seconds') }}Z">
+                    <span class="prazo-print-relogio" id="prazo-print-relogio" aria-hidden="true">2:00</span>
+                    <p class="prazo-print-texto" id="prazo-print-texto">
+                        {% if meu_lado == lado_atrasado %}
+                            O {{ time_enviou.nome }} já enviou o print. <strong>Envie o seu antes do tempo acabar</strong> —
+                            se não enviar, vale o placar do print deles.
+                        {% elif meu_lado %}
+                            Seu print já foi lido. O {{ time_atrasado.nome }} tem até o tempo acabar para enviar o dele —
+                            se não enviar, vale o placar do seu print.
+                        {% else %}
+                            O {{ time_atrasado.nome }} tem até o tempo acabar para enviar o print — se não enviar,
+                            vale o placar do print do {{ time_enviou.nome }}.
+                        {% endif %}
+                    </p>
+                </div>
+                <script>
+                (function () {
+                    var caixa = document.getElementById("prazo-print");
+                    var relogio = document.getElementById("prazo-print-relogio");
+                    var prazo = new Date(caixa.dataset.prazo).getTime();
+                    var abriuNoPrazo = Date.now() < prazo;
+                    function tique() {
+                        var falta = Math.max(0, Math.ceil((prazo - Date.now()) / 1000));
+                        relogio.textContent = Math.floor(falta / 60) + ":" + String(falta % 60).padStart(2, "0");
+                        if (falta > 0) { setTimeout(tique, 250); return; }
+                        caixa.classList.add("prazo-print-vencido");
+                        if (abriuNoPrazo) {
+                            document.getElementById("prazo-print-texto").textContent = "Tempo esgotado — confirmando o placar...";
+                            setTimeout(function () { window.location.reload(); }, 1500);
+                        } else {
+                            document.getElementById("prazo-print-texto").textContent =
+                                "Tempo esgotado, mas o print enviado não deu para validar sozinho (time não reconhecido ou empate onde precisa de vencedor). O organizador resolve a partida.";
+                        }
+                    }
+                    tique();
+                })();
+                </script>
+            {% endif %}
+
             {% if confronto.status not in ('validado', 'wo') %}
                 {% set meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 %}
                 {% set minha_leitura_ok = (confronto.leitura_time1_ok if meu_lado == 1 else confronto.leitura_time2_ok) %}
@@ -512,7 +566,9 @@
                         {% if confronto.status == 'divergente' %}Reenviar print do placar{% else %}Tirar print do placar{% endif %}
                     </button>
                 {% elif meu_lado and current_user.id == meu_time.capitao_id %}
-                    <p class="texto-fraco-pequeno" style="margin-top:14px;">Print enviado e lido. Agora é esperar o adversário enviar o dele para confirmar o resultado.</p>
+                    {% if not lado_atrasado %}
+                        <p class="texto-fraco-pequeno" style="margin-top:14px;">Print enviado e lido. Agora é esperar o adversário enviar o dele para confirmar o resultado.</p>
+                    {% endif %}
                 {% endif %}
             {% endif %}
         </div>

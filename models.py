@@ -702,6 +702,14 @@ class Confronto(db.Model):
     leitura_time1_ok = db.Column(db.Boolean, nullable=True)
     leitura_time2_ok = db.Column(db.Boolean, nullable=True)
 
+    # Quando chegou o primeiro print lido com sucesso, com o outro time ainda
+    # sem print válido. A partir daqui o outro time tem PRAZO_SEGUNDO_PRINT
+    # pra mandar o dele; se não mandar, vale o placar do primeiro (ver
+    # _validar_pelo_print_unico em app.py). Reenviar o primeiro print não
+    # reinicia o relógio; só volta a contar do zero se o print que estava
+    # valendo deixar de valer (reenvio que a IA não conseguiu ler).
+    primeiro_print_em = db.Column(db.DateTime, nullable=True)
+
     placar_time1 = db.Column(db.Integer, nullable=True)
     placar_time2 = db.Column(db.Integer, nullable=True)
 
@@ -738,6 +746,31 @@ class Confronto(db.Model):
     # folga pra montar o lobby — quem não apareceu nesse tempo não vai mais
     # aparecer, e o campeonato inteiro rola numa sessão só.
     PRAZO_WO = timedelta(minutes=30)
+
+    # Tempo que o segundo time tem pra mandar o print depois que o primeiro
+    # mandou. Existe porque quem perde tende a não mandar (ou enrolar) e a
+    # chave fica parada esperando.
+    PRAZO_SEGUNDO_PRINT = timedelta(minutes=2)
+
+    @property
+    def lado_aguardando_print(self):
+        """1 ou 2: o time que está correndo contra o prazo do segundo print.
+        None quando não tem prazo correndo (ninguém mandou, os dois já
+        mandaram, ou a partida já acabou)."""
+        if not self.primeiro_print_em or self.status in ("validado", "wo"):
+            return None
+        if self.leitura_time1_ok and not self.leitura_time2_ok:
+            return 2
+        if self.leitura_time2_ok and not self.leitura_time1_ok:
+            return 1
+        return None
+
+    @property
+    def prazo_segundo_print(self):
+        """Até quando o time em lado_aguardando_print pode mandar o print."""
+        if self.lado_aguardando_print is None:
+            return None
+        return self.primeiro_print_em + self.PRAZO_SEGUNDO_PRINT
 
     @property
     def eh_ida_volta(self):

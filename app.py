@@ -4315,6 +4315,10 @@ def detalhe_confronto(torneio_id, confronto_id):
     if confronto.torneio_id != torneio_id:
         abort(404)
 
+    # Prazo do segundo print vencido: encerra já, sem esperar a varredura
+    # de fundo — quem abriu a tela vê o resultado na hora.
+    _validar_pelo_print_unico(confronto)
+
     meu_lado = time_do_confronto(confronto, current_user)
     eh_organizador = _pode_administrar_torneio(confronto.torneio)
     ja_contestado = bool(
@@ -4463,6 +4467,9 @@ def _estado_do_chat(confronto, depois_de=0):
 def ler_chat_confronto(torneio_id, confronto_id):
     """A tela pergunta aqui a cada poucos segundos se chegou mensagem nova."""
     confronto, _ = _confronto_do_chat(torneio_id, confronto_id)
+    # A tela pergunta aqui a cada 3s — é o que faz o prazo do print fechar
+    # na hora certa pra quem está olhando (o "encerrado" recarrega a tela).
+    _validar_pelo_print_unico(confronto)
     depois_de = request.args.get("depois", 0, type=int)
     return jsonify(_estado_do_chat(confronto, depois_de))
 
@@ -4798,6 +4805,27 @@ def _leituras_batem(leitura1, leitura2):
     return True
 
 
+def _placar_por_lado(confronto, leitura):
+    """(placar do time1, placar do time2) a partir de uma leitura da IA, ou
+    None se não der pra saber qual placar é de qual time.
+
+    Nenhum nome do print bateu com os times do confronto (ou os dois bateram
+    ao mesmo tempo, o que não devia acontecer): sem saber com confiança qual
+    placar é de qual lado, não dá para adivinhar — melhor pedir reenvio do
+    que arriscar inverter o resultado.
+    """
+    (nome0, placar0), (nome1, placar1) = _pares_leitura(leitura)
+
+    bate_direto = _nomes_parecidos(nome0, confronto.nome_time1) or _nomes_parecidos(nome1, confronto.nome_time2)
+    bate_invertido = _nomes_parecidos(nome1, confronto.nome_time1) or _nomes_parecidos(nome0, confronto.nome_time2)
+
+    if bate_direto and not bate_invertido:
+        return placar0, placar1
+    if bate_invertido and not bate_direto:
+        return placar1, placar0
+    return None
+
+
 def _tentar_finalizar_confronto(confronto):
     """Se as duas leituras da IA estiverem prontas, compara e decide o status.
 
@@ -4821,25 +4849,11 @@ def _tentar_finalizar_confronto(confronto):
         confronto.status = "divergente"
         return "nao_bateu"
 
-    nomes_lidos = _pares_leitura(leitura1)
-    nome0, placar0 = nomes_lidos[0]
-    nome1, placar1 = nomes_lidos[1]
-
-    bate_direto = _nomes_parecidos(nome0, confronto.nome_time1) or _nomes_parecidos(nome1, confronto.nome_time2)
-    bate_invertido = _nomes_parecidos(nome1, confronto.nome_time1) or _nomes_parecidos(nome0, confronto.nome_time2)
-
-    if bate_direto and not bate_invertido:
-        placar_time1, placar_time2 = placar0, placar1
-    elif bate_invertido and not bate_direto:
-        placar_time1, placar_time2 = placar1, placar0
-    else:
-        # Nem um nome do print bateu com nenhum dos dois times do confronto
-        # (ou os dois bateram ao mesmo tempo, o que não devia acontecer) —
-        # sem saber com confiança qual placar é de qual lado, não dá para
-        # adivinhar. Melhor pedir para reenviar do que arriscar inverter o
-        # resultado.
+    placares = _placar_por_lado(confronto, leitura1)
+    if placares is None:
         confronto.status = "divergente"
         return "nomes_nao_identificados"
+    placar_time1, placar_time2 = placares
 
     motivo = _motivo_placar_recusado(confronto, placar_time1, placar_time2)
     if motivo:
@@ -4855,6 +4869,123 @@ def _tentar_finalizar_confronto(confronto):
     )
     confronto.status = "validado"
     return "ok"
+
+
+def _validar_pelo_print_unico(confronto, agora=None):
+    """Prazo do segundo print vencido: vale o placar do print que chegou.
+
+    Devolve True se encerrou a partida agora. Não faz nada (False) se o
+    prazo ainda está correndo, ou se o print que chegou não dá pra usar
+    sozinho — nomes dos times não reconhecidos, ou empate onde a fase
+    precisa de vencedor. Nesses casos a partida segue esperando o segundo
+    print (ou o organizador resolve na mão).
+
+    Chamada de vários lugares ao mesmo tempo (tela da partida, chat, envio
+    de print e a varredura de fundo), então "pega" a partida com um UPDATE
+    condicional: só quem conseguir trocar o status de verdade segue adiante
+    e avança a chave. Sem isso, duas chamadas simultâneas criavam o jogo da
+    fase seguinte em dobro.
+    """
+    agora = agora or datetime.utcnow()
+    lado = confronto.lado_aguardando_print
+    if lado is None or agora < confronto.prazo_segundo_print:
+        return False
+
+    leitura = json.loads(confronto.leitura_time2 if lado == 1 else confronto.leitura_time1)
+    placares = _placar_por_lado(confronto, leitura)
+    if placares is None:
+        return False
+    placar1, placar2 = placares
+    if _motivo_placar_recusado(confronto, placar1, placar2):
+        return False
+
+    vencedor_id = None if placar1 == placar2 else (
+        confronto.time1_id if placar1 > placar2 else confronto.time2_id
+    )
+    pegou = (
+        Confronto.query
+        .filter(Confronto.id == confronto.id, Confronto.status.notin_(("validado", "wo")))
+        .update(
+            {"status": "validado", "placar_time1": placar1, "placar_time2": placar2, "vencedor_id": vencedor_id},
+            synchronize_session=False,
+        )
+    )
+    if not pegou:
+        db.session.rollback()
+        return False
+    db.session.refresh(confronto)
+
+    time_que_enviou = confronto.time1 if lado == 2 else confronto.time2
+    time_atrasado = confronto.time1 if lado == 1 else confronto.time2
+    if vencedor_id:
+        vencedor = confronto.time1 if vencedor_id == confronto.time1_id else confronto.time2
+        resultado = f"{vencedor.nome} venceu {max(placar1, placar2)} a {min(placar1, placar2)}"
+    else:
+        resultado = f"empate em {placar1} a {placar2}"
+    notificar_federacao(
+        confronto.torneio,
+        "partida_finalizada",
+        f"A partida {confronto.nome_time1} x {confronto.nome_time2} ({confronto.torneio.nome}) "
+        f"finalizou: {resultado}. Valeu o print do {time_que_enviou.nome} — o {time_atrasado.nome} "
+        f"não mandou o dele em {int(Confronto.PRAZO_SEGUNDO_PRINT.total_seconds() // 60)} min.",
+        confronto=confronto,
+    )
+    _avancar_chaveamento(confronto)
+    db.session.commit()
+    return True
+
+
+def _checar_prazos_de_print():
+    """Uma varredura: encerra toda partida cujo prazo do segundo print venceu.
+
+    Roda na thread de fundo (ver _iniciar_poller_prazo_print) pra chave não
+    ficar parada quando ninguém está com a tela da partida aberta.
+    test_request_context pelo mesmo motivo do poller da EA: a notificação
+    monta link absoluto e precisa saber o host.
+    """
+    limite = datetime.utcnow() - Confronto.PRAZO_SEGUNDO_PRINT
+    with app.test_request_context(base_url=URL_BASE_SITE):
+        vencidos = (
+            Confronto.query
+            .filter(
+                Confronto.status.notin_(("validado", "wo")),
+                Confronto.primeiro_print_em.isnot(None),
+                Confronto.primeiro_print_em <= limite,
+            )
+            .all()
+        )
+        for confronto in vencidos:
+            try:
+                if _validar_pelo_print_unico(confronto):
+                    app.logger.info(f"Prazo do segundo print vencido: confronto {confronto.id} validado pelo primeiro print.")
+            except Exception as erro:
+                db.session.rollback()
+                app.logger.error(f"Falha ao validar confronto {confronto.id} pelo prazo do print: {erro}")
+
+
+INTERVALO_POLLER_PRINT_SEGUNDOS = 15
+_poller_print_iniciado = False
+_trava_poller_print = threading.Lock()
+
+
+def _iniciar_poller_prazo_print():
+    """Sobe a thread que vigia o prazo do segundo print, uma vez por processo
+    (mesma trava do poller da EA, pelo mesmo motivo do reloader local)."""
+    global _poller_print_iniciado
+    with _trava_poller_print:
+        if _poller_print_iniciado:
+            return
+        _poller_print_iniciado = True
+
+    def laco():
+        while True:
+            _dormir(INTERVALO_POLLER_PRINT_SEGUNDOS)
+            try:
+                _checar_prazos_de_print()
+            except Exception as erro:
+                app.logger.error(f"Poller do prazo de print falhou: {erro}")
+
+    threading.Thread(target=laco, daemon=True, name="poller-prazo-print").start()
 
 
 # ============ Placar automático pela API da EA ============
@@ -5378,6 +5509,13 @@ def enviar_print(torneio_id, confronto_id):
         flash("Só o capitão do time pode enviar o print da partida.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
+    # Print chegando depois do prazo de 2 min não vale mais: encerra pelo
+    # print do adversário antes de olhar o arquivo.
+    if _validar_pelo_print_unico(confronto):
+        flash("O prazo de 2 minutos para enviar o print acabou — valeu o placar do print do adversário. "
+              "Se ele estiver errado, use \"Contestar placar\".", "erro")
+        return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
+
     # "wo" também conta como encerrado: sem isso, os dois capitães podiam
     # combinar prints e derrubar o W.O. que o organizador tinha declarado —
     # trocando o vencedor e duplicando a fase seguinte do chaveamento.
@@ -5431,12 +5569,22 @@ def enviar_print(torneio_id, confronto_id):
         flash("Essa imagem não parece ser um print do placar final da partida. Envie a tela com o resultado.", "erro")
         return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
+    aguardando_antes = confronto.lado_aguardando_print
     if meu_lado == 1:
         confronto.leitura_time1 = json.dumps(leitura)
         confronto.leitura_time1_ok = True
     else:
         confronto.leitura_time2 = json.dumps(leitura)
         confronto.leitura_time2_ok = True
+
+    # Primeiro print válido com o adversário ainda sem o dele: começa o
+    # prazo de 2 min pro adversário. Se o relógio já corria contra ele
+    # (esse time só reenviou o próprio print), segue o mesmo prazo — reenviar
+    # não ganha tempo pra ninguém.
+    outro_lado = 2 if meu_lado == 1 else 1
+    outro_ok = confronto.leitura_time2_ok if meu_lado == 1 else confronto.leitura_time1_ok
+    if not outro_ok and aguardando_antes != outro_lado:
+        confronto.primeiro_print_em = datetime.utcnow()
 
     if confronto.status != "validado":
         confronto.status = "pendente"
@@ -5484,7 +5632,8 @@ def enviar_print(torneio_id, confronto_id):
     elif motivo_divergencia == "nomes_nao_identificados":
         flash("Não deu para reconhecer o nome de nenhum dos dois times no print. Confira se enviou a tela certa e reenvie.", "erro")
     else:
-        flash("Print lido! Falta o outro time enviar o dele para confirmar o resultado.", "sucesso")
+        flash("Print lido! O outro time tem 2 minutos para enviar o dele — se não enviar, "
+              "vale o placar do seu print.", "sucesso")
 
     return redirect(url_for("detalhe_confronto", torneio_id=torneio_id, confronto_id=confronto_id))
 
@@ -5574,6 +5723,8 @@ def _garantir_colunas_novas():
         ("torneios", "ida_volta", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("confrontos", "perna", "INTEGER NOT NULL DEFAULT 1"),
         ("confrontos", "confronto_ida_id", "INTEGER"),
+        # Prazo de 2 min pro segundo print.
+        ("confrontos", "primeiro_print_em", "TIMESTAMP"),
     ]
     for tabela, coluna, tipo in colunas:
         try:
@@ -5634,6 +5785,7 @@ with app.app_context():
     _preencher_conquistas_antigas()
 
 _iniciar_poller_ea()
+_iniciar_poller_prazo_print()
 
 if __name__ == "__main__":
     # Debug SÓ fica ligado se você setar FLASK_DEBUG=1 no ambiente. Com

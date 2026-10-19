@@ -3279,3 +3279,27 @@ dialog.popup-imagem img {
     .chat-nick strong { text-align: right; }
     .chat-mensagens { height: 240px; }
 }
+
+/* ===== Prazo de 2 min pro segundo print ===== */
+.prazo-print {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid rgba(232, 185, 35, 0.4);
+    background: rgba(232, 185, 35, 0.08);
+    border-radius: var(--raio);
+}
+.prazo-print-relogio {
+    flex-shrink: 0;
+    min-width: 64px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--dourado);
+}
+.prazo-print-texto { margin: 0; font-size: 13px; line-height: 1.45; color: var(--texto); }
+.prazo-print-vencido { border-color: rgba(229, 84, 77, 0.45); background: var(--erro-fraco); }
+.prazo-print-vencido .prazo-print-relogio { color: var(--erro); }
