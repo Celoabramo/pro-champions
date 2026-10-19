@@ -89,6 +89,252 @@
         </span>
     </div>
 
+    {% if confronto.status == 'validado' %}
+        <p class="texto-fraco-pequeno" style="margin-top:8px;">
+            {% if confronto.eh_ida_volta %}
+                {% if confronto.vencedor_id %}
+                    {{ confronto.vencedor.nome }} venceu este jogo.
+                {% else %}
+                    Empate neste jogo.
+                {% endif %}
+                {% if confronto.vencedor_do_duelo %}
+                    Somando os dois jogos, {{ confronto.vencedor_do_duelo.nome }} avança de fase.
+                {% else %}
+                    Quem avança sai do agregado, no fim do jogo de volta.
+                {% endif %}
+            {% elif confronto.vencedor_id %}
+                {{ confronto.vencedor.nome }} venceu e avança de fase.
+            {% else %}
+                Empate — vale ponto pros dois times na tabela do grupo.
+            {% endif %}
+            {% if confronto.primeiro_print_em and not confronto.ea_match_id and (confronto.leitura_time1_ok != confronto.leitura_time2_ok) %}
+                Valeu o print do {{ confronto.nome_time1 if confronto.leitura_time1_ok else confronto.nome_time2 }}:
+                o {{ confronto.nome_time2 if confronto.leitura_time1_ok else confronto.nome_time1 }} não enviou o dele dentro dos 2 minutos.
+            {% else %}
+                Resultado lido e confirmado automaticamente pela IA a partir dos dois prints.
+            {% endif %}
+        </p>
+
+        {% set meu_time_validado = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
+        {% if ja_contestado %}
+            <p class="texto-fraco-pequeno" style="margin-top:12px;">Esse placar já foi contestado — o organizador e o suporte já foram avisados.</p>
+        {% elif meu_time_validado and current_user.id == meu_time_validado.capitao_id %}
+            <form method="POST" action="{{ url_for('contestar_placar', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
+                  onsubmit="return confirm('Contestar esse placar? Um e-mail vai pro suporte e o organizador da federação é avisado. Só dá pra contestar uma vez.');" style="margin-top:12px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="botao-secundario-pequeno">Contestar placar</button>
+            </form>
+        {% endif %}
+    {% endif %}
+
+    {% if confronto.status == 'divergente' %}
+        <p class="texto-fraco-pequeno" style="margin-top:8px; color: var(--erro);">
+            A IA leu placares diferentes nos dois prints enviados. Confiram o resultado combinado e reenviem o print — o que for enviado por último substitui o anterior.
+        </p>
+    {% endif %}
+
+    {% if confronto.status == 'wo' %}
+        <p class="texto-fraco-pequeno" style="margin-top:8px;">
+            {% if confronto.vencedor_wo %}
+                W.O. — {{ confronto.vencedor_wo.nome }} venceu por ausência do adversário.
+            {% else %}
+                W.O. duplo — nenhum time compareceu.
+            {% endif %}
+        </p>
+    {% endif %}
+
+    {# Confirmação mútua "vamos começar": os dois capitães concordam sem
+       precisar da organização. Some assim que hora_inicio existir — não
+       importa por qual dos dois caminhos ela foi marcada. #}
+    {% if meu_lado and confronto.status not in ('validado', 'wo') and not confronto.eh_bye and not confronto.hora_inicio %}
+        {% set meu_time_pronto = confronto.pronto_time1 if meu_lado == 1 else confronto.pronto_time2 %}
+        <div class="perfil-bloco">
+            <h2>Vamos começar?</h2>
+            <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                Quando os dois capitães confirmarem, a partida já entra como iniciada — sem esperar a
+                organização. É esse horário que abre a janela do placar automático (e o prazo do W.O.).
+            </p>
+            <div class="status-prints" style="margin-bottom:14px;">
+                <div class="status-print-item {{ 'enviado' if confronto.pronto_time1 }}">
+                    <span>{{ confronto.nome_time1 }}</span>
+                    {% if confronto.pronto_time1 %}<strong>Pronto</strong>{% else %}<span class="texto-fraco-pequeno">Aguardando confirmar</span>{% endif %}
+                </div>
+                <div class="status-print-item {{ 'enviado' if confronto.pronto_time2 }}">
+                    <span>{{ confronto.nome_time2 }}</span>
+                    {% if confronto.pronto_time2 %}<strong>Pronto</strong>{% else %}<span class="texto-fraco-pequeno">Aguardando confirmar</span>{% endif %}
+                </div>
+            </div>
+            {% if not meu_time_pronto %}
+                <form method="POST" action="{{ url_for('confirmar_pronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Estou pronto pra começar</button>
+                </form>
+            {% else %}
+                <p class="texto-fraco-pequeno">Você já confirmou — falta o adversário.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {# Placar (automático da EA + prints) logo abaixo do placar, antes do
+       chat: mandar o print é a ação principal da tela, e no celular o botão
+       ficava lá no fim, depois do chat inteiro. #}
+    {# Placar automático: busca a partida direto na EA. O print continua
+       logo abaixo, sempre — a API da EA não é oficial e pode falhar. #}
+    {% set sou_capitao = meu_lado and current_user.id == (confronto.time1 if meu_lado == 1 else confronto.time2).capitao_id %}
+    {# Só em campeonato de FC 27: no FC 26 o placar é sempre pelo print, e o
+       aviso "a EA não tem essa edição" só empurrava o botão do print pra baixo. #}
+    {% if confronto.torneio.jogo == 'fc27' and confronto.status not in ('validado', 'wo') and not confronto.eh_bye and (sou_capitao or eh_organizador) %}
+        <div class="perfil-bloco">
+            <h2>Placar automático</h2>
+            {% if pode_placar_ea %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
+                    Acabou de jogar? O site busca a partida direto na EA e confirma o placar sozinho,
+                    sem print. Os dois clubes já estão cadastrados — e o site também tenta buscar
+                    sozinho, a partir de 20 minutos do início. Só clique se quiser adiantar.
+                </p>
+                <form method="POST" action="{{ url_for('buscar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="botao-principal">Já terminamos — buscar agora</button>
+                </form>
+            {% else %}
+                <p class="texto-fraco-pequeno">{{ motivo_sem_ea }}</p>
+            {% endif %}
+
+            {% if candidatas_ea %}
+                <div class="candidatas-ea">
+                    <h3>Qual dessas é a partida de vocês?</h3>
+                    {% for candidata in candidatas_ea %}
+                        <form method="POST" class="candidata-ea"
+                              action="{{ url_for('confirmar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="match_id" value="{{ candidata.match_id }}">
+                            <div class="candidata-ea-info">
+                                <span class="candidata-ea-placar">
+                                    <span class="candidata-ea-time">{{ confronto.nome_time1 }}</span>
+                                    <strong>{{ candidata.gols_time1 }} × {{ candidata.gols_time2 }}</strong>
+                                    <span class="candidata-ea-time">{{ confronto.nome_time2 }}</span>
+                                </span>
+                                <span class="texto-fraco-pequeno">
+                                    {% if candidata.minutos_atras < 60 %}há {{ candidata.minutos_atras }} min{% else %}há {{ (candidata.minutos_atras // 60) }}h{% endif %}
+                                    · {{ candidata.quando.strftime('%d/%m %H:%M') }}
+                                    {% if not candidata.na_janela %}
+                                        · <span style="color: var(--dourado);">fora do horário da rodada</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            {% if candidata.na_janela or eh_organizador %}
+                                <button type="submit" class="botao-secundario-pequeno">Confirmar esta</button>
+                            {% else %}
+                                <span class="texto-fraco-pequeno">só a organização confirma</span>
+                            {% endif %}
+                        </form>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {# O print aparece quando é o caminho da partida (FC 26), quando o
+       automático não tem como resolver (EA fora do ar, clube sem cadastro,
+       janela vencida) e sempre que já existe print enviado, pra não sumir
+       histórico. #}
+    {% set mostrar_print = aceita_print or confronto.print_time1 or confronto.print_time2 %}
+    {% if mostrar_print and (confronto.status not in ('validado', 'wo') or (eh_organizador and (confronto.print_time1 or confronto.print_time2))) %}
+        <div class="perfil-bloco">
+            <h2>Prints da partida</h2>
+            {% if confronto.torneio.jogo == 'fc27' and confronto.status not in ('validado', 'wo') %}
+                <p class="texto-aviso" style="margin-bottom:10px;">
+                    Esse campeonato é de placar automático, mas ele não dá conta dessa partida agora —
+                    então o print vale. {{ motivo_sem_ea }}
+                </p>
+            {% endif %}
+            {% if confronto.status in ('validado', 'wo') %}
+                <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Partida encerrada — prints guardados para consulta.</p>
+            {% endif %}
+            <div class="status-prints">
+                <div class="status-print-item {{ 'enviado' if confronto.leitura_time1_ok }}">
+                    <span>{{ confronto.nome_time1 }}</span>
+                    {% if confronto.print_time1 %}
+                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time1) }}')">Ver print enviado</a>
+                    {% else %}
+                        <span class="texto-fraco-pequeno">Aguardando envio</span>
+                    {% endif %}
+                </div>
+                <div class="status-print-item {{ 'enviado' if confronto.leitura_time2_ok }}">
+                    <span>{{ confronto.nome_time2 }}</span>
+                    {% if confronto.print_time2 %}
+                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time2) }}')">Ver print enviado</a>
+                    {% else %}
+                        <span class="texto-fraco-pequeno">Aguardando envio</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Prazo do segundo print: o primeiro time mandou, o outro tem 2 min.
+               O relógio é só visual — quem encerra é o servidor (tela, chat e
+               varredura de fundo). Ao zerar, recarrega uma vez pra mostrar o
+               resultado; se a página já abriu com o prazo vencido e a partida
+               segue aberta, é porque o print não deu pra validar sozinho. #}
+            {% set lado_atrasado = confronto.lado_aguardando_print %}
+            {% if lado_atrasado %}
+                {% set time_atrasado = confronto.time1 if lado_atrasado == 1 else confronto.time2 %}
+                {% set time_enviou = confronto.time2 if lado_atrasado == 1 else confronto.time1 %}
+                <div class="prazo-print" id="prazo-print"
+                     data-prazo="{{ confronto.prazo_segundo_print.isoformat(timespec='seconds') }}Z">
+                    <span class="prazo-print-relogio" id="prazo-print-relogio" aria-hidden="true">2:00</span>
+                    <p class="prazo-print-texto" id="prazo-print-texto">
+                        {% if meu_lado == lado_atrasado %}
+                            O {{ time_enviou.nome }} já enviou o print. <strong>Envie o seu antes do tempo acabar</strong> —
+                            se não enviar, vale o placar do print deles.
+                        {% elif meu_lado %}
+                            Seu print já foi lido. O {{ time_atrasado.nome }} tem até o tempo acabar para enviar o dele —
+                            se não enviar, vale o placar do seu print.
+                        {% else %}
+                            O {{ time_atrasado.nome }} tem até o tempo acabar para enviar o print — se não enviar,
+                            vale o placar do print do {{ time_enviou.nome }}.
+                        {% endif %}
+                    </p>
+                </div>
+                <script>
+                (function () {
+                    var caixa = document.getElementById("prazo-print");
+                    var relogio = document.getElementById("prazo-print-relogio");
+                    var prazo = new Date(caixa.dataset.prazo).getTime();
+                    var abriuNoPrazo = Date.now() < prazo;
+                    function tique() {
+                        var falta = Math.max(0, Math.ceil((prazo - Date.now()) / 1000));
+                        relogio.textContent = Math.floor(falta / 60) + ":" + String(falta % 60).padStart(2, "0");
+                        if (falta > 0) { setTimeout(tique, 250); return; }
+                        caixa.classList.add("prazo-print-vencido");
+                        if (abriuNoPrazo) {
+                            document.getElementById("prazo-print-texto").textContent = "Tempo esgotado — confirmando o placar...";
+                            setTimeout(function () { window.location.reload(); }, 1500);
+                        } else {
+                            document.getElementById("prazo-print-texto").textContent =
+                                "Tempo esgotado, mas o print enviado não deu para validar sozinho (time não reconhecido ou empate onde precisa de vencedor). O organizador resolve a partida.";
+                        }
+                    }
+                    tique();
+                })();
+                </script>
+            {% endif %}
+
+            {% if confronto.status not in ('validado', 'wo') %}
+                {% set meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 %}
+                {% set minha_leitura_ok = (confronto.leitura_time1_ok if meu_lado == 1 else confronto.leitura_time2_ok) %}
+                {% if meu_lado and current_user.id == meu_time.capitao_id and (not minha_leitura_ok or confronto.status == 'divergente') %}
+                    <button type="button" class="botao-principal" style="margin-top:16px;" onclick="document.getElementById('popup-print').showModal()">
+                        {% if confronto.status == 'divergente' %}Reenviar print do placar{% else %}Tirar print do placar{% endif %}
+                    </button>
+                {% elif meu_lado and current_user.id == meu_time.capitao_id %}
+                    {% if not lado_atrasado %}
+                        <p class="texto-fraco-pequeno" style="margin-top:14px;">Print enviado e lido. Agora é esperar o adversário enviar o dele para confirmar o resultado.</p>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+        </div>
+    {% endif %}
+
     {# Chat dos capitães. O primeiro envio de cada um é o nick do time no jogo, que
        fica fixado no topo; depois disso a conversa corre embaixo. Encerrada
        a partida, continua visível (só leitura) como registro. #}
@@ -268,60 +514,6 @@
         </script>
     {% endif %}
 
-    {% if confronto.status == 'validado' %}
-        <p class="texto-fraco-pequeno" style="margin-top:8px;">
-            {% if confronto.eh_ida_volta %}
-                {% if confronto.vencedor_id %}
-                    {{ confronto.vencedor.nome }} venceu este jogo.
-                {% else %}
-                    Empate neste jogo.
-                {% endif %}
-                {% if confronto.vencedor_do_duelo %}
-                    Somando os dois jogos, {{ confronto.vencedor_do_duelo.nome }} avança de fase.
-                {% else %}
-                    Quem avança sai do agregado, no fim do jogo de volta.
-                {% endif %}
-            {% elif confronto.vencedor_id %}
-                {{ confronto.vencedor.nome }} venceu e avança de fase.
-            {% else %}
-                Empate — vale ponto pros dois times na tabela do grupo.
-            {% endif %}
-            {% if confronto.primeiro_print_em and not confronto.ea_match_id and (confronto.leitura_time1_ok != confronto.leitura_time2_ok) %}
-                Valeu o print do {{ confronto.nome_time1 if confronto.leitura_time1_ok else confronto.nome_time2 }}:
-                o {{ confronto.nome_time2 if confronto.leitura_time1_ok else confronto.nome_time1 }} não enviou o dele dentro dos 2 minutos.
-            {% else %}
-                Resultado lido e confirmado automaticamente pela IA a partir dos dois prints.
-            {% endif %}
-        </p>
-
-        {% set meu_time_validado = confronto.time1 if meu_lado == 1 else confronto.time2 if meu_lado == 2 %}
-        {% if ja_contestado %}
-            <p class="texto-fraco-pequeno" style="margin-top:12px;">Esse placar já foi contestado — o organizador e o suporte já foram avisados.</p>
-        {% elif meu_time_validado and current_user.id == meu_time_validado.capitao_id %}
-            <form method="POST" action="{{ url_for('contestar_placar', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}"
-                  onsubmit="return confirm('Contestar esse placar? Um e-mail vai pro suporte e o organizador da federação é avisado. Só dá pra contestar uma vez.');" style="margin-top:12px;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="botao-secundario-pequeno">Contestar placar</button>
-            </form>
-        {% endif %}
-    {% endif %}
-
-    {% if confronto.status == 'divergente' %}
-        <p class="texto-fraco-pequeno" style="margin-top:8px; color: var(--erro);">
-            A IA leu placares diferentes nos dois prints enviados. Confiram o resultado combinado e reenviem o print — o que for enviado por último substitui o anterior.
-        </p>
-    {% endif %}
-
-    {% if confronto.status == 'wo' %}
-        <p class="texto-fraco-pequeno" style="margin-top:8px;">
-            {% if confronto.vencedor_wo %}
-                W.O. — {{ confronto.vencedor_wo.nome }} venceu por ausência do adversário.
-            {% else %}
-                W.O. duplo — nenhum time compareceu.
-            {% endif %}
-        </p>
-    {% endif %}
-
     {% if eh_organizador and confronto.status != 'validado' %}
         <div class="perfil-bloco">
             <h2>Controles do admin da federação</h2>
@@ -383,193 +575,6 @@
                 <p class="texto-fraco-pequeno" style="margin-top:8px;">
                     Ou espere os dois capitães confirmarem sozinhos, ali embaixo.
                 </p>
-            {% endif %}
-        </div>
-    {% endif %}
-
-    {# Confirmação mútua "vamos começar": os dois capitães concordam sem
-       precisar da organização. Some assim que hora_inicio existir — não
-       importa por qual dos dois caminhos ela foi marcada. #}
-    {% if meu_lado and confronto.status not in ('validado', 'wo') and not confronto.eh_bye and not confronto.hora_inicio %}
-        {% set meu_time_pronto = confronto.pronto_time1 if meu_lado == 1 else confronto.pronto_time2 %}
-        <div class="perfil-bloco">
-            <h2>Vamos começar?</h2>
-            <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
-                Quando os dois capitães confirmarem, a partida já entra como iniciada — sem esperar a
-                organização. É esse horário que abre a janela do placar automático (e o prazo do W.O.).
-            </p>
-            <div class="status-prints" style="margin-bottom:14px;">
-                <div class="status-print-item {{ 'enviado' if confronto.pronto_time1 }}">
-                    <span>{{ confronto.nome_time1 }}</span>
-                    {% if confronto.pronto_time1 %}<strong>Pronto</strong>{% else %}<span class="texto-fraco-pequeno">Aguardando confirmar</span>{% endif %}
-                </div>
-                <div class="status-print-item {{ 'enviado' if confronto.pronto_time2 }}">
-                    <span>{{ confronto.nome_time2 }}</span>
-                    {% if confronto.pronto_time2 %}<strong>Pronto</strong>{% else %}<span class="texto-fraco-pequeno">Aguardando confirmar</span>{% endif %}
-                </div>
-            </div>
-            {% if not meu_time_pronto %}
-                <form method="POST" action="{{ url_for('confirmar_pronto', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="botao-principal">Estou pronto pra começar</button>
-                </form>
-            {% else %}
-                <p class="texto-fraco-pequeno">Você já confirmou — falta o adversário.</p>
-            {% endif %}
-        </div>
-    {% endif %}
-
-    {# Placar automático: busca a partida direto na EA. O print continua
-       logo abaixo, sempre — a API da EA não é oficial e pode falhar. #}
-    {% set sou_capitao = meu_lado and current_user.id == (confronto.time1 if meu_lado == 1 else confronto.time2).capitao_id %}
-    {% if confronto.status not in ('validado', 'wo') and not confronto.eh_bye and (sou_capitao or eh_organizador) %}
-        <div class="perfil-bloco">
-            <h2>Placar automático</h2>
-            {% if pode_placar_ea %}
-                <p class="texto-fraco-pequeno" style="margin-bottom:12px;">
-                    Acabou de jogar? O site busca a partida direto na EA e confirma o placar sozinho,
-                    sem print. Os dois clubes já estão cadastrados — e o site também tenta buscar
-                    sozinho, a partir de 20 minutos do início. Só clique se quiser adiantar.
-                </p>
-                <form method="POST" action="{{ url_for('buscar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="botao-principal">Já terminamos — buscar agora</button>
-                </form>
-            {% else %}
-                <p class="texto-fraco-pequeno">{{ motivo_sem_ea }}</p>
-            {% endif %}
-
-            {% if candidatas_ea %}
-                <div class="candidatas-ea">
-                    <h3>Qual dessas é a partida de vocês?</h3>
-                    {% for candidata in candidatas_ea %}
-                        <form method="POST" class="candidata-ea"
-                              action="{{ url_for('confirmar_placar_ea', torneio_id=confronto.torneio_id, confronto_id=confronto.id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="match_id" value="{{ candidata.match_id }}">
-                            <div class="candidata-ea-info">
-                                <span class="candidata-ea-placar">
-                                    <span class="candidata-ea-time">{{ confronto.nome_time1 }}</span>
-                                    <strong>{{ candidata.gols_time1 }} × {{ candidata.gols_time2 }}</strong>
-                                    <span class="candidata-ea-time">{{ confronto.nome_time2 }}</span>
-                                </span>
-                                <span class="texto-fraco-pequeno">
-                                    {% if candidata.minutos_atras < 60 %}há {{ candidata.minutos_atras }} min{% else %}há {{ (candidata.minutos_atras // 60) }}h{% endif %}
-                                    · {{ candidata.quando.strftime('%d/%m %H:%M') }}
-                                    {% if not candidata.na_janela %}
-                                        · <span style="color: var(--dourado);">fora do horário da rodada</span>
-                                    {% endif %}
-                                </span>
-                            </div>
-                            {% if candidata.na_janela or eh_organizador %}
-                                <button type="submit" class="botao-secundario-pequeno">Confirmar esta</button>
-                            {% else %}
-                                <span class="texto-fraco-pequeno">só a organização confirma</span>
-                            {% endif %}
-                        </form>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        </div>
-    {% endif %}
-
-    {# O print aparece quando é o caminho da partida (FC 26), quando o
-       automático não tem como resolver (EA fora do ar, clube sem cadastro,
-       janela vencida) e sempre que já existe print enviado, pra não sumir
-       histórico. #}
-    {% set mostrar_print = aceita_print or confronto.print_time1 or confronto.print_time2 %}
-    {% if mostrar_print and (confronto.status not in ('validado', 'wo') or (eh_organizador and (confronto.print_time1 or confronto.print_time2))) %}
-        <div class="perfil-bloco">
-            <h2>Prints da partida</h2>
-            {% if confronto.torneio.jogo == 'fc27' and confronto.status not in ('validado', 'wo') %}
-                <p class="texto-aviso" style="margin-bottom:10px;">
-                    Esse campeonato é de placar automático, mas ele não dá conta dessa partida agora —
-                    então o print vale. {{ motivo_sem_ea }}
-                </p>
-            {% endif %}
-            {% if confronto.status in ('validado', 'wo') %}
-                <p class="texto-fraco-pequeno" style="margin-bottom:10px;">Partida encerrada — prints guardados para consulta.</p>
-            {% endif %}
-            <div class="status-prints">
-                <div class="status-print-item {{ 'enviado' if confronto.leitura_time1_ok }}">
-                    <span>{{ confronto.nome_time1 }}</span>
-                    {% if confronto.print_time1 %}
-                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time1) }}')">Ver print enviado</a>
-                    {% else %}
-                        <span class="texto-fraco-pequeno">Aguardando envio</span>
-                    {% endif %}
-                </div>
-                <div class="status-print-item {{ 'enviado' if confronto.leitura_time2_ok }}">
-                    <span>{{ confronto.nome_time2 }}</span>
-                    {% if confronto.print_time2 %}
-                        <a href="#" onclick="event.preventDefault(); abrirPrint('{{ url_for('arquivo_upload', categoria='prints', nome_arquivo=confronto.print_time2) }}')">Ver print enviado</a>
-                    {% else %}
-                        <span class="texto-fraco-pequeno">Aguardando envio</span>
-                    {% endif %}
-                </div>
-            </div>
-
-            {# Prazo do segundo print: o primeiro time mandou, o outro tem 2 min.
-               O relógio é só visual — quem encerra é o servidor (tela, chat e
-               varredura de fundo). Ao zerar, recarrega uma vez pra mostrar o
-               resultado; se a página já abriu com o prazo vencido e a partida
-               segue aberta, é porque o print não deu pra validar sozinho. #}
-            {% set lado_atrasado = confronto.lado_aguardando_print %}
-            {% if lado_atrasado %}
-                {% set time_atrasado = confronto.time1 if lado_atrasado == 1 else confronto.time2 %}
-                {% set time_enviou = confronto.time2 if lado_atrasado == 1 else confronto.time1 %}
-                <div class="prazo-print" id="prazo-print"
-                     data-prazo="{{ confronto.prazo_segundo_print.isoformat(timespec='seconds') }}Z">
-                    <span class="prazo-print-relogio" id="prazo-print-relogio" aria-hidden="true">2:00</span>
-                    <p class="prazo-print-texto" id="prazo-print-texto">
-                        {% if meu_lado == lado_atrasado %}
-                            O {{ time_enviou.nome }} já enviou o print. <strong>Envie o seu antes do tempo acabar</strong> —
-                            se não enviar, vale o placar do print deles.
-                        {% elif meu_lado %}
-                            Seu print já foi lido. O {{ time_atrasado.nome }} tem até o tempo acabar para enviar o dele —
-                            se não enviar, vale o placar do seu print.
-                        {% else %}
-                            O {{ time_atrasado.nome }} tem até o tempo acabar para enviar o print — se não enviar,
-                            vale o placar do print do {{ time_enviou.nome }}.
-                        {% endif %}
-                    </p>
-                </div>
-                <script>
-                (function () {
-                    var caixa = document.getElementById("prazo-print");
-                    var relogio = document.getElementById("prazo-print-relogio");
-                    var prazo = new Date(caixa.dataset.prazo).getTime();
-                    var abriuNoPrazo = Date.now() < prazo;
-                    function tique() {
-                        var falta = Math.max(0, Math.ceil((prazo - Date.now()) / 1000));
-                        relogio.textContent = Math.floor(falta / 60) + ":" + String(falta % 60).padStart(2, "0");
-                        if (falta > 0) { setTimeout(tique, 250); return; }
-                        caixa.classList.add("prazo-print-vencido");
-                        if (abriuNoPrazo) {
-                            document.getElementById("prazo-print-texto").textContent = "Tempo esgotado — confirmando o placar...";
-                            setTimeout(function () { window.location.reload(); }, 1500);
-                        } else {
-                            document.getElementById("prazo-print-texto").textContent =
-                                "Tempo esgotado, mas o print enviado não deu para validar sozinho (time não reconhecido ou empate onde precisa de vencedor). O organizador resolve a partida.";
-                        }
-                    }
-                    tique();
-                })();
-                </script>
-            {% endif %}
-
-            {% if confronto.status not in ('validado', 'wo') %}
-                {% set meu_time = confronto.time1 if meu_lado == 1 else confronto.time2 %}
-                {% set minha_leitura_ok = (confronto.leitura_time1_ok if meu_lado == 1 else confronto.leitura_time2_ok) %}
-                {% if meu_lado and current_user.id == meu_time.capitao_id and (not minha_leitura_ok or confronto.status == 'divergente') %}
-                    <button type="button" class="botao-principal" style="margin-top:16px;" onclick="document.getElementById('popup-print').showModal()">
-                        {% if confronto.status == 'divergente' %}Reenviar print do placar{% else %}Tirar print do placar{% endif %}
-                    </button>
-                {% elif meu_lado and current_user.id == meu_time.capitao_id %}
-                    {% if not lado_atrasado %}
-                        <p class="texto-fraco-pequeno" style="margin-top:14px;">Print enviado e lido. Agora é esperar o adversário enviar o dele para confirmar o resultado.</p>
-                    {% endif %}
-                {% endif %}
             {% endif %}
         </div>
     {% endif %}
